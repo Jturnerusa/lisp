@@ -35,4 +35,3 @@ dependencies = [
 [[package]]
 name = "slotmap"
 version = "0.1.0"
-source = "git+https://github.com/Jturnerusa/slotmap?rev=da18b8beb055e5fa8ec2b9c23d65f866e7e0c6ed#da18b8beb055e5fa8ec2b9c23d65f866e7e0c6ed"
