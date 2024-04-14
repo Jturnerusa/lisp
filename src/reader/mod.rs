@@ -17,6 +17,8 @@ pub enum Error {
     ParseError(String),
 }
 
+pub struct Iter<'a>(Option<&'a Value>);
+
 pub fn read(input: &str) -> Option<Result<Value, Error>> {
     let mut parser = Parser::new(input);
     match parser.next()? {
@@ -52,6 +54,57 @@ fn parse_cons<'a>(
         None => return Err(Error::UnbalancedParens),
         _ => todo!(),
     })
+}
+
+impl Value {
+    pub fn as_cons(&self) -> Option<(&Value, &Value)> {
+        match self {
+            Self::Cons(car, cdr) => Some((car, cdr)),
+            _ => None,
+        }
+    }
+
+    pub fn as_string(&self) -> Option<&str> {
+        match self {
+            Self::String(string) => Some(string.as_str()),
+            _ => None,
+        }
+    }
+
+    pub fn as_symbol(&self) -> Option<&str> {
+        match self {
+            Self::Symbol(symbol) => Some(symbol.as_str()),
+            _ => None,
+        }
+    }
+
+    pub fn as_int(&self) -> Option<u64> {
+        match self {
+            Self::Int(i) => Some(*i),
+            _ => None,
+        }
+    }
+
+    pub fn is_nil(&self) -> bool {
+        matches!(self, Self::Nil)
+    }
+}
+
+impl<'a> Iterator for Iter<'a> {
+    type Item = &'a Value;
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(value) = self.0 {
+            let (_, cdr) = value.as_cons().unwrap();
+            if matches!(cdr, Value::Cons(..)) {
+                self.0 = Some(cdr);
+            } else {
+                self.0 = None;
+            }
+            self.0
+        } else {
+            None
+        }
+    }
 }
 
 #[cfg(test)]
