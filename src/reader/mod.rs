@@ -1,8 +1,9 @@
 mod parse;
 
 use parse::Parser;
+use unwrap_enum::{EnumAs, EnumIs};
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, EnumAs, EnumIs)]
 pub enum Value {
     Cons(Box<Value>, Box<Value>),
     Symbol(String),
@@ -56,46 +57,12 @@ fn parse_cons<'a>(
     })
 }
 
-impl Value {
-    pub fn as_cons(&self) -> Option<(&Value, &Value)> {
-        match self {
-            Self::Cons(car, cdr) => Some((car, cdr)),
-            _ => None,
-        }
-    }
-
-    pub fn as_string(&self) -> Option<&str> {
-        match self {
-            Self::String(string) => Some(string.as_str()),
-            _ => None,
-        }
-    }
-
-    pub fn as_symbol(&self) -> Option<&str> {
-        match self {
-            Self::Symbol(symbol) => Some(symbol.as_str()),
-            _ => None,
-        }
-    }
-
-    pub fn as_int(&self) -> Option<u64> {
-        match self {
-            Self::Int(i) => Some(*i),
-            _ => None,
-        }
-    }
-
-    pub fn is_nil(&self) -> bool {
-        matches!(self, Self::Nil)
-    }
-}
-
 impl<'a> Iterator for Iter<'a> {
     type Item = &'a Value;
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(value) = self.0 {
             let (_, cdr) = value.as_cons().unwrap();
-            if matches!(cdr, Value::Cons(..)) {
+            if matches!(**cdr, Value::Cons(..)) {
                 self.0 = Some(cdr);
             } else {
                 self.0 = None;
