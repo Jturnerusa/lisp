@@ -49,7 +49,10 @@ fn string(input: &str) -> Result<&str, Node> {
 fn symbol(input: &str) -> Result<&str, Node> {
     combinator::map(
         combinator::recognize(sequence::preceded(
-            bytes::take_while_m_n(1, 1, |c: char| c.is_alphabetic()),
+            bytes::take_while_m_n(1, 1, |c: char| {
+                c.is_alphabetic()
+                    || matches!(c, '+' | '-' | '*' | '!' | '@' | '$' | '^' | '&' | '=')
+            }),
             bytes::take_while(|c: char| c.is_alphanumeric()),
         )),
         Node::Symbol,
