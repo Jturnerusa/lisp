@@ -53,7 +53,7 @@ fn parse_cons<'a>(
             Box::new(parse_cons(nodes)?),
         ),
         None => return Err(Error::UnbalancedParens),
-        _ => todo!(),
+        Some(Err(e)) => return Err(Error::ParseError(e.to_string())),
     })
 }
 
