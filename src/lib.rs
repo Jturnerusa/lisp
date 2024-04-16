@@ -10,7 +10,8 @@ use unwrap_enum::{EnumAs, EnumIs};
 type ObjectRef = slotmap::Key;
 
 const BUILTINS: &[&str] = &[
-    "lambda", "car", "cdr", "cons", "print", "if", "nil", "t", "panic", "=", "+", "-", "*", "/",
+    "lambda", "car", "cdr", "cons", "print", "if", "nil", "t", "panic", "def", "set", "=", "+",
+    "-", "*", "/",
 ];
 
 #[derive(Clone, Copy, Debug)]
@@ -85,6 +86,8 @@ impl Interpreter {
                 match self.objects[car].as_symbol().map(|s| s.as_str()) {
                     Some("lambda") => return self.lambda(objref),
                     Some("if") => return self.branch(objref),
+                    Some("def") => return self.def(objref),
+                    Some("set") => return self.set(objref),
                     _ => (),
                 }
                 // regular function calls eval right to left, with the
@@ -172,6 +175,39 @@ impl Interpreter {
         self.locals.pop();
 
         ret
+    }
+
+    fn set(&mut self, cons: ObjectRef) -> Result<ObjectRef, Error> {
+        if self.iter_cars(cons)?.count() != 3 {
+            return Err(Error::InvalidParams);
+        }
+
+        let binding_ref = self.iter_cars(cons)?.nth(1).unwrap();
+        let binding = match &self.objects[binding_ref] {
+            Object::Symbol(symbol) => symbol.clone(),
+            _ => return Err(Error::InvalidParams),
+        };
+
+        if self.get_variable(binding.as_str()).is_none() {
+            Err(Error::NotFound)
+        } else {
+            self.def(cons)
+        }
+    }
+
+    fn def(&mut self, cons: ObjectRef) -> Result<ObjectRef, Error> {
+        if self.iter_cars(cons)?.count() != 3 {
+            return Err(Error::InvalidParams);
+        }
+        let binding_ref = self.iter_cars(cons)?.nth(1).unwrap();
+        let binding = match &self.objects[binding_ref] {
+            Object::Symbol(symbol) => symbol.clone(),
+            _ => return Err(Error::InvalidParams),
+        };
+        let expr = self.iter_cars(cons)?.nth(2).unwrap();
+        let val = self.eval(expr)?;
+        self.globals.insert(binding, val);
+        Ok(self.objects.insert(Object::Nil))
     }
 
     fn branch(&mut self, cons: ObjectRef) -> Result<ObjectRef, Error> {

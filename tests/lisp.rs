@@ -9,6 +9,18 @@ fn eval_str(s: &str) -> lisp::Object {
     interpreter.get_object(result).unwrap().clone()
 }
 
+fn eval_many(s: &str) -> lisp::Object {
+    let mut interpreter = Interpreter::new();
+    let reader = Reader::new(s);
+    let mut object = None;
+    for read in reader {
+        let expr = interpreter.read(read.unwrap());
+        let result = interpreter.eval(expr).unwrap();
+        object = Some(interpreter.get_object(result).unwrap());
+    }
+    object.unwrap().clone()
+}
+
 #[test]
 fn test_add() {
     assert!(matches!(eval_str("(+ 1 1)"), lisp::Object::Int(2)));
@@ -101,4 +113,15 @@ fn test_if_else() {
 #[should_panic]
 fn test_panic() {
     eval_str(r#"(if (= 1 1) (panic "test") nil)"#);
+}
+
+#[test]
+fn test_def_set() {
+    let src = r#"
+(def x "hello")
+(if (= x "hello") nil (panic "test failed"))
+(set x "world")
+(if (= x "world") nil (panic "test failed"))
+"#;
+    eval_many(src);
 }
