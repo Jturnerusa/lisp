@@ -134,3 +134,32 @@ fn test_equal_cons() {
         lisp::Object::True
     ));
 }
+
+#[test]
+fn test_if_then() {
+    let mut interpreter = Interpreter::new();
+    let r = reader::read("(if (= 1 1) 1 2)")
+        .unwrap()
+        .unwrap();
+    let expr = interpreter.read(r);
+    let result = interpreter.eval(expr).unwrap();
+    assert!(matches!(
+        interpreter.get_object(result).unwrap(),
+        lisp::Object::Int(1)
+    ));
+}
+
+
+#[test]
+fn test_if_else() {
+    let mut interpreter = Interpreter::new();
+    let r = reader::read("(if (= 1 2) 1 2)")
+        .unwrap()
+        .unwrap();
+    let expr = interpreter.read(r);
+    let result = interpreter.eval(expr).unwrap();
+    assert!(matches!(
+        interpreter.get_object(result).unwrap(),
+        lisp::Object::Int(2)
+    ));
+}

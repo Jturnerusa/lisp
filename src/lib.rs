@@ -10,7 +10,7 @@ use unwrap_enum::{EnumAs, EnumIs};
 type ObjectRef = slotmap::Key;
 
 const BUILTINS: &[&str] = &[
-    "lambda", "car", "cdr", "cons", "print", "=", "+", "-", "*", "/",
+    "lambda", "car", "cdr", "cons", "print", "if", "=", "+", "-", "*", "/",
 ];
 
 #[derive(Clone, Copy, Debug)]
@@ -84,6 +84,7 @@ impl Interpreter {
                 #[allow(clippy::single_match)]
                 match self.objects[car].as_symbol().map(|s| s.as_str()) {
                     Some("lambda") => return self.lambda(objref),
+                    Some("if") => return self.branch(objref),
                     _ => (),
                 }
                 // regular function calls eval right to left, with the
@@ -164,6 +165,21 @@ impl Interpreter {
         self.locals.pop();
 
         ret
+    }
+
+    fn branch(&mut self, cons: ObjectRef) -> Result<ObjectRef, Error> {
+        if self.iter_cars(cons)?.count() != 4 {
+            return Err(Error::InvalidParams);
+        }
+        let predicate = self.iter_cars(cons)?.nth(1).unwrap();
+        let then = self.iter_cars(cons)?.nth(2).unwrap();
+        let els = self.iter_cars(cons)?.nth(3).unwrap();
+        let result = self.eval(predicate)?;
+        if self.objects[result].is_true() {
+            self.eval(then)
+        } else {
+            self.eval(els)
+        }
     }
 
     fn lambda(&mut self, cons: ObjectRef) -> Result<ObjectRef, Error> {
