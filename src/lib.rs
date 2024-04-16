@@ -9,6 +9,10 @@ use unwrap_enum::{EnumAs, EnumIs};
 
 type ObjectRef = slotmap::Key;
 
+const BUILTINS: &[&str] = &[
+    "lambda", "car", "cdr", "cons", "print", "=", "+", "-", "*", "/",
+];
+
 #[derive(Clone, Copy, Debug)]
 pub enum Error {
     TypeError,
@@ -16,7 +20,7 @@ pub enum Error {
     NotFound,
 }
 
-#[derive(Clone, Debug, EnumAs, EnumIs)]
+#[derive(Clone, Debug, PartialEq, Eq, EnumAs, EnumIs)]
 pub enum Object {
     Function {
         body: ObjectRef,
@@ -27,6 +31,7 @@ pub enum Object {
     String(String),
     Symbol(String),
     Int(i64),
+    True,
     Nil,
 }
 
@@ -92,7 +97,11 @@ impl Interpreter {
                     .collect::<Result<Vec<_>, Error>>()?;
                 self.fncall(fun, args.into_iter())
             }
-            Object::Symbol(symbol) if matches!(symbol.as_str(), "+" | "lambda") => Ok(objref),
+            Object::Symbol(symbol)
+                if BUILTINS.iter().any(|builtin| *builtin == symbol.as_str()) =>
+            {
+                Ok(objref)
+            }
             Object::Symbol(symbol) => {
                 Ok(self.get_variable(symbol.as_str()).ok_or(Error::NotFound)?)
             }
@@ -108,7 +117,15 @@ impl Interpreter {
         // built ins get called first
         #[allow(clippy::single_match)]
         match self.objects[fun].as_symbol().map(|s| s.as_str()) {
+            Some("car") => return self.car(args),
+            Some("cdr") => return self.cdr(args),
+            Some("cons") => return self.cons(args),
+            Some("print") => return self.print(args),
+            Some("=") => return self.equal(args),
             Some("+") => return self.add(args),
+            Some("-") => return self.sub(args),
+            Some("*") => return self.mul(args),
+            Some("/") => return self.div(args),
             _ => (),
         }
         // get the actual function object from a lambda or a function
@@ -182,6 +199,110 @@ impl Interpreter {
             }
         }
         Ok(self.objects.insert(Object::Int(acc)))
+    }
+
+    fn sub<I: Iterator<Item = ObjectRef> + Clone>(&mut self, args: I) -> Result<ObjectRef, Error> {
+        let mut acc = 0;
+        for arg in args {
+            match &self.objects[arg] {
+                Object::Int(i) => acc -= i,
+                _ => return Err(Error::TypeError),
+            }
+        }
+        Ok(self.objects.insert(Object::Int(acc)))
+    }
+
+    fn div<I: Iterator<Item = ObjectRef> + Clone>(&mut self, args: I) -> Result<ObjectRef, Error> {
+        let mut acc = 0;
+        for arg in args {
+            match &self.objects[arg] {
+                Object::Int(i) => acc /= i,
+                _ => return Err(Error::TypeError),
+            }
+        }
+        Ok(self.objects.insert(Object::Int(acc)))
+    }
+
+    fn mul<I: Iterator<Item = ObjectRef> + Clone>(&mut self, args: I) -> Result<ObjectRef, Error> {
+        let mut acc = 0;
+        for arg in args {
+            match &self.objects[arg] {
+                Object::Int(i) => acc *= i,
+                _ => return Err(Error::TypeError),
+            }
+        }
+        Ok(self.objects.insert(Object::Int(acc)))
+    }
+
+    fn car<I: Iterator<Item = ObjectRef> + Clone>(
+        &mut self,
+        mut args: I,
+    ) -> Result<ObjectRef, Error> {
+        if args.clone().count() != 1 {
+            return Err(Error::InvalidParams);
+        }
+        let cons = args.next().unwrap();
+        let cdr = match self.objects[cons] {
+            Object::Cons(car, _) => car,
+            _ => return Err(Error::TypeError),
+        };
+        Ok(cdr)
+    }
+
+    fn cdr<I: Iterator<Item = ObjectRef> + Clone>(
+        &mut self,
+        mut args: I,
+    ) -> Result<ObjectRef, Error> {
+        if args.clone().count() != 1 {
+            return Err(Error::InvalidParams);
+        }
+        let cons = args.next().unwrap();
+        let cdr = match self.objects[cons] {
+            Object::Cons(_, cdr) => cdr,
+            _ => return Err(Error::TypeError),
+        };
+        Ok(cdr)
+    }
+
+    fn cons<I: Iterator<Item = ObjectRef> + Clone>(
+        &mut self,
+        mut args: I,
+    ) -> Result<ObjectRef, Error> {
+        if args.clone().count() != 2 {
+            return Err(Error::InvalidParams);
+        }
+        let car = args.next().unwrap();
+        let cdr = args.next().unwrap();
+        Ok(self.objects.insert(Object::Cons(car, cdr)))
+    }
+
+    fn print<I: Iterator<Item = ObjectRef> + Clone>(
+        &mut self,
+        args: I,
+    ) -> Result<ObjectRef, Error> {
+        for arg in args {
+            let object = &self.objects[arg];
+            println!("{:?}", object);
+        }
+        Ok(self.objects.insert(Object::Nil))
+    }
+
+    fn equal<I: Iterator<Item = ObjectRef> + Clone>(
+        &mut self,
+        mut args: I,
+    ) -> Result<ObjectRef, Error> {
+        let first = args.next().ok_or(Error::InvalidParams)?;
+        for arg in args {
+            if match (&self.objects[first], &self.objects[arg]) {
+                (Object::Cons(a, b), Object::Cons(c, d)) => {
+                    (&self.objects[*a], &self.objects[*b]) != (&self.objects[*c], &self.objects[*d])
+                }
+                (a, b) => a != b,
+            } {
+                return Ok(self.objects.insert(Object::Nil));
+            }
+        }
+        Ok(self.objects.insert(Object::True))
     }
 
     fn get_variable(&self, name: &str) -> Option<ObjectRef> {
