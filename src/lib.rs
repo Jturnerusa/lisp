@@ -26,7 +26,7 @@ pub enum Object {
     Cons(ObjectRef, ObjectRef),
     String(String),
     Symbol(String),
-    Int(u64),
+    Int(i64),
     Nil,
 }
 
@@ -84,7 +84,6 @@ impl Interpreter {
                 // regular function calls eval right to left, with the
                 // first expr being the function that is called
                 let fun = self.eval(car)?;
-                &self.objects[fun];
                 let args = self
                     .iter_cars(rest)?
                     .collect::<Vec<ObjectRef>>()

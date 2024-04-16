@@ -8,7 +8,7 @@ pub enum Value {
     Cons(Box<Value>, Box<Value>),
     Symbol(String),
     String(String),
-    Int(u64),
+    Int(i64),
     Nil,
 }
 
