@@ -18,8 +18,6 @@ pub enum Error {
     ParseError(String),
 }
 
-pub struct Iter<'a>(Option<&'a Value>);
-
 pub fn read(input: &str) -> Option<Result<Value, Error>> {
     let mut parser = Parser::new(input);
     match parser.next()? {
@@ -55,23 +53,6 @@ fn parse_cons<'a>(
         None => return Err(Error::UnbalancedParens),
         Some(Err(e)) => return Err(Error::ParseError(e.to_string())),
     })
-}
-
-impl<'a> Iterator for Iter<'a> {
-    type Item = &'a Value;
-    fn next(&mut self) -> Option<Self::Item> {
-        if let Some(value) = self.0 {
-            let (_, cdr) = value.as_cons().unwrap();
-            if matches!(**cdr, Value::Cons(..)) {
-                self.0 = Some(cdr);
-            } else {
-                self.0 = None;
-            }
-            self.0
-        } else {
-            None
-        }
-    }
 }
 
 #[cfg(test)]
