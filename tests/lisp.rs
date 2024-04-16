@@ -1,8 +1,9 @@
-use lisp::{reader, Interpreter};
+use lisp::{reader::Reader, Interpreter};
 
 fn eval_str(s: &str) -> lisp::Object {
     let mut interpreter = Interpreter::new();
-    let r = reader::read(s).unwrap().unwrap();
+    let mut reader = Reader::new(s);
+    let r = reader.next().unwrap().unwrap();
     let expr = interpreter.read(r);
     let result = interpreter.eval(expr).unwrap();
     interpreter.get_object(result).unwrap().clone()
@@ -40,7 +41,8 @@ fn test_eval_lambda() {
 #[test]
 fn test_cons() {
     let mut interpreter = Interpreter::new();
-    let r = reader::read("(cons 1 2)").unwrap().unwrap();
+    let mut reader = Reader::new("(cons 1 2)");
+    let r = reader.next().unwrap().unwrap();
     let expr = interpreter.read(r);
     let result = interpreter.eval(expr).unwrap();
     let (car, cdr) = match interpreter.get_object(result).unwrap() {

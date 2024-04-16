@@ -18,16 +18,8 @@ pub enum Error {
     ParseError(String),
 }
 
-pub fn read(input: &str) -> Option<Result<Value, Error>> {
-    let mut parser = Parser::new(input);
-    match parser.next()? {
-        Ok(parse::Node::LeftParen) => Some(parse_cons(&mut parser)),
-        Ok(parse::Node::RightParen) => Some(Err(Error::UnbalancedParens)),
-        Ok(parse::Node::String(string)) => Some(Ok(Value::String(string.to_string()))),
-        Ok(parse::Node::Symbol(symbol)) => Some(Ok(Value::Symbol(symbol.to_string()))),
-        Ok(parse::Node::Int(i)) => Some(Ok(Value::Int(i.parse().unwrap()))),
-        Err(e) => Some(Err(Error::ParseError(e.to_string()))),
-    }
+pub struct Reader<'a> {
+    parser: Parser<'a>,
 }
 
 fn parse_cons<'a>(
@@ -55,6 +47,32 @@ fn parse_cons<'a>(
     })
 }
 
+impl<'a> Reader<'a> {
+    pub fn new(input: &'a str) -> Self {
+        Self {
+            parser: Parser::new(input),
+        }
+    }
+
+    fn read(&mut self) -> Option<Result<Value, Error>> {
+        match self.parser.next()? {
+            Ok(parse::Node::LeftParen) => Some(parse_cons(&mut self.parser)),
+            Ok(parse::Node::RightParen) => Some(Err(Error::UnbalancedParens)),
+            Ok(parse::Node::String(string)) => Some(Ok(Value::String(string.to_string()))),
+            Ok(parse::Node::Symbol(symbol)) => Some(Ok(Value::Symbol(symbol.to_string()))),
+            Ok(parse::Node::Int(i)) => Some(Ok(Value::Int(i.parse().unwrap()))),
+            Err(e) => Some(Err(Error::ParseError(e.to_string()))),
+        }
+    }
+}
+
+impl<'a> Iterator for Reader<'a> {
+    type Item = Result<Value, Error>;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.read()
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -75,7 +93,7 @@ mod test {
                 boxed!(Cons(boxed!(Int(1)), boxed!(Nil))),
             )),
         );
-        let value = read(r#"(hello "world" 1)"#).unwrap().unwrap();
+        let value = Reader::new(r#"(hello "world" 1)"#).next().unwrap().unwrap();
         assert_eq!(expected, value);
     }
 
@@ -95,7 +113,10 @@ mod test {
             boxed!(Symbol("let".to_string())),
             boxed!(Cons(boxed!(bindings_list), boxed!(Nil))),
         );
-        let value = read(r#"(let ((a 1) (b 2)))"#).unwrap().unwrap();
+        let value = Reader::new(r#"(let ((a 1) (b 2)))"#)
+            .next()
+            .unwrap()
+            .unwrap();
         assert_eq!(expected, value);
     }
 }
