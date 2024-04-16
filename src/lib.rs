@@ -10,7 +10,7 @@ use unwrap_enum::{EnumAs, EnumIs};
 type ObjectRef = slotmap::Key;
 
 const BUILTINS: &[&str] = &[
-    "lambda", "car", "cdr", "cons", "print", "if", "=", "+", "-", "*", "/",
+    "lambda", "car", "cdr", "cons", "print", "if", "panic", "=", "+", "-", "*", "/",
 ];
 
 #[derive(Clone, Copy, Debug)]
@@ -122,6 +122,7 @@ impl Interpreter {
             Some("cdr") => return self.cdr(args),
             Some("cons") => return self.cons(args),
             Some("print") => return self.print(args),
+            Some("panic") => return self.panic(args),
             Some("=") => return self.equal(args),
             Some("+") => return self.add(args),
             Some("-") => return self.sub(args),
@@ -319,6 +320,19 @@ impl Interpreter {
             }
         }
         Ok(self.objects.insert(Object::True))
+    }
+
+    fn panic<I: Iterator<Item = ObjectRef> + Clone>(
+        &mut self,
+        mut args: I,
+    ) -> Result<ObjectRef, Error> {
+        if args.clone().count() != 1 {
+            return Err(Error::InvalidParams);
+        }
+        let message = args.next().unwrap();
+        let object = &self.objects[message];
+
+        panic!("lisp interpreter panicked {:?}", object);
     }
 
     fn get_variable(&self, name: &str) -> Option<ObjectRef> {

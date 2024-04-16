@@ -163,3 +163,14 @@ fn test_if_else() {
         lisp::Object::Int(2)
     ));
 }
+
+#[test]
+#[should_panic]
+fn test_panic() {
+    let mut interpreter = Interpreter::new();
+    let r = reader::read(r#"(if (= 1 1) (panic "test panic") (+ 1 1))"#)
+        .unwrap()
+        .unwrap();
+    let expr = interpreter.read(r);
+    interpreter.eval(expr).unwrap();
+}
