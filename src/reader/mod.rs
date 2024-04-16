@@ -119,4 +119,10 @@ mod test {
             .unwrap();
         assert_eq!(expected, value);
     }
+
+    #[test]
+    fn test_multi() {
+        let reader = Reader::new("(a b c) (d e f)");
+        assert_eq!(reader.count(), 2);
+    }
 }
