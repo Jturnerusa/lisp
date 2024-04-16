@@ -1,58 +1,51 @@
 use lisp::{reader, Interpreter};
 
-#[test]
-fn test_add() {
+fn eval_str(s: &str) -> lisp::Object {
     let mut interpreter = Interpreter::new();
-    let r = reader::read("(+ 1 1)").unwrap().unwrap();
+    let r = reader::read(s).unwrap().unwrap();
     let expr = interpreter.read(r);
     let result = interpreter.eval(expr).unwrap();
-    let obj = interpreter.get_object(result).unwrap();
-    assert!(matches!(obj, lisp::Object::Int(2)));
+    interpreter.get_object(result).unwrap().clone()
+}
+
+#[test]
+fn test_add() {
+    assert!(matches!(eval_str("(+ 1 1)"), lisp::Object::Int(2)));
 }
 
 #[test]
 fn test_nested_add() {
-    let mut interpreter = Interpreter::new();
-    let r = reader::read("(+ (+ 1 1) (+ 1 1))").unwrap().unwrap();
-    let expr = interpreter.read(r);
-    let result = interpreter.eval(expr).unwrap();
-    let obj = interpreter.get_object(result).unwrap();
-    assert!(matches!(obj, lisp::Object::Int(4)));
+    assert!(matches!(
+        eval_str("(+ (+ 1 1) (+ 1 1))"),
+        lisp::Object::Int(4)
+    ));
 }
 
 #[test]
 fn test_lambda() {
-    let mut interpreter = Interpreter::new();
-    let r = reader::read("(lambda (a b c) (+ a b c))").unwrap().unwrap();
-    let expr = interpreter.read(r);
-    let result = interpreter.eval(expr).unwrap();
-    let obj = interpreter.get_object(result).unwrap();
-    assert!(matches!(obj, lisp::Object::Function { .. }));
+    assert!(matches!(
+        eval_str("(lambda (a b c) (+ a b c))"),
+        lisp::Object::Function { .. }
+    ));
 }
 
 #[test]
 fn test_eval_lambda() {
-    let mut interpreter = Interpreter::new();
-    let r = reader::read("((lambda (a b c) (+ a b c)) 1 2 3)")
-        .unwrap()
-        .unwrap();
-    let expr = interpreter.read(r);
-    let result = interpreter.eval(expr).unwrap();
-    let obj = interpreter.get_object(result).unwrap();
-    assert!(matches!(obj, lisp::Object::Int(6)));
+    assert!(matches!(
+        eval_str("((lambda (a b c) (+ a b c)) 1 2 3)"),
+        lisp::Object::Int(6)
+    ));
 }
 
 #[test]
 fn test_cons() {
     let mut interpreter = Interpreter::new();
-    let r = reader::read("(cons 1 2)")
-        .unwrap()
-        .unwrap();
+    let r = reader::read("(cons 1 2)").unwrap().unwrap();
     let expr = interpreter.read(r);
     let result = interpreter.eval(expr).unwrap();
     let (car, cdr) = match interpreter.get_object(result).unwrap() {
         lisp::Object::Cons(car, cdr) => (car, cdr),
-        _ => panic!()
+        _ => panic!(),
     };
     assert!(matches!(
         interpreter.get_object(*car).unwrap(),
@@ -66,111 +59,44 @@ fn test_cons() {
 
 #[test]
 fn test_car() {
-    let mut interpreter = Interpreter::new();
-    let r = reader::read("(car (cons 1 2))")
-        .unwrap()
-        .unwrap();
-    let expr = interpreter.read(r);
-    let result = interpreter.eval(expr).unwrap();
-    assert!(matches!(
-        interpreter.get_object(result).unwrap(),
-        lisp::Object::Int(1)
-    ));
+    assert!(matches!(eval_str("(car (cons 1 2))"), lisp::Object::Int(1)));
 }
 
 #[test]
 fn test_cdr() {
-    let mut interpreter = Interpreter::new();
-    let r = reader::read("(cdr (cons 1 2))")
-        .unwrap()
-        .unwrap();
-    let expr = interpreter.read(r);
-    let result = interpreter.eval(expr).unwrap();
-    assert!(matches!(
-        interpreter.get_object(result).unwrap(),
-        lisp::Object::Int(2)
-    ));
+    assert!(matches!(eval_str("(cdr (cons 1 2))"), lisp::Object::Int(2)));
 }
-
 
 #[test]
 fn test_equal() {
-    let mut interpreter = Interpreter::new();
-    let r = reader::read("(= 1 1)")
-        .unwrap()
-        .unwrap();
-    let expr = interpreter.read(r);
-    let result = interpreter.eval(expr).unwrap();
-    assert!(matches!(
-        interpreter.get_object(result).unwrap(),
-        lisp::Object::True
-    ));
+    assert!(matches!(eval_str("(= 1 1)"), lisp::Object::True));
 }
 
 #[test]
 fn test_not_equal() {
-    let mut interpreter = Interpreter::new();
-    let r = reader::read("(= 1 2)")
-        .unwrap()
-        .unwrap();
-    let expr = interpreter.read(r);
-    let result = interpreter.eval(expr).unwrap();
-    assert!(matches!(
-        interpreter.get_object(result).unwrap(),
-        lisp::Object::Nil
-    ));
+    assert!(matches!(eval_str("(= 1 2)"), lisp::Object::Nil));
 }
 
 #[test]
 fn test_equal_cons() {
-    let mut interpreter = Interpreter::new();
-    let r = reader::read("(= (cons 1 2) (cons 1 2))")
-        .unwrap()
-        .unwrap();
-    let expr = interpreter.read(r);
-    let result = interpreter.eval(expr).unwrap();
     assert!(matches!(
-        interpreter.get_object(result).unwrap(),
+        eval_str("(= (cons 1 2) (cons 1 2))"),
         lisp::Object::True
     ));
 }
 
 #[test]
 fn test_if_then() {
-    let mut interpreter = Interpreter::new();
-    let r = reader::read("(if (= 1 1) 1 2)")
-        .unwrap()
-        .unwrap();
-    let expr = interpreter.read(r);
-    let result = interpreter.eval(expr).unwrap();
-    assert!(matches!(
-        interpreter.get_object(result).unwrap(),
-        lisp::Object::Int(1)
-    ));
+    assert!(matches!(eval_str("(if (= 1 1) 1 2)"), lisp::Object::Int(1)));
 }
-
 
 #[test]
 fn test_if_else() {
-    let mut interpreter = Interpreter::new();
-    let r = reader::read("(if (= 1 2) 1 2)")
-        .unwrap()
-        .unwrap();
-    let expr = interpreter.read(r);
-    let result = interpreter.eval(expr).unwrap();
-    assert!(matches!(
-        interpreter.get_object(result).unwrap(),
-        lisp::Object::Int(2)
-    ));
+    assert!(matches!(eval_str("(if (= 1 2) 1 2)"), lisp::Object::Int(2)));
 }
 
 #[test]
 #[should_panic]
 fn test_panic() {
-    let mut interpreter = Interpreter::new();
-    let r = reader::read(r#"(if (= 1 1) (panic "test panic") (+ 1 1))"#)
-        .unwrap()
-        .unwrap();
-    let expr = interpreter.read(r);
-    interpreter.eval(expr).unwrap();
+    eval_str(r#"(if (= 1 1) (panic "test") nil)"#);
 }
