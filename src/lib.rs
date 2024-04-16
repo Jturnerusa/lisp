@@ -214,47 +214,59 @@ impl Interpreter {
     }
 
     fn add<I: Iterator<Item = ObjectRef> + Clone>(&mut self, args: I) -> Result<ObjectRef, Error> {
-        let mut acc = 0;
-        for arg in args {
-            match &self.objects[arg] {
-                Object::Int(i) => acc += i,
-                _ => return Err(Error::TypeError),
-            }
-        }
-        Ok(self.objects.insert(Object::Int(acc)))
+        let result = args
+            .map(|arg| &self.objects[arg])
+            .map(|obj| match obj {
+                Object::Int(i) => Ok(*i),
+                _ => Err(Error::TypeError),
+            })
+            .collect::<Result<Vec<_>, Error>>()?
+            .into_iter()
+            .reduce(|acc, e| acc + e)
+            .ok_or(Error::InvalidParams)?;
+        Ok(self.objects.insert(Object::Int(result)))
     }
 
     fn sub<I: Iterator<Item = ObjectRef> + Clone>(&mut self, args: I) -> Result<ObjectRef, Error> {
-        let mut acc = 0;
-        for arg in args {
-            match &self.objects[arg] {
-                Object::Int(i) => acc -= i,
-                _ => return Err(Error::TypeError),
-            }
-        }
-        Ok(self.objects.insert(Object::Int(acc)))
-    }
-
-    fn div<I: Iterator<Item = ObjectRef> + Clone>(&mut self, args: I) -> Result<ObjectRef, Error> {
-        let mut acc = 0;
-        for arg in args {
-            match &self.objects[arg] {
-                Object::Int(i) => acc /= i,
-                _ => return Err(Error::TypeError),
-            }
-        }
-        Ok(self.objects.insert(Object::Int(acc)))
+        let result = args
+            .map(|arg| &self.objects[arg])
+            .map(|obj| match obj {
+                Object::Int(i) => Ok(*i),
+                _ => Err(Error::TypeError),
+            })
+            .collect::<Result<Vec<_>, Error>>()?
+            .into_iter()
+            .reduce(|acc, e| acc - e)
+            .ok_or(Error::InvalidParams)?;
+        Ok(self.objects.insert(Object::Int(result)))
     }
 
     fn mul<I: Iterator<Item = ObjectRef> + Clone>(&mut self, args: I) -> Result<ObjectRef, Error> {
-        let mut acc = 0;
-        for arg in args {
-            match &self.objects[arg] {
-                Object::Int(i) => acc *= i,
-                _ => return Err(Error::TypeError),
-            }
-        }
-        Ok(self.objects.insert(Object::Int(acc)))
+        let result = args
+            .map(|arg| &self.objects[arg])
+            .map(|obj| match obj {
+                Object::Int(i) => Ok(*i),
+                _ => Err(Error::TypeError),
+            })
+            .collect::<Result<Vec<_>, Error>>()?
+            .into_iter()
+            .reduce(|acc, e| acc * e)
+            .ok_or(Error::InvalidParams)?;
+        Ok(self.objects.insert(Object::Int(result)))
+    }
+
+    fn div<I: Iterator<Item = ObjectRef> + Clone>(&mut self, args: I) -> Result<ObjectRef, Error> {
+        let result = args
+            .map(|arg| &self.objects[arg])
+            .map(|obj| match obj {
+                Object::Int(i) => Ok(*i),
+                _ => Err(Error::TypeError),
+            })
+            .collect::<Result<Vec<_>, Error>>()?
+            .into_iter()
+            .reduce(|acc, e| acc / e)
+            .ok_or(Error::InvalidParams)?;
+        Ok(self.objects.insert(Object::Int(result)))
     }
 
     fn car<I: Iterator<Item = ObjectRef> + Clone>(
