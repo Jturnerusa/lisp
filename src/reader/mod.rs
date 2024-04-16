@@ -1,5 +1,7 @@
 mod parse;
 
+use std::fmt;
+
 use parse::Parser;
 use unwrap_enum::{EnumAs, EnumIs};
 
@@ -72,6 +74,17 @@ impl<'a> Iterator for Reader<'a> {
         self.read()
     }
 }
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnbalancedParens => write!(f, "unbalanced parens"),
+            Self::ParseError(e) => write!(f, "parser error: {}", e),
+        }
+    }
+}
+
+impl std::error::Error for Error {}
 
 #[cfg(test)]
 mod test {

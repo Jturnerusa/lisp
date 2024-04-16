@@ -3,9 +3,12 @@
 pub mod reader;
 
 use std::collections::HashMap;
+use std::fmt;
 
 use slotmap::SlotMap;
 use unwrap_enum::{EnumAs, EnumIs};
+
+pub use reader::Reader;
 
 type ObjectRef = slotmap::Key;
 
@@ -451,3 +454,15 @@ impl<'a> Iterator for IterCars<'a> {
         }
     }
 }
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::TypeError => write!(f, "type error"),
+            Self::InvalidParams => write!(f, "invalid parameters"),
+            Self::NotFound => write!(f, "variable not found"),
+        }
+    }
+}
+
+impl std::error::Error for Error {}
