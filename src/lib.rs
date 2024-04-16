@@ -10,7 +10,7 @@ use unwrap_enum::{EnumAs, EnumIs};
 type ObjectRef = slotmap::Key;
 
 const BUILTINS: &[&str] = &[
-    "lambda", "car", "cdr", "cons", "print", "if", "panic", "=", "+", "-", "*", "/",
+    "lambda", "car", "cdr", "cons", "print", "if", "nil", "t", "panic", "=", "+", "-", "*", "/",
 ];
 
 #[derive(Clone, Copy, Debug)]
@@ -97,6 +97,12 @@ impl Interpreter {
                     .map(|i| self.eval(i))
                     .collect::<Result<Vec<_>, Error>>()?;
                 self.fncall(fun, args.into_iter())
+            }
+            Object::Symbol(symbol) if symbol.as_str() == "t" => {
+                Ok(self.objects.insert(Object::True))
+            }
+            Object::Symbol(symbol) if symbol.as_str() == "nil" => {
+                Ok(self.objects.insert(Object::Nil))
             }
             Object::Symbol(symbol)
                 if BUILTINS.iter().any(|builtin| *builtin == symbol.as_str()) =>
