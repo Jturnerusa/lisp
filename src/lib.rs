@@ -124,10 +124,10 @@ impl Interpreter {
     }
 
     fn get_variable(&self, name: &str) -> Option<Rc<Object>> {
-        std::iter::once(&self.globals)
-            .chain(self.locals.iter())
-            .next_back()
-            .and_then(|env| env.get(name))
-            .cloned()
+        if let Some(Some(var)) = self.locals.iter().next_back().map(|env| env.get(name)) {
+            Some(Rc::clone(var))
+        } else {
+            self.globals.get(name).cloned()
+        }
     }
 }
