@@ -49,7 +49,7 @@ impl std::error::Error for Error {}
 impl From<&Object> for Type {
     fn from(other: &Object) -> Type {
         match other {
-            Object::Function(..) => Type::Function,
+            Object::NativeFunction(..) | Object::Function(..) => Type::Function,
             Object::Cons(..) => Type::Cons,
             Object::Symbol(_) => Type::Symbol,
             Object::String(_) => Type::String,

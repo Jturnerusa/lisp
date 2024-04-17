@@ -3,9 +3,15 @@ use std::rc::Rc;
 use unwrap_enum::{EnumAs, EnumIs};
 
 use crate::reader;
+use crate::Error;
 
-#[derive(Clone, Debug, EnumAs, EnumIs)]
+pub type NativeArgs = dyn Iterator<Item = Rc<Object>>;
+
+pub type NativeFunction = dyn Fn(Box<NativeArgs>) -> Result<Rc<Object>, Error>;
+
+#[derive(EnumAs, EnumIs)]
 pub enum Object {
+    NativeFunction(Box<NativeFunction>),
     Function(Rc<Object>, Vec<String>, HashMap<String, Rc<Object>>),
     Cons(Rc<Object>, Rc<Object>),
     Symbol(String),
@@ -73,6 +79,25 @@ impl From<reader::Value> for Object {
             reader::Value::String(string) => Self::String(string),
             reader::Value::Int(i) => Self::Int(i),
             reader::Value::Nil => Self::Nil,
+        }
+    }
+}
+
+impl std::fmt::Debug for Object {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NativeFunction(..) => write!(f, "Object::NativeFunction"),
+            Self::Function(body, parameters, captures) => write!(
+                f,
+                "Object::Function({:?}, {:?} {:?})",
+                *body, parameters, captures
+            ),
+            Self::Cons(car, cdr) => write!(f, "Object::Cons({:?}, {:?})", car, cdr),
+            Self::String(string) => write!(f, "Object::String({})", string.as_str()),
+            Self::Symbol(symbol) => write!(f, "Object::Symbol({})", symbol.as_str()),
+            Self::Int(i) => write!(f, "Object::Int({})", i),
+            Self::True => write!(f, "Object::True"),
+            Self::Nil => write!(f, "Object::Nil"),
         }
     }
 }

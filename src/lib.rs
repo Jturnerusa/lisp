@@ -26,6 +26,16 @@ impl Interpreter {
         }
     }
 
+    pub fn load_native_function(
+        &mut self,
+        name: &str,
+        f: Box<object::NativeFunction>,
+    ) -> Rc<Object> {
+        let object = Rc::new(Object::NativeFunction(f));
+        self.globals.insert(name.to_string(), Rc::clone(&object));
+        object
+    }
+
     pub fn eval(&mut self, object: Rc<Object>) -> Result<Rc<Object>, Error> {
         match &*object {
             Object::Cons(car, _) if matches!(&**car, Object::Symbol(s) if s.as_str() == "lambda") => {
@@ -37,6 +47,15 @@ impl Interpreter {
             Object::Cons(car, _) if matches!(&**car, Object::Symbol(s) if s.as_str() == "set") => {
                 self.set(object)
             }
+            Object::Cons(car, cdr) => {
+                let f = self.eval(Rc::clone(car))?;
+                let args = cdr
+                    .iter_cars()
+                    .ok_or(Error::Parameters)?
+                    .map(|c| self.eval(c))
+                    .collect::<Result<Vec<_>, Error>>()?;
+                self.fncall(f, args.into_iter())
+            }
             Object::Symbol(symbol)
                 if !BUILTINS.iter().any(|builtin| *builtin == symbol.as_str()) =>
             {
@@ -45,6 +64,44 @@ impl Interpreter {
             }
             _ => Ok(object),
         }
+    }
+
+    fn fncall<I: Iterator<Item = Rc<Object>> + 'static>(
+        &mut self,
+        f: Rc<Object>,
+        args: I,
+    ) -> Result<Rc<Object>, Error> {
+        if let Some(native_function) = f.as_nativefunction() {
+            return native_function(Box::new(args));
+        }
+
+        let (body, parameters, captures) = match &*f {
+            Object::Function(b, p, c) => (Rc::clone(b), p.clone(), c.clone()),
+            Object::Symbol(symbol) => match *self
+                .get_variable(symbol.as_str())
+                .ok_or(Error::NotFound(symbol.clone()))?
+            {
+                Object::Function(ref b, ref p, ref c) => (Rc::clone(b), p.clone(), c.clone()),
+                ref object => return Err(Error::Type(Type::Function, Type::from(object))),
+            },
+            object => return Err(Error::Type(Type::Function, Type::from(object))),
+        };
+
+        let mut environment = HashMap::new();
+
+        environment.extend(captures);
+
+        for (parameter, arg) in parameters.iter().zip(args) {
+            environment.insert(parameter.clone(), arg);
+        }
+
+        self.locals.push(environment);
+
+        let ret = self.eval(body);
+
+        self.locals.pop().unwrap();
+
+        ret
     }
 
     fn lambda(&self, cons: Rc<Object>) -> Result<Rc<Object>, Error> {
@@ -130,4 +187,16 @@ impl Interpreter {
             self.globals.get(name).cloned()
         }
     }
+}
+
+pub fn add(args: Box<object::NativeArgs>) -> Result<Rc<Object>, Error> {
+    let result = args
+        .map(|arg| match &*arg {
+            Object::Int(i) => Ok(*i),
+            object => Err(Error::Type(Type::Int, Type::from(object))),
+        })
+        .collect::<Result<Vec<_>, Error>>()?
+        .into_iter()
+        .sum();
+    Ok(Rc::new(Object::Int(result)))
 }
