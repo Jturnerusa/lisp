@@ -14,14 +14,14 @@ type ObjectRef = slotmap::Key;
 
 const BUILTINS: &[&str] = &[
     "lambda", "car", "cdr", "cons", "print", "if", "nil", "t", "panic", "def", "set", "=", "+",
-    "-", "*", "/",
+    "-", "*", "/", "<", ">",
 ];
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub enum Error {
     TypeError,
     InvalidParams,
-    NotFound,
+    NotFound(String),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, EnumAs, EnumIs)]
@@ -115,9 +115,9 @@ impl Interpreter {
             {
                 Ok(objref)
             }
-            Object::Symbol(symbol) => {
-                Ok(self.get_variable(symbol.as_str()).ok_or(Error::NotFound)?)
-            }
+            Object::Symbol(symbol) => Ok(self
+                .get_variable(symbol.as_str())
+                .ok_or(Error::NotFound(symbol.clone()))?),
             _ => Ok(objref),
         }
     }
@@ -140,6 +140,7 @@ impl Interpreter {
             Some("-") => return self.sub(args),
             Some("*") => return self.mul(args),
             Some("/") => return self.div(args),
+            Some("<") => return self.less_than(args),
             _ => (),
         }
         // get the actual function object from a lambda or a function
@@ -151,7 +152,9 @@ impl Interpreter {
                 parameters,
             } => (body, captures, parameters),
             Object::Symbol(symbol) => {
-                let var = self.get_variable(symbol.as_str()).ok_or(Error::NotFound)?;
+                let var = self
+                    .get_variable(symbol.as_str())
+                    .ok_or(Error::NotFound(symbol.clone()))?;
                 if let Some((body, captures, parameters)) = self.objects[var].as_function() {
                     (body, captures, parameters)
                 } else {
@@ -192,7 +195,7 @@ impl Interpreter {
         };
 
         if self.get_variable(binding.as_str()).is_none() {
-            Err(Error::NotFound)
+            Err(Error::NotFound(binding.clone()))
         } else {
             self.def(cons)
         }
@@ -250,6 +253,34 @@ impl Interpreter {
             parameters,
         };
         Ok(self.objects.insert(lambda))
+    }
+
+    fn less_than<I: Iterator<Item = ObjectRef> + Clone>(
+        &mut self,
+        args: I,
+    ) -> Result<ObjectRef, Error> {
+        if args.clone().count() < 2 {
+            return Err(Error::InvalidParams);
+        }
+        let Some(first) = self.objects[args.clone().next().unwrap()].as_int() else {
+            return Err(Error::TypeError);
+        };
+        Ok(
+            if args
+                .skip(1)
+                .map(|arg| match &self.objects[arg] {
+                    Object::Int(i) => Ok(i),
+                    _ => Err(Error::TypeError),
+                })
+                .collect::<Result<Vec<_>, Error>>()?
+                .into_iter()
+                .all(|i| first < i)
+            {
+                self.objects.insert(Object::True)
+            } else {
+                self.objects.insert(Object::Nil)
+            },
+        )
     }
 
     fn add<I: Iterator<Item = ObjectRef> + Clone>(&mut self, args: I) -> Result<ObjectRef, Error> {
@@ -460,7 +491,7 @@ impl fmt::Display for Error {
         match self {
             Self::TypeError => write!(f, "type error"),
             Self::InvalidParams => write!(f, "invalid parameters"),
-            Self::NotFound => write!(f, "variable not found"),
+            Self::NotFound(var) => write!(f, "variable not found: {}", var),
         }
     }
 }
