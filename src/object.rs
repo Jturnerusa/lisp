@@ -2,6 +2,8 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use unwrap_enum::{EnumAs, EnumIs};
 
+use crate::reader;
+
 #[derive(Clone, Debug, EnumAs, EnumIs)]
 pub enum Object {
     Function(Rc<Object>, Vec<String>, HashMap<String, Rc<Object>>),
@@ -57,6 +59,20 @@ impl Iterator for Iter {
             Some((Rc::clone(car), Rc::clone(cdr)))
         } else {
             None
+        }
+    }
+}
+
+impl From<reader::Value> for Object {
+    fn from(other: reader::Value) -> Self {
+        match other {
+            reader::Value::Cons(car, cdr) => {
+                Self::Cons(Rc::new(Object::from(*car)), Rc::new(Object::from(*cdr)))
+            }
+            reader::Value::Symbol(symbol) => Self::Symbol(symbol),
+            reader::Value::String(string) => Self::String(string),
+            reader::Value::Int(i) => Self::Int(i),
+            reader::Value::Nil => Self::Nil,
         }
     }
 }
