@@ -16,6 +16,8 @@ pub enum Type {
     Symbol,
     String,
     Int,
+    True,
+    Nil,
 }
 
 impl fmt::Display for Type {
@@ -26,6 +28,8 @@ impl fmt::Display for Type {
             Self::Symbol => write!(f, "symbol"),
             Self::String => write!(f, "string"),
             Self::Int => write!(f, "integer"),
+            Self::True => write!(f, "true"),
+            Self::Nil => write!(f, "nil"),
         }
     }
 }
@@ -50,6 +54,8 @@ impl From<&Object> for Type {
             Object::Symbol(_) => Type::Symbol,
             Object::String(_) => Type::String,
             Object::Int(_) => Type::Int,
+            Object::True => Type::True,
+            Object::Nil => Type::Nil,
         }
     }
 }

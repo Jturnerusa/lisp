@@ -9,6 +9,8 @@ pub enum Object {
     Symbol(String),
     String(String),
     Int(i64),
+    True,
+    Nil,
 }
 
 pub struct Iter(Option<(Rc<Object>, Rc<Object>)>);
