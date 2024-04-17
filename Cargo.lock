@@ -22,7 +22,6 @@ name = "lisp"
 version = "0.1.0"
 dependencies = [
  "nom",
- "slotmap",
  "unwrap-enum",
 ]
 
@@ -83,10 +82,6 @@ checksum = "291ec9ab5efd934aaf503a6466c5d5251535d108ee747472c3977cc5acc868ef"
 dependencies = [
  "proc-macro2",
 ]
-
-[[package]]
-name = "slotmap"
-version = "0.1.0"
 
 [[package]]
 name = "syn"
