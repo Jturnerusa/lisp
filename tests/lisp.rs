@@ -22,3 +22,8 @@ fn test_lambda() {
         Object::Function(..)
     ))
 }
+
+#[test]
+fn test_self_evaluatiing() {
+    assert!(matches!(*eval("1"), Object::Int(1)));
+}

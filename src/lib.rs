@@ -11,6 +11,8 @@ pub use error::{Error, Type};
 pub use object::Object;
 pub use reader::Reader;
 
+const BUILTINS: &[&str] = &["lambda"];
+
 pub struct Interpreter {
     globals: HashMap<String, Rc<Object>>,
     locals: Vec<HashMap<String, Rc<Object>>>,
@@ -29,7 +31,15 @@ impl Interpreter {
             Object::Cons(car, _) if matches!(&**car, Object::Symbol(s) if s.as_str() == "lambda") => {
                 self.lambda(object)
             }
-            _ => todo!(),
+            Object::Symbol(symbol)
+                if !BUILTINS.iter().any(|builtin| *builtin == symbol.as_str()) =>
+            {
+                todo!()
+            }
+            Object::Symbol(symbol) => {
+                todo!()
+            }
+            _ => Ok(object),
         }
     }
 
