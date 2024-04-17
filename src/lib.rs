@@ -31,13 +31,17 @@ impl Interpreter {
             Object::Cons(car, _) if matches!(&**car, Object::Symbol(s) if s.as_str() == "lambda") => {
                 self.lambda(object)
             }
+            Object::Cons(car, _) if matches!(&**car, Object::Symbol(s) if s.as_str() == "def") => {
+                self.def(object)
+            }
+            Object::Cons(car, _) if matches!(&**car, Object::Symbol(s) if s.as_str() == "set") => {
+                self.set(object)
+            }
             Object::Symbol(symbol)
                 if !BUILTINS.iter().any(|builtin| *builtin == symbol.as_str()) =>
             {
-                todo!()
-            }
-            Object::Symbol(symbol) => {
-                todo!()
+                self.get_variable(symbol.as_str())
+                    .ok_or(Error::NotFound(symbol.clone()))
             }
             _ => Ok(object),
         }
@@ -75,5 +79,55 @@ impl Interpreter {
             .unwrap_or_else(HashMap::new);
 
         Ok(Rc::new(Object::Function(body, parameters, captures)))
+    }
+
+    fn set(&mut self, object: Rc<Object>) -> Result<Rc<Object>, Error> {
+        let variable_name = match &*object
+            .iter_cars()
+            .ok_or(Error::Type(Type::Cons, Type::from(&*object)))?
+            .nth(1)
+            .ok_or(Error::Parameters)?
+        {
+            Object::Symbol(symbol) => symbol.clone(),
+            object => return Err(Error::Type(Type::Symbol, Type::from(object))),
+        };
+
+        if self.get_variable(variable_name.as_str()).is_none() {
+            Err(Error::NotFound(variable_name.clone()))
+        } else {
+            self.def(object)
+        }
+    }
+
+    fn def(&mut self, object: Rc<Object>) -> Result<Rc<Object>, Error> {
+        let variable_name = match &*object
+            .iter_cars()
+            .ok_or(Error::Type(Type::Cons, Type::from(&*object)))?
+            .nth(1)
+            .ok_or(Error::Parameters)?
+        {
+            Object::Symbol(symbol) => symbol.clone(),
+            object => return Err(Error::Type(Type::Symbol, Type::from(object))),
+        };
+
+        let expr = object
+            .iter_cars()
+            .ok_or(Error::Type(Type::Cons, Type::from(&*object)))?
+            .nth(2)
+            .ok_or(Error::Parameters)?;
+
+        let variable_value = self.eval(expr)?;
+
+        self.globals.insert(variable_name, variable_value);
+
+        Ok(Rc::new(Object::Nil))
+    }
+
+    fn get_variable(&self, name: &str) -> Option<Rc<Object>> {
+        std::iter::once(&self.globals)
+            .chain(self.locals.iter())
+            .next_back()
+            .and_then(|env| env.get(name))
+            .cloned()
     }
 }

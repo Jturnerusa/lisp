@@ -27,3 +27,13 @@ fn test_lambda() {
 fn test_self_evaluatiing() {
     assert!(matches!(*eval("1"), Object::Int(1)));
 }
+
+#[test]
+fn test_def() {
+    assert!(matches!(*eval("(def x 1) x"), Object::Int(1)));
+}
+
+#[test]
+fn test_set() {
+    assert!(matches!(*eval("(def x 1) (set x 2) x"), Object::Int(2)));
+}
