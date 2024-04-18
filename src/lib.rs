@@ -119,14 +119,18 @@ impl Interpreter {
             .nth(2)
             .ok_or(Error::Parameters)?;
 
-        let parameters: Vec<String> = parameter_list
-            .iter()
-            .ok_or(Error::Parameters)?
-            .map(|(car, _)| match &*car {
-                Object::Symbol(symbol) => Ok(symbol.clone()),
-                _ => Err(Error::Parameters),
-            })
-            .collect::<Result<Vec<_>, Error>>()?;
+        let parameters = if let Object::Nil = &*parameter_list {
+            Vec::new()
+        } else {
+            parameter_list
+                .iter_cars()
+                .ok_or(Error::Parameters)?
+                .map(|param| match &*param {
+                    Object::Symbol(symbol) => Ok(symbol.clone()),
+                    object => Err(Error::Type(Type::Symbol, Type::from(object))),
+                })
+                .collect::<Result<Vec<_>, Error>>()?
+        };
 
         let captures = self
             .locals

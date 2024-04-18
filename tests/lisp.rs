@@ -54,3 +54,8 @@ fn test_lisp_level_function() {
 "#;
     assert!(matches!(*eval(s), Object::Int(3)));
 }
+
+#[test]
+fn test_lambda_empty_param_list() {
+    eval("(lambda () nil)");
+}
