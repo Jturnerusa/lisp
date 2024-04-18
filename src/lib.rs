@@ -2,6 +2,7 @@
 
 pub mod error;
 pub mod object;
+pub mod prologue;
 pub mod reader;
 
 use std::collections::HashMap;
@@ -191,16 +192,4 @@ impl Interpreter {
             self.globals.get(name).cloned()
         }
     }
-}
-
-pub fn add(args: Box<object::NativeArgs>) -> Result<Rc<Object>, Error> {
-    let result = args
-        .map(|arg| match &*arg {
-            Object::Int(i) => Ok(*i),
-            object => Err(Error::Type(Type::Int, Type::from(object))),
-        })
-        .collect::<Result<Vec<_>, Error>>()?
-        .into_iter()
-        .sum();
-    Ok(Rc::new(Object::Int(result)))
 }
