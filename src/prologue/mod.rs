@@ -44,3 +44,10 @@ pub fn equal(mut args: Box<NativeArgs>) -> Result<Rc<Object>, Error> {
         Ok(Rc::new(Object::Nil))
     }
 }
+
+pub fn list(mut args: Box<NativeArgs>) -> Result<Rc<Object>, Error> {
+    match args.next() {
+        Some(object) => Ok(Rc::new(Object::Cons(object, list(args)?))),
+        None => Ok(Rc::new(Object::Nil)),
+    }
+}

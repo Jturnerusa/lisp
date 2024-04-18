@@ -54,6 +54,10 @@ fn eval(expr: &str) -> Rc<Object> {
             "cdr",
             Box::new(prologue::cdr) as Box<lisp::object::NativeFunction>,
         ),
+        (
+            "list",
+            Box::new(prologue::list) as Box<lisp::object::NativeFunction>,
+        ),
     ] {
         let _ = interpreter.load_native_function(binding, fun);
     }
@@ -180,4 +184,14 @@ fn test_car() {
 #[test]
 fn test_cdr() {
     assert!(matches!(*eval("(cdr (cons 1 2))"), Object::Int(2)));
+}
+#[test]
+fn test_list() {
+    assert_eq!(
+        eval("(list 1 2 3 (+ 2 2) (cons 1 (cons 2 ())) 4)")
+            .iter()
+            .unwrap()
+            .count(),
+        6
+    );
 }
