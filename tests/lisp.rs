@@ -35,6 +35,10 @@ fn eval(expr: &str) -> Rc<Object> {
             Box::new(arithmetic::greater_than) as Box<lisp::object::NativeFunction>,
         ),
         (
+            "%",
+            Box::new(arithmetic::modulo) as Box<lisp::object::NativeFunction>,
+        ),
+        (
             "=",
             Box::new(prologue::equal) as Box<lisp::object::NativeFunction>,
         ),
@@ -141,4 +145,9 @@ fn test_while() {
 x
 "#;
     assert!(matches!(*eval(source), Object::Int(10)));
+}
+
+#[test]
+fn test_mod() {
+    assert!(matches!(*eval("(% 256 255)"), Object::Int(1)))
 }

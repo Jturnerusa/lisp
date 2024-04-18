@@ -111,3 +111,25 @@ pub fn greater_than(mut args: Box<crate::object::NativeArgs>) -> Result<Rc<Objec
         Ok(Rc::new(Object::Nil))
     }
 }
+
+pub fn modulo(mut args: Box<crate::object::NativeArgs>) -> Result<Rc<Object>, Error> {
+    let first = *match args.next().as_deref() {
+        Some(Object::Int(i)) => i,
+        Some(object) => return Err(Error::Type(Type::Int, Type::from(object))),
+        None => return Err(Error::Parameters),
+    };
+
+    let second = *match args.next().as_deref() {
+        Some(Object::Int(i)) => i,
+        Some(object) => return Err(Error::Type(Type::Int, Type::from(object))),
+        None => return Err(Error::Parameters),
+    };
+
+    let None = args.next() else {
+        return Err(Error::Parameters);
+    };
+
+    let result = first % second;
+
+    Ok(Rc::new(Object::Int(result)))
+}
