@@ -131,3 +131,14 @@ fn test_equal() {
     assert!(matches!(*eval("(= 1 1)"), Object::True));
     assert!(matches!(*eval("(= 1 2)"), Object::Nil));
 }
+
+#[test]
+fn test_while() {
+    let source = r#"
+(def x 1)
+(loop (< x 10)
+  (set x (+ x 1)))
+x
+"#;
+    assert!(matches!(*eval(source), Object::Int(10)));
+}

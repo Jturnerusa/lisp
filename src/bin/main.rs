@@ -1,6 +1,6 @@
 use std::env;
 use std::fs::File;
-use std::io::{self, Read};
+use std::io::Read;
 use std::rc::Rc;
 
 use lisp::{Interpreter, Object, Reader};
@@ -13,7 +13,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
 
     let mut source = String::new();
-    file.read_to_string(&mut source);
+    file.read_to_string(&mut source)?;
 
     let mut interpreter = Interpreter::new();
 

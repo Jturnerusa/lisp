@@ -49,6 +49,9 @@ impl Interpreter {
             Object::Cons(car, _) if matches!(&**car, Object::Symbol(s) if s.as_str() == "if") => {
                 self.branch(object)
             }
+            Object::Cons(car, _) if matches!(&**car, Object::Symbol(s) if s.as_str() == "loop") => {
+                self.while_loop(object)
+            }
             Object::Cons(car, cdr) => {
                 let f = self.eval(Rc::clone(car))?;
                 let args = cdr
@@ -63,6 +66,26 @@ impl Interpreter {
                 .ok_or(Error::NotFound(symbol.clone())),
             _ => Ok(object),
         }
+    }
+
+    fn while_loop(&mut self, object: Rc<Object>) -> Result<Rc<Object>, Error> {
+        let predicate = object
+            .iter_cars()
+            .ok_or(Error::Parameters)?
+            .nth(1)
+            .ok_or(Error::Parameters)?;
+
+        let body = object
+            .iter_cars()
+            .ok_or(Error::Parameters)?
+            .nth(2)
+            .ok_or(Error::Parameters)?;
+
+        while let Object::True = *self.eval(Rc::clone(&predicate))? {
+            self.eval(Rc::clone(&body))?;
+        }
+
+        Ok(Rc::new(Object::Nil))
     }
 
     fn branch(&mut self, object: Rc<Object>) -> Result<Rc<Object>, Error> {
