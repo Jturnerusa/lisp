@@ -12,8 +12,6 @@ pub use error::{Error, Type};
 pub use object::Object;
 pub use reader::Reader;
 
-const BUILTINS: &[&str] = &["lambda"];
-
 pub struct Interpreter {
     globals: HashMap<String, Rc<Object>>,
     locals: Vec<HashMap<String, Rc<Object>>>,
@@ -57,12 +55,9 @@ impl Interpreter {
                     .collect::<Result<Vec<_>, Error>>()?;
                 self.fncall(f, args.into_iter())
             }
-            Object::Symbol(symbol)
-                if !BUILTINS.iter().any(|builtin| *builtin == symbol.as_str()) =>
-            {
-                self.get_variable(symbol.as_str())
-                    .ok_or(Error::NotFound(symbol.clone()))
-            }
+            Object::Symbol(symbol) => self
+                .get_variable(symbol.as_str())
+                .ok_or(Error::NotFound(symbol.clone())),
             _ => Ok(object),
         }
     }
