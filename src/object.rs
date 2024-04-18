@@ -83,6 +83,21 @@ impl From<reader::Value> for Object {
     }
 }
 
+impl std::fmt::Display for Object {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NativeFunction(..) => write!(f, "<native function>"),
+            Self::Function(body, ..) => write!(f, "<lambda> {}", **body),
+            Self::Cons(car, cdr) => write!(f, "({} . {})", car, cdr),
+            Self::Symbol(symbol) => write!(f, "'{}", symbol.as_str()),
+            Self::String(string) => write!(f, r#""{}""#, string.as_str()),
+            Self::Int(i) => write!(f, "{i}"),
+            Self::True => write!(f, "t"),
+            Self::Nil => write!(f, "nil"),
+        }
+    }
+}
+
 impl std::fmt::Debug for Object {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
