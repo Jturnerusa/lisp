@@ -38,7 +38,7 @@ impl Object {
 
     pub fn cdr(&self) -> Option<Rc<Object>> {
         match self {
-            Self::Cons(car, _) => Some(Rc::clone(car)),
+            Self::Cons(_, cdr) => Some(Rc::clone(cdr)),
             _ => None,
         }
     }
