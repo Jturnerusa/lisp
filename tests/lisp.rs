@@ -1,4 +1,4 @@
-use lisp::prologue::arithmetic;
+use lisp::prologue::{self, arithmetic};
 use lisp::{self, Interpreter, Object, Reader};
 use std::rc::Rc;
 
@@ -33,6 +33,10 @@ fn eval(expr: &str) -> Rc<Object> {
         (
             ">",
             Box::new(arithmetic::greater_than) as Box<lisp::object::NativeFunction>,
+        ),
+        (
+            "=",
+            Box::new(prologue::equal) as Box<lisp::object::NativeFunction>,
         ),
     ] {
         let _ = interpreter.load_native_function(binding, fun);
@@ -120,4 +124,10 @@ fn test_gt() {
 #[test]
 fn test_branch() {
     assert!(matches!(*eval("(if (> 2 1) 1 2)"), Object::Int(1)));
+}
+
+#[test]
+fn test_equal() {
+    assert!(matches!(*eval("(= 1 1)"), Object::True));
+    assert!(matches!(*eval("(= 1 2)"), Object::Nil));
 }

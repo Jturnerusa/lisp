@@ -1,3 +1,4 @@
+use std::cmp::PartialEq;
 use std::collections::HashMap;
 use std::rc::Rc;
 use unwrap_enum::{EnumAs, EnumIs};
@@ -113,6 +114,23 @@ impl std::fmt::Debug for Object {
             Self::Int(i) => write!(f, "Object::Int({})", i),
             Self::True => write!(f, "Object::True"),
             Self::Nil => write!(f, "Object::Nil"),
+        }
+    }
+}
+
+impl PartialEq for Object {
+    fn eq(&self, other: &Self) -> bool {
+        use Object::*;
+        match (self, other) {
+            (NativeFunction(_), _) => false,
+            (Function(a, b, c), Function(d, e, f)) => a == d && b == e && c == f,
+            (Cons(a, b), Cons(c, d)) => a == c && b == d,
+            (Symbol(a), Symbol(b)) => a == b,
+            (String(a), String(b)) => a == b,
+            (Int(a), Int(b)) => a == b,
+            (True, True) => true,
+            (Nil, Nil) => true,
+            _ => false,
         }
     }
 }
