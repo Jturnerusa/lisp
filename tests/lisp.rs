@@ -116,3 +116,8 @@ fn test_lt() {
 fn test_gt() {
     assert!(matches!(*eval("(> 2 1)"), Object::True));
 }
+
+#[test]
+fn test_branch() {
+    assert!(matches!(*eval("(if (> 2 1) 1 2)"), Object::Int(1)));
+}

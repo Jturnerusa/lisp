@@ -46,6 +46,9 @@ impl Interpreter {
             Object::Cons(car, _) if matches!(&**car, Object::Symbol(s) if s.as_str() == "set") => {
                 self.set(object)
             }
+            Object::Cons(car, _) if matches!(&**car, Object::Symbol(s) if s.as_str() == "if") => {
+                self.branch(object)
+            }
             Object::Cons(car, cdr) => {
                 let f = self.eval(Rc::clone(car))?;
                 let args = cdr
@@ -59,6 +62,32 @@ impl Interpreter {
                 .get_variable(symbol.as_str())
                 .ok_or(Error::NotFound(symbol.clone())),
             _ => Ok(object),
+        }
+    }
+
+    fn branch(&mut self, object: Rc<Object>) -> Result<Rc<Object>, Error> {
+        let predicate = object
+            .iter_cars()
+            .ok_or(Error::Parameters)?
+            .nth(1)
+            .ok_or(Error::Parameters)?;
+
+        let then = object
+            .iter_cars()
+            .ok_or(Error::Parameters)?
+            .nth(2)
+            .ok_or(Error::Parameters)?;
+
+        let els = object
+            .iter_cars()
+            .ok_or(Error::Parameters)?
+            .nth(3)
+            .ok_or(Error::Parameters)?;
+
+        if let Object::True = *self.eval(predicate)? {
+            self.eval(then)
+        } else {
+            self.eval(els)
         }
     }
 
