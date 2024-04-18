@@ -42,6 +42,18 @@ fn eval(expr: &str) -> Rc<Object> {
             "=",
             Box::new(prologue::equal) as Box<lisp::object::NativeFunction>,
         ),
+        (
+            "cons",
+            Box::new(prologue::cons) as Box<lisp::object::NativeFunction>,
+        ),
+        (
+            "car",
+            Box::new(prologue::car) as Box<lisp::object::NativeFunction>,
+        ),
+        (
+            "cdr",
+            Box::new(prologue::cdr) as Box<lisp::object::NativeFunction>,
+        ),
     ] {
         let _ = interpreter.load_native_function(binding, fun);
     }
@@ -150,4 +162,22 @@ x
 #[test]
 fn test_mod() {
     assert!(matches!(*eval("(% 256 255)"), Object::Int(1)))
+}
+
+#[test]
+fn test_cons() {
+    assert!(matches!(
+        &*eval("(cons 1 2)"),
+        Object::Cons(car, cdr) if matches!(&**car, Object::Int(1)) && matches!(&**cdr, Object::Int(2))
+    ));
+}
+
+#[test]
+fn test_car() {
+    assert!(matches!(*eval("(car (cons 1 2))"), Object::Int(1)));
+}
+
+#[test]
+fn test_cdr() {
+    assert!(matches!(*eval("(cdr (cons 1 2))"), Object::Int(2)));
 }
