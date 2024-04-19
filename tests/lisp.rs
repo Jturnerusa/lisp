@@ -215,8 +215,14 @@ fn test_defmacro() {
 
 #[test]
 fn test_macro() {
-    assert!(matches!(
-        *eval("(defmacro interpolate (a b c) (list a b c)) (interpolate 1 2 3)"),
-        Object::Cons(..)
-    ))
+    let source = r#"
+(defmacro defun (name parameters body)
+  (list (quote def) name
+    (list (quote lambda) parameters body)))
+
+(defun add (a b) (+ a b))
+
+(add 1 1)
+"#;
+    assert!(matches!(*eval(source), Object::Int(2)));
 }
