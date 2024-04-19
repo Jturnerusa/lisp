@@ -1,8 +1,8 @@
 use lisp::prologue::{self, arithmetic};
-use lisp::{self, Interpreter, Object, Reader};
+use lisp::{self, Error, Interpreter, Object, Reader};
 use std::rc::Rc;
 
-fn eval(expr: &str) -> Rc<Object> {
+fn eval(expr: &str) -> Result<Rc<Object>, Error> {
     let mut interpreter = Interpreter::new();
 
     for (binding, fun) in [
@@ -71,30 +71,33 @@ fn eval(expr: &str) -> Rc<Object> {
                 .unwrap(),
         );
     }
-    obj.unwrap()
+    Ok(obj.unwrap())
 }
 
 #[test]
 fn test_lambda() {
     assert!(matches!(
-        *eval("(lambda (a b c) (+ a b c))"),
+        *eval("(lambda (a b c) (+ a b c))").unwrap(),
         Object::Function(..)
     ))
 }
 
 #[test]
 fn test_self_evaluatiing() {
-    assert!(matches!(*eval("1"), Object::Int(1)));
+    assert!(matches!(*eval("1").unwrap(), Object::Int(1)));
 }
 
 #[test]
 fn test_def() {
-    assert!(matches!(*eval("(def x 1) x"), Object::Int(1)));
+    assert!(matches!(*eval("(def x 1) x").unwrap(), Object::Int(1)));
 }
 
 #[test]
 fn test_set() {
-    assert!(matches!(*eval("(def x 1) (set x 2) x"), Object::Int(2)));
+    assert!(matches!(
+        *eval("(def x 1) (set x 2) x").unwrap(),
+        Object::Int(2)
+    ));
 }
 
 #[test]
@@ -103,53 +106,53 @@ fn test_lisp_level_function() {
 (def f (lambda (a b c) (+ a b c)))
 (f 1 1 1)
 "#;
-    assert!(matches!(*eval(s), Object::Int(3)));
+    assert!(matches!(*eval(s).unwrap(), Object::Int(3)));
 }
 
 #[test]
 fn test_lambda_empty_param_list() {
-    eval("(lambda () nil)");
+    eval("(lambda () nil)").unwrap();
 }
 
 #[test]
 fn test_add() {
-    assert!(matches!(*eval("(+ 1 1)"), Object::Int(2)));
+    assert!(matches!(*eval("(+ 1 1)").unwrap(), Object::Int(2)));
 }
 
 #[test]
 fn test_sub() {
-    assert!(matches!(*eval("(- 2 1)"), Object::Int(1)));
+    assert!(matches!(*eval("(- 2 1)").unwrap(), Object::Int(1)));
 }
 
 #[test]
 fn test_mul() {
-    assert!(matches!(*eval("(* 2 2)"), Object::Int(4)));
+    assert!(matches!(*eval("(* 2 2)").unwrap(), Object::Int(4)));
 }
 
 #[test]
 fn test_div() {
-    assert!(matches!(*eval("(/ 4 2)"), Object::Int(2)));
+    assert!(matches!(*eval("(/ 4 2)").unwrap(), Object::Int(2)));
 }
 
 #[test]
 fn test_lt() {
-    assert!(matches!(*eval("(< 1 2)"), Object::True));
+    assert!(matches!(*eval("(< 1 2)").unwrap(), Object::True));
 }
 
 #[test]
 fn test_gt() {
-    assert!(matches!(*eval("(> 2 1)"), Object::True));
+    assert!(matches!(*eval("(> 2 1)").unwrap(), Object::True));
 }
 
 #[test]
 fn test_branch() {
-    assert!(matches!(*eval("(if (> 2 1) 1 2)"), Object::Int(1)));
+    assert!(matches!(*eval("(if (> 2 1) 1 2)").unwrap(), Object::Int(1)));
 }
 
 #[test]
 fn test_equal() {
-    assert!(matches!(*eval("(= 1 1)"), Object::True));
-    assert!(matches!(*eval("(= 1 2)"), Object::Nil));
+    assert!(matches!(*eval("(= 1 1)").unwrap(), Object::True));
+    assert!(matches!(*eval("(= 1 2)").unwrap(), Object::Nil));
 }
 
 #[test]
@@ -160,36 +163,37 @@ fn test_while() {
   (set x (+ x 1)))
 x
 "#;
-    assert!(matches!(*eval(source), Object::Int(10)));
+    assert!(matches!(*eval(source).unwrap(), Object::Int(10)));
 }
 
 #[test]
 fn test_mod() {
-    assert!(matches!(*eval("(% 256 255)"), Object::Int(1)))
+    assert!(matches!(*eval("(% 256 255)").unwrap(), Object::Int(1)))
 }
 
 #[test]
 fn test_cons() {
     assert!(matches!(
-        &*eval("(cons 1 2)"),
+        &*eval("(cons 1 2)").unwrap(),
         Object::Cons(car, cdr) if matches!(&**car, Object::Int(1)) && matches!(&**cdr, Object::Int(2))
     ));
 }
 
 #[test]
 fn test_car() {
-    assert!(matches!(*eval("(car (cons 1 2))"), Object::Int(1)));
+    assert!(matches!(*eval("(car (cons 1 2))").unwrap(), Object::Int(1)));
 }
 
 #[test]
 fn test_cdr() {
-    assert!(matches!(*eval("(cdr (cons 1 2))"), Object::Int(2)));
+    assert!(matches!(*eval("(cdr (cons 1 2))").unwrap(), Object::Int(2)));
 }
 
 #[test]
 fn test_list() {
     assert_eq!(
         eval("(list 1 2 3 (+ 2 2) (cons 1 (cons 2 ())) 4)")
+            .unwrap()
             .iter()
             .unwrap()
             .count(),
@@ -200,7 +204,7 @@ fn test_list() {
 #[test]
 fn test_quote() {
     assert!(matches!(
-        &*eval("(quote a)"),
+        &*eval("(quote a)").unwrap(),
         Object::Symbol(symbol) if symbol == "a"
     ));
 }
@@ -208,7 +212,7 @@ fn test_quote() {
 #[test]
 fn test_defmacro() {
     assert!(matches!(
-        &*eval("(defmacro macro (a b c) nil)"),
+        &*eval("(defmacro macro (a b c) nil)").unwrap(),
         Object::Nil
     ))
 }
@@ -224,5 +228,5 @@ fn test_macro() {
 
 (add 1 1)
 "#;
-    assert!(matches!(*eval(source), Object::Int(2)));
+    assert!(matches!(*eval(source).unwrap(), Object::Int(2)));
 }
