@@ -7,6 +7,7 @@ pub enum Error {
     Type(Type, Type),
     Parameters,
     NotFound(String),
+    NotFunction(String),
 }
 
 #[derive(Clone, Debug)]
@@ -40,6 +41,7 @@ impl fmt::Display for Error {
             Self::Type(expected, got) => write!(f, "expected type: {}: got :{}", expected, got),
             Self::Parameters => write!(f, "invalid parameters"),
             Self::NotFound(var) => write!(f, "variable not found: {}", var),
+            Self::NotFunction(var) => write!(f, "variable is not function: {}", var),
         }
     }
 }
