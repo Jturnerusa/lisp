@@ -37,33 +37,51 @@ impl Interpreter {
 
     pub fn eval(&mut self, object: Rc<Object>) -> Result<Rc<Object>, Error> {
         match &*object {
-            Object::Cons(car, _) if matches!(&**car, Object::Symbol(s) if s.as_str() == "lambda") => {
-                self.lambda(object)
-            }
-            Object::Cons(car, _) if matches!(&**car, Object::Symbol(s) if s.as_str() == "def") => {
-                self.def(object)
-            }
-            Object::Cons(car, _) if matches!(&**car, Object::Symbol(s) if s.as_str() == "set") => {
-                self.set(object)
-            }
-            Object::Cons(car, _) if matches!(&**car, Object::Symbol(s) if s.as_str() == "if") => {
-                self.branch(object)
-            }
-            Object::Cons(car, _) if matches!(&**car, Object::Symbol(s) if s.as_str() == "loop") => {
-                self.while_loop(object)
-            }
             Object::Cons(car, cdr) => {
-                let f = self.eval(Rc::clone(car))?;
-                let args = cdr
-                    .iter_cars()
-                    .ok_or(Error::Parameters)?
-                    .map(|c| self.eval(c))
-                    .collect::<Result<Vec<_>, Error>>()?;
-                self.fncall(f, args.into_iter())
+                let fun = self.eval(Rc::clone(car))?;
+                match &*fun {
+                    Object::Symbol(symbol) if symbol == "lambda" => self.lambda(object),
+                    Object::Symbol(symbol) if symbol == "def" => self.def(object),
+                    Object::Symbol(symbol) if symbol == "set" => self.set(object),
+                    Object::Symbol(symbol) if symbol == "if" => self.branch(object),
+                    Object::Symbol(symbol) if symbol == "loop" => self.while_loop(object),
+                    Object::NativeFunction(f) => {
+                        let args = cdr
+                            .iter_cars()
+                            .ok_or(Error::Parameters)?
+                            .map(|expr| self.eval(expr))
+                            .collect::<Result<Vec<_>, Error>>()?
+                            .into_iter();
+                        f(Box::new(args))
+                    }
+                    Object::Function(body, parameters, captures) => {
+                        let args = cdr
+                            .iter_cars()
+                            .ok_or(Error::Parameters)?
+                            .map(|expr| self.eval(expr))
+                            .collect::<Result<Vec<_>, Error>>()?
+                            .into_iter();
+                        self.fncall(
+                            Rc::clone(body),
+                            parameters.iter().cloned(),
+                            captures
+                                .iter()
+                                .map(|(var, val)| (var.clone(), Rc::clone(val))),
+                            args,
+                        )
+                    }
+                    object => Err(Error::NotFunction(format!("{}", object))),
+                }
             }
-            Object::Symbol(symbol) => self
-                .get_variable(symbol.as_str())
-                .ok_or(Error::NotFound(symbol.clone())),
+            Object::Symbol(symbol)
+                if matches!(symbol.as_str(), "lambda" | "def" | "set" | "if" | "loop") =>
+            {
+                Ok(object)
+            }
+            Object::Symbol(symbol) if self.get_variable(symbol).is_none() => {
+                Err(Error::NotFound(symbol.clone()))
+            }
+            Object::Symbol(symbol) => Ok(self.get_variable(symbol).unwrap()),
             _ => Ok(object),
         }
     }
@@ -114,41 +132,19 @@ impl Interpreter {
         }
     }
 
-    fn fncall<I: Iterator<Item = Rc<Object>> + 'static>(
+    fn fncall(
         &mut self,
-        f: Rc<Object>,
-        args: I,
+        body: Rc<Object>,
+        parameters: impl Iterator<Item = String>,
+        captures: impl Iterator<Item = (String, Rc<Object>)>,
+        args: impl Iterator<Item = Rc<Object>>,
     ) -> Result<Rc<Object>, Error> {
-        if let Some(native_function) = f.as_nativefunction() {
-            return native_function(Box::new(args));
-        }
-
-        let (body, parameters, captures) = match &*f {
-            Object::Function(b, p, c) => (Rc::clone(b), p.clone(), c.clone()),
-            Object::Symbol(symbol) => match *self
-                .get_variable(symbol.as_str())
-                .ok_or(Error::NotFound(symbol.clone()))?
-            {
-                Object::Function(ref b, ref p, ref c) => (Rc::clone(b), p.clone(), c.clone()),
-                ref object => return Err(Error::Type(Type::Function, Type::from(object))),
-            },
-            object => return Err(Error::Type(Type::Function, Type::from(object))),
-        };
-
-        let mut environment = HashMap::new();
-
-        environment.extend(captures);
-
-        for (parameter, arg) in parameters.iter().zip(args) {
-            environment.insert(parameter.clone(), arg);
-        }
-
+        let environment = captures
+            .chain(parameters.zip(args))
+            .collect::<HashMap<_, _>>();
         self.locals.push(environment);
-
         let ret = self.eval(body);
-
-        self.locals.pop().unwrap();
-
+        self.locals.pop();
         ret
     }
 
