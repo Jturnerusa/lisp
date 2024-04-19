@@ -198,6 +198,14 @@ fn test_list() {
 }
 
 #[test]
+fn test_quote() {
+    assert!(matches!(
+        &*eval("(quote a)"),
+        Object::Symbol(symbol) if symbol == "a"
+    ));
+}
+
+#[test]
 fn test_defmacro() {
     assert!(matches!(
         dbg!(&*eval("(defmacro macro (a b c) nil)")),

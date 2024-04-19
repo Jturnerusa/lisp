@@ -46,6 +46,7 @@ impl Interpreter {
                     Object::Symbol(symbol) if symbol == "if" => self.branch(object),
                     Object::Symbol(symbol) if symbol == "loop" => self.while_loop(object),
                     Object::Symbol(symbol) if symbol == "defmacro" => self.defmacro(object),
+                    Object::Symbol(symbol) if symbol == "quote" => self.quote(object),
                     Object::NativeFunction(f) => {
                         let args = cdr
                             .iter_cars()
@@ -85,7 +86,7 @@ impl Interpreter {
             Object::Symbol(symbol)
                 if matches!(
                     symbol.as_str(),
-                    "lambda" | "def" | "set" | "if" | "loop" | "defmacro"
+                    "lambda" | "def" | "set" | "if" | "loop" | "defmacro" | "quote"
                 ) =>
             {
                 Ok(object)
@@ -96,6 +97,14 @@ impl Interpreter {
             Object::Symbol(symbol) => Ok(self.get_variable(symbol).unwrap()),
             _ => Ok(object),
         }
+    }
+
+    fn quote(&self, object: Rc<Object>) -> Result<Rc<Object>, Error> {
+        let expr = object
+            .iter_cars()
+            .and_then(|mut iter| iter.nth(1))
+            .ok_or(Error::Parameters)?;
+        Ok(expr)
     }
 
     fn expand_macro(
