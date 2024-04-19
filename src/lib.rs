@@ -78,7 +78,9 @@ impl Interpreter {
                             .ok_or(Error::Parameters)?
                             .collect::<Vec<_>>()
                             .into_iter();
-                        self.expand_macro(Rc::clone(body), parameters.iter().cloned(), args)
+                        let expanded =
+                            self.expand_macro(Rc::clone(body), parameters.iter().cloned(), args)?;
+                        self.eval(expanded)
                     }
                     object => Err(Error::NotFunction(format!("{}", object))),
                 }
