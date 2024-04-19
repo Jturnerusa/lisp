@@ -208,7 +208,7 @@ fn test_quote() {
 #[test]
 fn test_defmacro() {
     assert!(matches!(
-        dbg!(&*eval("(defmacro macro (a b c) nil)")),
+        &*eval("(defmacro macro (a b c) nil)"),
         Object::Nil
     ))
 }
