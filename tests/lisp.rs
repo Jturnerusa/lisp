@@ -230,3 +230,17 @@ fn test_macro() {
 "#;
     assert!(matches!(*eval(source).unwrap(), Object::Int(2)));
 }
+
+#[test]
+fn test_quote_shorthand() {
+    let source = r#"
+(defmacro defun (name parameters body)
+  (list 'def name
+    (list 'lambda parameters body)))
+
+(defun add (a b) (+ a b))
+
+(add 1 1)
+"#;
+    assert!(matches!(*eval(source).unwrap(), Object::Int(2)));
+}

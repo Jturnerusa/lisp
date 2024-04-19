@@ -9,6 +9,7 @@ type Result<'a, I = &'a str, O = I> = nom::IResult<I, O>;
 pub enum Node<'a> {
     LeftParen,
     RightParen,
+    Quote,
     String(&'a str),
     Symbol(&'a str),
     Int(&'a str),
@@ -22,7 +23,7 @@ pub struct Parser<'a> {
 fn parse_node(input: &str) -> Result<&str, Node> {
     sequence::delimited(
         combinator::opt(whitespace),
-        branch::alt((left_paren, right_paren, string, symbol, int)),
+        branch::alt((left_paren, right_paren, quote, string, symbol, int)),
         combinator::opt(whitespace),
     )(input)
 }
@@ -33,6 +34,10 @@ fn left_paren(input: &str) -> Result<&str, Node> {
 
 fn right_paren(input: &str) -> Result<&str, Node> {
     combinator::map(bytes::tag(")"), |_| Node::RightParen)(input)
+}
+
+fn quote(input: &str) -> Result<&str, Node> {
+    combinator::map(bytes::tag("'"), |_| Node::Quote)(input)
 }
 
 fn string(input: &str) -> Result<&str, Node> {
