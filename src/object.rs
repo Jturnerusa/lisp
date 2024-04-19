@@ -1,12 +1,13 @@
 use std::cmp::PartialEq;
 use std::collections::HashMap;
+use std::iter::ExactSizeIterator;
 use std::rc::Rc;
 use unwrap_enum::{EnumAs, EnumIs};
 
 use crate::reader;
 use crate::Error;
 
-pub type NativeArgs = dyn Iterator<Item = Rc<Object>>;
+pub type NativeArgs = dyn ExactSizeIterator<Item = Rc<Object>>;
 
 pub type NativeFunction = dyn Fn(Box<NativeArgs>) -> Result<Rc<Object>, Error>;
 
