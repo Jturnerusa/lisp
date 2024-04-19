@@ -45,6 +45,7 @@ impl Interpreter {
                     Object::Symbol(symbol) if symbol == "set" => self.set(object),
                     Object::Symbol(symbol) if symbol == "if" => self.branch(object),
                     Object::Symbol(symbol) if symbol == "loop" => self.while_loop(object),
+                    Object::Symbol(symbol) if symbol == "defmacro" => self.defmacro(object),
                     Object::NativeFunction(f) => {
                         let args = cdr
                             .iter_cars()
@@ -70,11 +71,22 @@ impl Interpreter {
                             args,
                         )
                     }
+                    Object::Macro(body, parameters) => {
+                        let args = cdr
+                            .iter_cars()
+                            .ok_or(Error::Parameters)?
+                            .collect::<Vec<_>>()
+                            .into_iter();
+                        self.expand_macro(Rc::clone(body), parameters.iter().cloned(), args)
+                    }
                     object => Err(Error::NotFunction(format!("{}", object))),
                 }
             }
             Object::Symbol(symbol)
-                if matches!(symbol.as_str(), "lambda" | "def" | "set" | "if" | "loop") =>
+                if matches!(
+                    symbol.as_str(),
+                    "lambda" | "def" | "set" | "if" | "loop" | "defmacro"
+                ) =>
             {
                 Ok(object)
             }
@@ -84,6 +96,51 @@ impl Interpreter {
             Object::Symbol(symbol) => Ok(self.get_variable(symbol).unwrap()),
             _ => Ok(object),
         }
+    }
+
+    fn expand_macro(
+        &mut self,
+        body: Rc<Object>,
+        parameters: impl Iterator<Item = String>,
+        args: impl Iterator<Item = Rc<Object>>,
+    ) -> Result<Rc<Object>, Error> {
+        let enviromemt = parameters.zip(args).collect::<HashMap<_, _>>();
+        self.locals.push(enviromemt);
+        let expanded = self.eval(body);
+        self.locals.pop().unwrap();
+        expanded
+    }
+
+    fn defmacro(&mut self, object: Rc<Object>) -> Result<Rc<Object>, Error> {
+        let macro_name = object
+            .iter_cars()
+            .and_then(|mut iter| iter.nth(1))
+            .and_then(|object| object.as_symbol().cloned())
+            .ok_or(Error::Parameters)?;
+
+        let parameter_list = object
+            .iter_cars()
+            .and_then(|mut iter| iter.nth(2))
+            .ok_or(Error::Parameters)?;
+
+        let parameters = parameter_list
+            .iter_cars()
+            .and_then(|iter| {
+                iter.map(|object| object.as_symbol().cloned())
+                    .collect::<Option<Vec<_>>>()
+            })
+            .ok_or(Error::Parameters)?;
+
+        let body = object
+            .iter_cars()
+            .and_then(|mut iter| iter.nth(3))
+            .ok_or(Error::Parameters)?;
+
+        let mac = Object::Macro(body, parameters);
+
+        self.globals.insert(macro_name, Rc::new(mac));
+
+        Ok(Rc::new(Object::Nil))
     }
 
     fn while_loop(&mut self, object: Rc<Object>) -> Result<Rc<Object>, Error> {

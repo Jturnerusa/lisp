@@ -14,6 +14,7 @@ pub type NativeFunction = dyn Fn(Box<NativeArgs>) -> Result<Rc<Object>, Error>;
 pub enum Object {
     NativeFunction(Box<NativeFunction>),
     Function(Rc<Object>, Vec<String>, HashMap<String, Rc<Object>>),
+    Macro(Rc<Object>, Vec<String>),
     Cons(Rc<Object>, Rc<Object>),
     Symbol(String),
     String(String),
@@ -46,6 +47,7 @@ impl Object {
     pub fn iter(&self) -> Option<Iter> {
         match self {
             Object::Cons(car, cdr) => Some(Iter(Some((Rc::clone(car), Rc::clone(cdr))))),
+            Object::Nil => Some(Iter(None)),
             _ => None,
         }
     }
@@ -89,6 +91,7 @@ impl std::fmt::Display for Object {
         match self {
             Self::NativeFunction(..) => write!(f, "<native function>"),
             Self::Function(body, ..) => write!(f, "<lambda> {}", **body),
+            Self::Macro(body, _) => write!(f, "<macro> {}", **body),
             Self::Cons(car, cdr) => write!(f, "({} . {})", car, cdr),
             Self::Symbol(symbol) => write!(f, "'{}", symbol.as_str()),
             Self::String(string) => write!(f, r#""{}""#, string.as_str()),
@@ -108,6 +111,9 @@ impl std::fmt::Debug for Object {
                 "Object::Function({:?}, {:?} {:?})",
                 *body, parameters, captures
             ),
+            Self::Macro(body, parameters) => {
+                write!(f, "Object::Macro({:?}, {:?})", body, parameters)
+            }
             Self::Cons(car, cdr) => write!(f, "Object::Cons({:?}, {:?})", car, cdr),
             Self::String(string) => write!(f, "Object::String({})", string.as_str()),
             Self::Symbol(symbol) => write!(f, "Object::Symbol({})", symbol.as_str()),

@@ -13,6 +13,7 @@ pub enum Error {
 #[derive(Clone, Debug)]
 pub enum Type {
     Function,
+    Macro,
     Cons,
     Symbol,
     String,
@@ -25,6 +26,7 @@ impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Function => write!(f, "function"),
+            Self::Macro => write!(f, "macro"),
             Self::Cons => write!(f, "cons"),
             Self::Symbol => write!(f, "symbol"),
             Self::String => write!(f, "string"),
@@ -52,6 +54,7 @@ impl From<&Object> for Type {
     fn from(other: &Object) -> Type {
         match other {
             Object::NativeFunction(..) | Object::Function(..) => Type::Function,
+            Object::Macro(..) => Type::Macro,
             Object::Cons(..) => Type::Cons,
             Object::Symbol(_) => Type::Symbol,
             Object::String(_) => Type::String,

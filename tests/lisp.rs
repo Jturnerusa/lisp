@@ -185,6 +185,7 @@ fn test_car() {
 fn test_cdr() {
     assert!(matches!(*eval("(cdr (cons 1 2))"), Object::Int(2)));
 }
+
 #[test]
 fn test_list() {
     assert_eq!(
@@ -194,4 +195,20 @@ fn test_list() {
             .count(),
         6
     );
+}
+
+#[test]
+fn test_defmacro() {
+    assert!(matches!(
+        dbg!(&*eval("(defmacro macro (a b c) nil)")),
+        Object::Nil
+    ))
+}
+
+#[test]
+fn test_macro() {
+    assert!(matches!(
+        *eval("(defmacro interpolate (a b c) (list a b c)) (interpolate 1 2 3)"),
+        Object::Cons(..)
+    ))
 }
