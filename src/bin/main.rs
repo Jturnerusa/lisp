@@ -74,6 +74,10 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
             "cdr",
             Box::new(lisp::prologue::cdr) as Box<lisp::object::NativeFunction>,
         ),
+        (
+            "append",
+            Box::new(lisp::prologue::append) as Box<lisp::object::NativeFunction>,
+        ),
     ] {
         let _ = interpreter.load_native_function(binding, fun);
     }

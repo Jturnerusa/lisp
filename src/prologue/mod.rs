@@ -71,3 +71,21 @@ pub fn is_nil(mut args: Box<NativeArgs>) -> Result<Rc<Object>, Error> {
         _ => Ok(Rc::new(Object::Nil)),
     }
 }
+
+pub fn append(args: Box<NativeArgs>) -> Result<Rc<Object>, Error> {
+    if args.len() < 1 {
+        return Err(Error::Parameters);
+    }
+
+    let mut elements = Vec::new();
+
+    for arg in args {
+        match arg {
+            object if object.is_cons() => elements.extend(object.iter_cars().unwrap()),
+            object if object.is_nil() => continue,
+            object => elements.push(object),
+        }
+    }
+
+    list(Box::new(elements.into_iter()))
+}
