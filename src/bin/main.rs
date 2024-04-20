@@ -6,15 +6,6 @@ use std::rc::Rc;
 use lisp::{Interpreter, Object, Reader};
 
 pub fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut file = File::open(
-        env::args()
-            .nth(1)
-            .ok_or("expected path to file as first argument")?,
-    )?;
-
-    let mut source = String::new();
-    file.read_to_string(&mut source)?;
-
     let mut interpreter = Interpreter::new();
 
     for (binding, fun) in [
@@ -82,12 +73,21 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         let _ = interpreter.load_native_function(binding, fun);
     }
 
-    for read in Reader::new(source.as_str()) {
-        let object = match read {
-            Ok(r) => Rc::new(Object::from(r)),
-            Err(e) => return Err(Box::new(e)),
-        };
-        interpreter.eval(object)?;
+    let mut buff = String::new();
+
+    for arg in std::env::args().skip(1) {
+        let mut file = File::open(arg)?;
+        buff.clear();
+        file.read_to_string(&mut buff)?;
+        for read in Reader::new(buff.as_str()) {
+            match read {
+                Ok(r) => {
+                    let object = Object::from(r);
+                    interpreter.eval(Rc::new(object))?;
+                }
+                Err(e) => return Err(e.into()),
+            }
+        }
     }
 
     Ok(())
