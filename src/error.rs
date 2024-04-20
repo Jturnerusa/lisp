@@ -8,6 +8,7 @@ pub enum Error {
     Parameters,
     NotFound(String),
     NotFunction(String),
+    Lambda(String),
 }
 
 #[derive(Clone, Debug)]
@@ -44,6 +45,7 @@ impl fmt::Display for Error {
             Self::Parameters => write!(f, "invalid parameters"),
             Self::NotFound(var) => write!(f, "variable not found: {}", var),
             Self::NotFunction(var) => write!(f, "variable is not function: {}", var),
+            Self::Lambda(var) => write!(f, "lambda expression is malformed: {}", var),
         }
     }
 }

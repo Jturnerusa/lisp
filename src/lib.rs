@@ -226,33 +226,35 @@ impl Interpreter {
         ret
     }
 
-    fn lambda(&self, cons: Rc<Object>) -> Result<Rc<Object>, Error> {
-        let parameter_list = cons
-            .iter()
-            .ok_or(Error::Type(Type::Cons, Type::from(&*cons)))?
-            .map(|(car, _)| car)
+    fn lambda(&self, object: Rc<Object>) -> Result<Rc<Object>, Error> {
+        if object
+            .iter_cars()
+            .map(|iter| iter.count())
+            .filter(|count| *count == 3)
+            .is_none()
+        {
+            return Err(Error::Lambda("expected 3 expressions".to_string()));
+        }
+
+        let parameters = object
+            .iter_cars()
+            .unwrap()
             .nth(1)
-            .ok_or(Error::Parameters)?;
+            .unwrap()
+            .iter_cars()
+            .ok_or(Error::Lambda(
+                "expected list in parameter position".to_string(),
+            ))?
+            .map(|object| match &*object {
+                Object::Symbol(symbol) => Ok(symbol.clone()),
+                object => Err(Error::Lambda(format!(
+                    "expected symbols in parameter list, found {}",
+                    Type::from(object)
+                ))),
+            })
+            .collect::<Result<Vec<_>, Error>>()?;
 
-        let body = cons
-            .iter()
-            .ok_or(Error::Type(Type::Cons, Type::from(&*cons)))?
-            .map(|(car, _)| car)
-            .nth(2)
-            .ok_or(Error::Parameters)?;
-
-        let parameters = if let Object::Nil = &*parameter_list {
-            Vec::new()
-        } else {
-            parameter_list
-                .iter_cars()
-                .ok_or(Error::Parameters)?
-                .map(|param| match &*param {
-                    Object::Symbol(symbol) => Ok(symbol.clone()),
-                    object => Err(Error::Type(Type::Symbol, Type::from(object))),
-                })
-                .collect::<Result<Vec<_>, Error>>()?
-        };
+        let body = object.iter_cars().unwrap().nth(2).unwrap();
 
         let captures = self
             .locals
@@ -261,7 +263,9 @@ impl Interpreter {
             .cloned()
             .unwrap_or_else(HashMap::new);
 
-        Ok(Rc::new(Object::Function(body, parameters, captures)))
+        let lambda = Object::Function(body, parameters, captures);
+
+        Ok(Rc::new(lambda))
     }
 
     fn set(&mut self, object: Rc<Object>) -> Result<Rc<Object>, Error> {
