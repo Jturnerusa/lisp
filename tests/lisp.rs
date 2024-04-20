@@ -303,3 +303,16 @@ fn test_push_back() {
         4
     );
 }
+
+#[test]
+fn test_fac() {
+    let source = r#"
+(def fac (lambda (n)
+           (if (< n 2)
+               n
+               (* n (fac (- n 1))))))
+
+(fac 10)
+"#;
+    assert!(matches!(*eval(source).unwrap(), Object::Int(3628800)))
+}
