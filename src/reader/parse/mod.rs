@@ -5,6 +5,10 @@ use nom::sequence;
 
 type Result<'a, I = &'a str, O = I> = nom::IResult<I, O>;
 
+const SYMBOL_ALLOWED_CHARS: &[char] = &[
+    '!', '@', '#', '$', '%', '^', '&', '*', '-', '_', '=', '+', '.', '/', '>', '<', '?',
+];
+
 #[derive(Clone, Copy, Debug)]
 pub enum Node<'a> {
     LeftParen,
@@ -56,24 +60,18 @@ fn symbol(input: &str) -> Result<&str, Node> {
         combinator::recognize(sequence::preceded(
             bytes::take_while_m_n(1, 1, |c: char| {
                 c.is_alphabetic()
-                    || matches!(
-                        c,
-                        '+' | '-'
-                            | '*'
-                            | '!'
-                            | '@'
-                            | '$'
-                            | '^'
-                            | '&'
-                            | '='
-                            | '<'
-                            | '>'
-                            | '/'
-                            | '%'
-                            | '?'
-                    )
+                    || SYMBOL_ALLOWED_CHARS
+                        .iter()
+                        .cloned()
+                        .any(|allowed| c == allowed)
             }),
-            bytes::take_while(|c: char| c.is_alphanumeric() || matches!(c, '?')),
+            bytes::take_while(|c: char| {
+                c.is_alphanumeric()
+                    || SYMBOL_ALLOWED_CHARS
+                        .iter()
+                        .cloned()
+                        .any(|allowed| c == allowed)
+            }),
         )),
         Node::Symbol,
     )(input)
