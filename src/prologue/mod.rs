@@ -60,3 +60,14 @@ pub fn list(mut args: Box<NativeArgs>) -> Result<Rc<Object>, Error> {
         None => Ok(Rc::new(Object::Nil)),
     }
 }
+
+pub fn is_nil(mut args: Box<NativeArgs>) -> Result<Rc<Object>, Error> {
+    if args.len() != 1 {
+        return Err(Error::Parameters);
+    }
+
+    match &*args.next().unwrap() {
+        Object::Nil => Ok(Rc::new(Object::True)),
+        _ => Ok(Rc::new(Object::Nil)),
+    }
+}

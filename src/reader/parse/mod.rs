@@ -58,10 +58,22 @@ fn symbol(input: &str) -> Result<&str, Node> {
                 c.is_alphabetic()
                     || matches!(
                         c,
-                        '+' | '-' | '*' | '!' | '@' | '$' | '^' | '&' | '=' | '<' | '>' | '/' | '%'
+                        '+' | '-'
+                            | '*'
+                            | '!'
+                            | '@'
+                            | '$'
+                            | '^'
+                            | '&'
+                            | '='
+                            | '<'
+                            | '>'
+                            | '/'
+                            | '%'
+                            | '?'
                     )
             }),
-            bytes::take_while(|c: char| c.is_alphanumeric()),
+            bytes::take_while(|c: char| c.is_alphanumeric() || matches!(c, '?')),
         )),
         Node::Symbol,
     )(input)

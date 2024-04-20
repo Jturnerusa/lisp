@@ -58,6 +58,10 @@ fn eval(expr: &str) -> Result<Rc<Object>, Error> {
             "list",
             Box::new(prologue::list) as Box<lisp::object::NativeFunction>,
         ),
+        (
+            "nil?",
+            Box::new(prologue::is_nil) as Box<lisp::object::NativeFunction>,
+        ),
     ] {
         let _ = interpreter.load_native_function(binding, fun);
     }
@@ -243,4 +247,9 @@ fn test_quote_shorthand() {
 (add 1 1)
 "#;
     assert!(matches!(*eval(source).unwrap(), Object::Int(2)));
+}
+
+#[test]
+fn test_is_nil() {
+    assert!(matches!(*eval("(nil? nil)").unwrap(), Object::True))
 }

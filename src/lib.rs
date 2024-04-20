@@ -93,6 +93,7 @@ impl Interpreter {
             {
                 Ok(object)
             }
+            Object::Symbol(symbol) if symbol == "nil" => Ok(Rc::new(Object::Nil)),
             Object::Symbol(symbol) if self.get_variable(symbol).is_none() => {
                 Err(Error::NotFound(symbol.clone()))
             }
