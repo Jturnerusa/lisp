@@ -63,8 +63,8 @@ fn eval(expr: &str) -> Result<Rc<Object>, Error> {
             Box::new(prologue::is_nil) as Box<lisp::object::NativeFunction>,
         ),
         (
-            "append",
-            Box::new(prologue::append) as Box<lisp::object::NativeFunction>,
+            "push-back",
+            Box::new(prologue::push_back) as Box<lisp::object::NativeFunction>,
         ),
     ] {
         let _ = interpreter.load_native_function(binding, fun);
@@ -272,13 +272,22 @@ fn test_progn() {
 }
 
 #[test]
-fn test_append() {
+fn test_push_back() {
     assert_eq!(
-        eval("(append (list 1 2 3) (list 4 5 6))")
+        eval("(push-back (list 1 2 3) (list 4 5 6))")
             .unwrap()
             .iter_cars()
             .unwrap()
             .count(),
-        6
+        4
+    );
+
+    assert_eq!(
+        eval("(push-back (list 1 2 3) 4)")
+            .unwrap()
+            .iter_cars()
+            .unwrap()
+            .count(),
+        4
     );
 }

@@ -72,20 +72,20 @@ pub fn is_nil(mut args: Box<NativeArgs>) -> Result<Rc<Object>, Error> {
     }
 }
 
-pub fn append(args: Box<NativeArgs>) -> Result<Rc<Object>, Error> {
+pub fn push_back(mut args: Box<NativeArgs>) -> Result<Rc<Object>, Error> {
     if args.len() < 1 {
         return Err(Error::Parameters);
     }
 
     let mut elements = Vec::new();
 
-    for arg in args {
-        match arg {
-            object if object.is_cons() => elements.extend(object.iter_cars().unwrap()),
-            object if object.is_nil() => continue,
-            object => elements.push(object),
-        }
-    }
+    let first = match args.next().unwrap() {
+        object if object.is_cons() || object.is_nil() => object.iter_cars().unwrap(),
+        object => return Err(Error::Type(Type::Cons, Type::from(&*object))),
+    };
+
+    elements.extend(first);
+    elements.extend(args);
 
     list(Box::new(elements.into_iter()))
 }
