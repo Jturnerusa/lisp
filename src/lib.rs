@@ -123,9 +123,12 @@ impl Interpreter {
         &mut self,
         body: Rc<Object>,
         parameters: impl Iterator<Item = String>,
-        args: impl Iterator<Item = Rc<Object>>,
+        mut args: impl Iterator<Item = Rc<Object>>,
     ) -> Result<Rc<Object>, Error> {
-        let enviromemt = parameters.zip(args).collect::<HashMap<_, _>>();
+        let mut enviromemt = parameters.zip(args.by_ref()).collect::<HashMap<_, _>>();
+        let rest: Vec<Rc<Object>> = args.collect();
+        let rest = crate::prologue::list(Box::new(rest.into_iter()))?;
+        enviromemt.insert("&rest".to_string(), rest);
         self.locals.push(enviromemt);
         let expanded = self.eval(body);
         self.locals.pop().unwrap();
