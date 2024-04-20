@@ -62,6 +62,18 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
             "nil?",
             Box::new(lisp::prologue::is_nil) as Box<lisp::object::NativeFunction>,
         ),
+        (
+            "cons",
+            Box::new(lisp::prologue::cons) as Box<lisp::object::NativeFunction>,
+        ),
+        (
+            "car",
+            Box::new(lisp::prologue::car) as Box<lisp::object::NativeFunction>,
+        ),
+        (
+            "cdr",
+            Box::new(lisp::prologue::cdr) as Box<lisp::object::NativeFunction>,
+        ),
     ] {
         let _ = interpreter.load_native_function(binding, fun);
     }
