@@ -265,21 +265,37 @@ impl Interpreter {
     }
 
     fn set(&mut self, object: Rc<Object>) -> Result<Rc<Object>, Error> {
-        let variable_name = match &*object
-            .iter_cars()
-            .ok_or(Error::Type(Type::Cons, Type::from(&*object)))?
-            .nth(1)
-            .ok_or(Error::Parameters)?
-        {
-            Object::Symbol(symbol) => symbol.clone(),
-            object => return Err(Error::Type(Type::Symbol, Type::from(object))),
-        };
-
-        if self.get_variable(variable_name.as_str()).is_none() {
-            Err(Error::NotFound(variable_name.clone()))
-        } else {
-            self.def(object)
+        if object.iter_cars().ok_or(Error::Parameters)?.count() != 3 {
+            return Err(Error::Parameters);
         }
+
+        let variable_name = object
+            .iter_cars()
+            .and_then(|mut iter| iter.nth(1))
+            .and_then(|object| object.as_symbol().cloned())
+            .ok_or(Error::Parameters)?;
+
+        let expr = object
+            .iter_cars()
+            .and_then(|mut iter| iter.nth(2))
+            .ok_or(Error::Parameters)?;
+
+        let val = self.eval(expr)?;
+
+        if let Some(var) = self
+            .locals
+            .iter_mut()
+            .next_back()
+            .and_then(|env| env.get_mut(variable_name.as_str()))
+        {
+            *var = Rc::clone(&val);
+        } else if let Some(var) = self.globals.get_mut(variable_name.as_str()) {
+            *var = Rc::clone(&val);
+        } else {
+            return Err(Error::NotFound(variable_name));
+        }
+
+        Ok(val)
     }
 
     fn def(&mut self, object: Rc<Object>) -> Result<Rc<Object>, Error> {
