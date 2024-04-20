@@ -2,6 +2,8 @@ use lisp::prologue::{self, arithmetic};
 use lisp::{self, Error, Interpreter, Object, Reader};
 use std::rc::Rc;
 
+static BOOTSTRAP: &str = include_str!("lisp/lib/bootstrap.lisp");
+
 fn eval(expr: &str) -> Result<Rc<Object>, Error> {
     let mut interpreter = Interpreter::new();
 
@@ -66,8 +68,18 @@ fn eval(expr: &str) -> Result<Rc<Object>, Error> {
             "push-back",
             Box::new(prologue::push_back) as Box<lisp::object::NativeFunction>,
         ),
+        (
+            "print",
+            Box::new(prologue::io::print) as Box<lisp::object::NativeFunction>,
+        ),
     ] {
         let _ = interpreter.load_native_function(binding, fun);
+    }
+
+    let reader = Reader::new(BOOTSTRAP);
+    for read in reader.map(|r| r.unwrap()) {
+        let object = Object::from(read);
+        interpreter.eval(Rc::new(object))?;
     }
 
     let reader = Reader::new(expr);
