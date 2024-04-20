@@ -253,3 +253,16 @@ fn test_quote_shorthand() {
 fn test_is_nil() {
     assert!(matches!(*eval("(nil? nil)").unwrap(), Object::True))
 }
+
+#[test]
+fn test_progn() {
+    assert!(matches!(
+        *eval(
+            "(progn (+ 1 1)
+                    (+ 2 2)
+                    (+ 3 3))"
+        )
+        .unwrap(),
+        Object::Int(6)
+    ))
+}
