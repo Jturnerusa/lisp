@@ -5,8 +5,6 @@ use std::fmt;
 use parse::Parser;
 use unwrap_enum::{EnumAs, EnumIs};
 
-use crate::Object;
-
 #[derive(Clone, PartialEq, Eq, Debug, EnumAs, EnumIs)]
 pub enum Value {
     Cons(Box<Value>, Box<Value>),
