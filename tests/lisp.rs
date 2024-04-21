@@ -1,76 +1,78 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use lisp::prologue::{self, arithmetic};
 use lisp::{self, Error, Interpreter, Object, Reader};
-use std::rc::Rc;
 
 static BOOTSTRAP: &str = include_str!("lisp/lib/bootstrap.lisp");
 
-fn eval(expr: &str) -> Result<Rc<Object>, Error> {
+fn eval(expr: &str) -> Result<Object, Error> {
     let mut interpreter = Interpreter::new();
 
     for (binding, fun) in [
         (
             "+",
-            Box::new(arithmetic::add) as Box<lisp::object::NativeFunction>,
+            Rc::new(arithmetic::add) as Rc<lisp::object::NativeFunction>,
         ),
         (
             "-",
-            Box::new(arithmetic::sub) as Box<lisp::object::NativeFunction>,
+            Rc::new(arithmetic::sub) as Rc<lisp::object::NativeFunction>,
         ),
         (
             "*",
-            Box::new(arithmetic::mul) as Box<lisp::object::NativeFunction>,
+            Rc::new(arithmetic::mul) as Rc<lisp::object::NativeFunction>,
         ),
         (
             "/",
-            Box::new(arithmetic::div) as Box<lisp::object::NativeFunction>,
+            Rc::new(arithmetic::div) as Rc<lisp::object::NativeFunction>,
         ),
         (
             "expt",
-            Box::new(arithmetic::expt) as Box<lisp::object::NativeFunction>,
+            Rc::new(arithmetic::expt) as Rc<lisp::object::NativeFunction>,
         ),
         (
             "<",
-            Box::new(arithmetic::less_than) as Box<lisp::object::NativeFunction>,
+            Rc::new(arithmetic::less_than) as Rc<lisp::object::NativeFunction>,
         ),
         (
             ">",
-            Box::new(arithmetic::greater_than) as Box<lisp::object::NativeFunction>,
+            Rc::new(arithmetic::greater_than) as Rc<lisp::object::NativeFunction>,
         ),
         (
             "%",
-            Box::new(arithmetic::modulo) as Box<lisp::object::NativeFunction>,
+            Rc::new(arithmetic::modulo) as Rc<lisp::object::NativeFunction>,
         ),
         (
             "=",
-            Box::new(prologue::equal) as Box<lisp::object::NativeFunction>,
+            Rc::new(prologue::equal) as Rc<lisp::object::NativeFunction>,
         ),
         (
             "cons",
-            Box::new(prologue::cons) as Box<lisp::object::NativeFunction>,
+            Rc::new(prologue::cons) as Rc<lisp::object::NativeFunction>,
         ),
         (
             "car",
-            Box::new(prologue::car) as Box<lisp::object::NativeFunction>,
+            Rc::new(prologue::car) as Rc<lisp::object::NativeFunction>,
         ),
         (
             "cdr",
-            Box::new(prologue::cdr) as Box<lisp::object::NativeFunction>,
+            Rc::new(prologue::cdr) as Rc<lisp::object::NativeFunction>,
         ),
         (
             "list",
-            Box::new(prologue::list) as Box<lisp::object::NativeFunction>,
+            Rc::new(prologue::list) as Rc<lisp::object::NativeFunction>,
         ),
         (
             "nil?",
-            Box::new(prologue::is_nil) as Box<lisp::object::NativeFunction>,
+            Rc::new(prologue::is_nil) as Rc<lisp::object::NativeFunction>,
         ),
         (
             "push-back",
-            Box::new(prologue::push_back) as Box<lisp::object::NativeFunction>,
+            Rc::new(prologue::push_back) as Rc<lisp::object::NativeFunction>,
         ),
         (
             "print",
-            Box::new(prologue::io::print) as Box<lisp::object::NativeFunction>,
+            Rc::new(prologue::io::print) as Rc<lisp::object::NativeFunction>,
         ),
     ] {
         let _ = interpreter.load_native_function(binding, fun);
@@ -79,7 +81,7 @@ fn eval(expr: &str) -> Result<Rc<Object>, Error> {
     let reader = Reader::new(BOOTSTRAP);
     for read in reader.map(|r| r.unwrap()) {
         let object = Object::from(read);
-        interpreter.eval(Rc::new(object))?;
+        interpreter.eval(Rc::new(RefCell::new(object)))?;
     }
 
     let reader = Reader::new(expr);
@@ -87,35 +89,35 @@ fn eval(expr: &str) -> Result<Rc<Object>, Error> {
     for read in reader {
         obj = Some(
             interpreter
-                .eval(Rc::new(Object::from(read.unwrap())))
+                .eval(Rc::new(RefCell::new(Object::from(read.unwrap()))))
                 .unwrap(),
         );
     }
-    Ok(obj.unwrap())
+    Ok(Rc::unwrap_or_clone(obj.unwrap()).into_inner())
 }
 
 #[test]
 fn test_lambda() {
     assert!(matches!(
-        *eval("(lambda (a b c) (+ a b c))").unwrap(),
+        eval("(lambda (a b c) (+ a b c))").unwrap(),
         Object::Function(..)
     ))
 }
 
 #[test]
 fn test_self_evaluatiing() {
-    assert!(matches!(*eval("1").unwrap(), Object::Int(1)));
+    assert!(matches!(eval("1").unwrap(), Object::Int(1)));
 }
 
 #[test]
 fn test_def() {
-    assert!(matches!(*eval("(def x 1) x").unwrap(), Object::Int(1)));
+    assert!(matches!(eval("(def x 1) x").unwrap(), Object::Int(1)));
 }
 
 #[test]
 fn test_set() {
     assert!(matches!(
-        *eval("(def x 1) (set x 2) x").unwrap(),
+        eval("(def x 1) (set x 2) x").unwrap(),
         Object::Int(2)
     ));
 }
@@ -126,7 +128,7 @@ fn test_lisp_level_function() {
 (def f (lambda (a b c) (+ a b c)))
 (f 1 1 1)
 "#;
-    assert!(matches!(*eval(s).unwrap(), Object::Int(3)));
+    assert!(matches!(eval(s).unwrap(), Object::Int(3)));
 }
 
 #[test]
@@ -136,43 +138,43 @@ fn test_lambda_empty_param_list() {
 
 #[test]
 fn test_add() {
-    assert!(matches!(*eval("(+ 1 1)").unwrap(), Object::Int(2)));
+    assert!(matches!(eval("(+ 1 1)").unwrap(), Object::Int(2)));
 }
 
 #[test]
 fn test_sub() {
-    assert!(matches!(*eval("(- 2 1)").unwrap(), Object::Int(1)));
+    assert!(matches!(eval("(- 2 1)").unwrap(), Object::Int(1)));
 }
 
 #[test]
 fn test_mul() {
-    assert!(matches!(*eval("(* 2 2)").unwrap(), Object::Int(4)));
+    assert!(matches!(eval("(* 2 2)").unwrap(), Object::Int(4)));
 }
 
 #[test]
 fn test_div() {
-    assert!(matches!(*eval("(/ 4 2)").unwrap(), Object::Int(2)));
+    assert!(matches!(eval("(/ 4 2)").unwrap(), Object::Int(2)));
 }
 
 #[test]
 fn test_lt() {
-    assert!(matches!(*eval("(< 1 2)").unwrap(), Object::True));
+    assert!(matches!(eval("(< 1 2)").unwrap(), Object::True));
 }
 
 #[test]
 fn test_gt() {
-    assert!(matches!(*eval("(> 2 1)").unwrap(), Object::True));
+    assert!(matches!(eval("(> 2 1)").unwrap(), Object::True));
 }
 
 #[test]
 fn test_branch() {
-    assert!(matches!(*eval("(if (> 2 1) 1 2)").unwrap(), Object::Int(1)));
+    assert!(matches!(eval("(if (> 2 1) 1 2)").unwrap(), Object::Int(1)));
 }
 
 #[test]
 fn test_equal() {
-    assert!(matches!(*eval("(= 1 1)").unwrap(), Object::True));
-    assert!(matches!(*eval("(= 1 2)").unwrap(), Object::Nil));
+    assert!(matches!(eval("(= 1 1)").unwrap(), Object::True));
+    assert!(matches!(eval("(= 1 2)").unwrap(), Object::Nil));
 }
 
 #[test]
@@ -183,30 +185,30 @@ fn test_while() {
   (set x (+ x 1)))
 x
 "#;
-    assert!(matches!(*eval(source).unwrap(), Object::Int(10)));
+    assert!(matches!(eval(source).unwrap(), Object::Int(10)));
 }
 
 #[test]
 fn test_mod() {
-    assert!(matches!(*eval("(% 256 255)").unwrap(), Object::Int(1)))
+    assert!(matches!(eval("(% 256 255)").unwrap(), Object::Int(1)))
 }
 
 #[test]
 fn test_cons() {
     assert!(matches!(
-        &*eval("(cons 1 2)").unwrap(),
-        Object::Cons(car, cdr) if matches!(&**car, Object::Int(1)) && matches!(&**cdr, Object::Int(2))
+        &eval("(cons 1 2)").unwrap(),
+        Object::Cons(car, cdr) if matches!(*car.borrow(), Object::Int(1)) && matches!(*cdr.borrow(), Object::Int(2))
     ));
 }
 
 #[test]
 fn test_car() {
-    assert!(matches!(*eval("(car (cons 1 2))").unwrap(), Object::Int(1)));
+    assert!(matches!(eval("(car (cons 1 2))").unwrap(), Object::Int(1)));
 }
 
 #[test]
 fn test_cdr() {
-    assert!(matches!(*eval("(cdr (cons 1 2))").unwrap(), Object::Int(2)));
+    assert!(matches!(eval("(cdr (cons 1 2))").unwrap(), Object::Int(2)));
 }
 
 #[test]
@@ -224,7 +226,7 @@ fn test_list() {
 #[test]
 fn test_quote() {
     assert!(matches!(
-        &*eval("(quote a)").unwrap(),
+        &eval("(quote a)").unwrap(),
         Object::Symbol(symbol) if symbol == "a"
     ));
 }
@@ -232,7 +234,7 @@ fn test_quote() {
 #[test]
 fn test_defmacro() {
     assert!(matches!(
-        &*eval("(defmacro macro (a b c) nil)").unwrap(),
+        &eval("(defmacro macro (a b c) nil)").unwrap(),
         Object::Nil
     ))
 }
@@ -248,7 +250,7 @@ fn test_macro() {
 
 (add 1 1)
 "#;
-    assert!(matches!(*eval(source).unwrap(), Object::Int(2)));
+    assert!(matches!(eval(source).unwrap(), Object::Int(2)));
 }
 
 #[test]
@@ -262,18 +264,18 @@ fn test_quote_shorthand() {
 
 (add 1 1)
 "#;
-    assert!(matches!(*eval(source).unwrap(), Object::Int(2)));
+    assert!(matches!(eval(source).unwrap(), Object::Int(2)));
 }
 
 #[test]
 fn test_is_nil() {
-    assert!(matches!(*eval("(nil? nil)").unwrap(), Object::True))
+    assert!(matches!(eval("(nil? nil)").unwrap(), Object::True))
 }
 
 #[test]
 fn test_progn() {
     assert!(matches!(
-        *eval(
+        eval(
             "(progn (+ 1 1)
                     (+ 2 2)
                     (+ 3 3))"
@@ -314,5 +316,5 @@ fn test_fac() {
 
 (fac 10)
 "#;
-    assert!(matches!(*eval(source).unwrap(), Object::Int(3628800)))
+    assert!(matches!(eval(source).unwrap(), Object::Int(3628800)))
 }

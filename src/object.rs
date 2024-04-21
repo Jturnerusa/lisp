@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::cmp::PartialEq;
 use std::collections::HashMap;
 use std::iter::ExactSizeIterator;
@@ -7,16 +8,18 @@ use unwrap_enum::{EnumAs, EnumIs};
 use crate::reader;
 use crate::Error;
 
-pub type NativeArgs = dyn ExactSizeIterator<Item = Rc<Object>>;
+type ObjectRef = Rc<RefCell<Object>>;
 
-pub type NativeFunction = dyn Fn(Box<NativeArgs>) -> Result<Rc<Object>, Error>;
+pub type NativeArgs = dyn ExactSizeIterator<Item = ObjectRef>;
 
-#[derive(EnumAs, EnumIs)]
+pub type NativeFunction = dyn Fn(Box<NativeArgs>) -> Result<ObjectRef, Error>;
+
+#[derive(EnumAs, EnumIs, Clone)]
 pub enum Object {
-    NativeFunction(Box<NativeFunction>),
-    Function(Rc<Object>, Vec<String>, HashMap<String, Rc<Object>>),
-    Macro(Rc<Object>, Vec<String>),
-    Cons(Rc<Object>, Rc<Object>),
+    NativeFunction(Rc<NativeFunction>),
+    Function(ObjectRef, Vec<String>, HashMap<String, ObjectRef>),
+    Macro(ObjectRef, Vec<String>),
+    Cons(ObjectRef, ObjectRef),
     Symbol(String),
     String(String),
     Int(i64),
@@ -24,21 +27,21 @@ pub enum Object {
     Nil,
 }
 
-pub struct Iter(Option<(Rc<Object>, Rc<Object>)>);
+pub struct Iter(Option<(ObjectRef, ObjectRef)>);
 
 impl Object {
-    pub fn cons(a: Rc<Object>, b: Rc<Object>) -> Rc<Object> {
-        Rc::new(Self::Cons(a, b))
+    pub fn cons(a: ObjectRef, b: ObjectRef) -> ObjectRef {
+        Rc::new(RefCell::new(Self::Cons(a, b)))
     }
 
-    pub fn car(&self) -> Option<Rc<Object>> {
+    pub fn car(&self) -> Option<ObjectRef> {
         match self {
             Self::Cons(car, _) => Some(Rc::clone(car)),
             _ => None,
         }
     }
 
-    pub fn cdr(&self) -> Option<Rc<Object>> {
+    pub fn cdr(&self) -> Option<ObjectRef> {
         match self {
             Self::Cons(_, cdr) => Some(Rc::clone(cdr)),
             _ => None,
@@ -53,16 +56,16 @@ impl Object {
         }
     }
 
-    pub fn iter_cars(&self) -> Option<impl Iterator<Item = Rc<Object>>> {
+    pub fn iter_cars(&self) -> Option<impl Iterator<Item = ObjectRef>> {
         Some(self.iter()?.map(|(car, _)| car))
     }
 }
 
 impl Iterator for Iter {
-    type Item = (Rc<Object>, Rc<Object>);
+    type Item = (ObjectRef, ObjectRef);
     fn next(&mut self) -> Option<Self::Item> {
         if let Some((car, cdr)) = &self.0.clone() {
-            self.0 = match &**cdr {
+            self.0 = match &*cdr.borrow() {
                 Object::Cons(a, b) => Some((Rc::clone(a), Rc::clone(b))),
                 _ => None,
             };
@@ -76,9 +79,10 @@ impl Iterator for Iter {
 impl From<reader::Value> for Object {
     fn from(other: reader::Value) -> Self {
         match other {
-            reader::Value::Cons(car, cdr) => {
-                Self::Cons(Rc::new(Object::from(*car)), Rc::new(Object::from(*cdr)))
-            }
+            reader::Value::Cons(car, cdr) => Self::Cons(
+                Rc::new(RefCell::new(Object::from(*car))),
+                Rc::new(RefCell::new(Object::from(*cdr))),
+            ),
             reader::Value::Symbol(symbol) => Self::Symbol(symbol),
             reader::Value::String(string) => Self::String(string),
             reader::Value::Int(i) => Self::Int(i),
@@ -91,9 +95,9 @@ impl std::fmt::Display for Object {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::NativeFunction(..) => write!(f, "<native function>"),
-            Self::Function(body, ..) => write!(f, "<lambda> {}", **body),
-            Self::Macro(body, _) => write!(f, "<macro> {}", **body),
-            Self::Cons(car, cdr) => write!(f, "({} . {})", car, cdr),
+            Self::Function(body, ..) => write!(f, "<lambda> {}", body.borrow()),
+            Self::Macro(body, _) => write!(f, "<macro> {}", body.borrow()),
+            Self::Cons(car, cdr) => write!(f, "({} . {})", car.borrow(), cdr.borrow()),
             Self::Symbol(symbol) => write!(f, "'{}", symbol.as_str()),
             Self::String(string) => write!(f, r#""{}""#, string.as_str()),
             Self::Int(i) => write!(f, "{i}"),
