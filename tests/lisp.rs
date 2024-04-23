@@ -347,3 +347,17 @@ fn test_captures() {
 "#;
     assert!(matches!(eval(source).unwrap(), Object::Int(1)));
 }
+
+#[test]
+fn test_captures_2() {
+    let source = r#"
+(defun test-captures ()
+  (let ((acc nil))
+    ((lambda ()
+      (set acc 1)))
+   acc))
+
+(test-captures)
+"#;
+    assert!(matches!(dbg!(eval(source).unwrap()), Object::Int(1)))
+}
