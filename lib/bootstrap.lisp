@@ -17,3 +17,12 @@
   (cons (list 'lambda (map car bindings)
               (cons 'progn &rest))
         (map cadr bindings)))
+
+(defun filter (p list)
+  (let ((acc nil))
+    (map (lambda (e)
+           (if (p e)
+               (set acc (push-back acc e))
+               nil))
+         list)
+    acc))

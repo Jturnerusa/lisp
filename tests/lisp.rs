@@ -361,3 +361,14 @@ fn test_captures_2() {
 "#;
     assert!(matches!(dbg!(eval(source).unwrap()), Object::Int(1)))
 }
+
+#[test]
+fn test_filter() {
+    let source = r#"
+(filter (lambda (x) (< x 5)) (list 1 2 3 4 5 6 7 8 9))
+"#;
+    assert!(matches!(
+        eval(source).unwrap(),
+        object if object.iter_cars().unwrap().count()== 4
+    ));
+}
