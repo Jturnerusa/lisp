@@ -319,9 +319,9 @@ impl Interpreter {
             .next_back()
             .and_then(|env| env.get_mut(variable_name.as_str()))
         {
-            *var = Rc::clone(&val);
+            *(*var).borrow_mut() = (*val).clone().into_inner();
         } else if let Some(var) = self.globals.get_mut(variable_name.as_str()) {
-            *var = Rc::clone(&val);
+            *(*var).borrow_mut() = (*val).clone().into_inner();
         } else {
             return Err(Error::NotFound(variable_name));
         }
