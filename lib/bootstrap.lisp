@@ -8,12 +8,10 @@
   (if p nil t))
 
 (defun map (f list)
-  ((lambda (f list acc)
-     (progn (loop (not (nil? list))
-             (progn (set acc (push-back acc (f (car list))))
-                    (set list (cdr list))))
-             acc))
-   f list nil))
+  (if (nil? list)
+      nil
+      (cons (f (car list))
+            (map f (cdr list)))))
 
 (defmacro let (bindings)
   (cons (list 'lambda (map car bindings)
