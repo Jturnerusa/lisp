@@ -372,3 +372,11 @@ fn test_filter() {
         object if object.iter_cars().unwrap().count()== 4
     ));
 }
+
+#[test]
+fn test_fold() {
+    let source = r#"
+(fold (lambda (acc e) (+ acc e)) (list 1 2 3))
+"#;
+    assert!(matches!(eval(source).unwrap(), Object::Int(6)));
+}

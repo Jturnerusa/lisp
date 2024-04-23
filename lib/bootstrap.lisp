@@ -26,3 +26,10 @@
                nil))
          list)
     acc))
+
+(defun fold (f list)
+  (let ((acc (car list)))
+    (map (lambda (e)
+           (set acc (f acc e)))
+         (cdr list))
+    acc))
