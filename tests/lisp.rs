@@ -318,3 +318,17 @@ fn test_fac() {
 "#;
     assert!(matches!(eval(source).unwrap(), Object::Int(3628800)))
 }
+
+#[test]
+fn test_captures() {
+    let source = r#"
+(defun test-captures ()
+  (let ((acc nil))
+    (let ((_ nil))
+      (set acc 1))
+   acc))
+
+(test-captures)
+"#;
+    assert!(matches!(eval(source).unwrap(), Object::Int(1)));
+}
