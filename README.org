@@ -1,0 +1,21 @@
+An interpreter for a custom lisp dialect.
+
+* Ideas
+The core language should be as simple as possible, complex features should be implemented in terms
+of the primitives where possible and reasonable. Let can be implemented with lambda, loops
+can be implemented with recusion, etc.
+
+* Differences
+This lisp is intended to be similar to Emacs lisp, but functions and values are unified into a single
+namespace like in scheme.
+
+There is only one equality function, "=", no eq, eql, equal, etc.
+
+Everything is based around single expressions, even lambda bodies are required to be a single expression,
+but can be a "progn" form to evaluate multiple things. Some macros like defun and let introduce a progn
+for you, this makes programming a little bit easier.
+
+* Limitations
+Currently a lot of things are broken, performance is very bad, and error messages are not great and there
+aren't many functions available for programming useful things. A goal is to make it usable enough to
+do advent of code with, but right now it's not very usable.
