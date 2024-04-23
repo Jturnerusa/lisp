@@ -320,6 +320,21 @@ fn test_fac() {
 }
 
 #[test]
+fn test_map() {
+    let source = r#"
+(map (lambda (x) (* x 2)) (list 2 4 6))
+"#;
+    assert!(matches!(
+        eval(source).unwrap(),
+        object if matches!(object.iter_cars()
+            .unwrap()
+            .map(|car| *(*car).clone().into_inner().as_int().unwrap())
+            .collect::<Vec<_>>()
+            .as_slice(), &[4, 8, 12])
+    ))
+}
+
+#[test]
 fn test_captures() {
     let source = r#"
 (defun test-captures ()
