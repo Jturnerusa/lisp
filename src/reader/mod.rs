@@ -193,6 +193,6 @@ mod test {
     #[test]
     fn test_expand_quote_shorthand() {
         let mut reader = Reader::new("('a b '(c d e))");
-        dbg!(reader.next().unwrap().unwrap());
+        reader.next().unwrap().unwrap();
     }
 }
