@@ -43,7 +43,6 @@ impl Interpreter {
                     Object::Symbol(symbol) if symbol == "def" => self.def(object),
                     Object::Symbol(symbol) if symbol == "set" => self.set(object),
                     Object::Symbol(symbol) if symbol == "if" => self.branch(object),
-                    Object::Symbol(symbol) if symbol == "loop" => self.while_loop(object),
                     Object::Symbol(symbol) if symbol == "defmacro" => self.defmacro(object),
                     Object::Symbol(symbol) if symbol == "quote" => self.quote(object),
                     Object::NativeFunction(f) => {
@@ -90,7 +89,7 @@ impl Interpreter {
             Object::Symbol(symbol)
                 if matches!(
                     symbol.as_str(),
-                    "lambda" | "def" | "set" | "if" | "loop" | "defmacro" | "quote"
+                    "lambda" | "def" | "set" | "if" | "defmacro" | "quote"
                 ) =>
             {
                 Ok(object)
@@ -162,28 +161,6 @@ impl Interpreter {
         let mac = Object::Macro(body, parameters);
 
         self.globals.insert(macro_name, Rc::new(RefCell::new(mac)));
-
-        Ok(Rc::new(RefCell::new(Object::Nil)))
-    }
-
-    fn while_loop(&mut self, object: ObjectRef) -> Result<ObjectRef, Error> {
-        let predicate = object
-            .borrow()
-            .iter_cars()
-            .ok_or(Error::Parameters)?
-            .nth(1)
-            .ok_or(Error::Parameters)?;
-
-        let body = object
-            .borrow()
-            .iter_cars()
-            .ok_or(Error::Parameters)?
-            .nth(2)
-            .ok_or(Error::Parameters)?;
-
-        while let Object::True = *self.eval(Rc::clone(&predicate))?.borrow() {
-            self.eval(Rc::clone(&body))?;
-        }
 
         Ok(Rc::new(RefCell::new(Object::Nil)))
     }

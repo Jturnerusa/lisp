@@ -178,17 +178,6 @@ fn test_equal() {
 }
 
 #[test]
-fn test_while() {
-    let source = r#"
-(def x 1)
-(loop (< x 10)
-  (set x (+ x 1)))
-x
-"#;
-    assert!(matches!(eval(source).unwrap(), Object::Int(10)));
-}
-
-#[test]
 fn test_mod() {
     assert!(matches!(eval("(% 256 255)").unwrap(), Object::Int(1)))
 }
