@@ -55,7 +55,7 @@ impl Interpreter {
                             .into_iter();
                         f(Box::new(args))
                     }
-                    Object::Function(body, parameters, captures) => {
+                    Object::Function(f) => {
                         let args = cdr
                             .borrow()
                             .iter_cars()
@@ -63,24 +63,16 @@ impl Interpreter {
                             .map(|expr| self.eval(expr))
                             .collect::<Result<Vec<_>, Error>>()?
                             .into_iter();
-                        self.fncall(
-                            Rc::clone(&body),
-                            parameters.iter().cloned(),
-                            captures
-                                .iter()
-                                .map(|(var, val)| (var.clone(), Rc::clone(val))),
-                            args,
-                        )
+                        self.fncall(&f, args)
                     }
-                    Object::Macro(body, parameters) => {
+                    Object::Macro(mac) => {
                         let args = cdr
                             .borrow()
                             .iter_cars()
                             .ok_or(Error::Parameters)?
                             .collect::<Vec<_>>()
                             .into_iter();
-                        let expanded =
-                            self.expand_macro(Rc::clone(&body), parameters.iter().cloned(), args)?;
+                        let expanded = self.expand_macro(&mac, args)?;
                         self.eval(expanded)
                     }
                     object => Err(Error::NotFunction(format!("{}", object))),
@@ -115,16 +107,20 @@ impl Interpreter {
 
     fn expand_macro(
         &mut self,
-        body: ObjectRef,
-        parameters: impl Iterator<Item = String>,
+        mac: &object::Macro,
         mut args: impl Iterator<Item = ObjectRef>,
     ) -> Result<ObjectRef, Error> {
-        let mut enviromemt = parameters.zip(args.by_ref()).collect::<HashMap<_, _>>();
+        let mut enviromemt = mac
+            .parameters
+            .iter()
+            .cloned()
+            .zip(args.by_ref())
+            .collect::<HashMap<_, _>>();
         let rest: Vec<ObjectRef> = args.collect();
         let rest = crate::prologue::list(Box::new(rest.into_iter()))?;
         enviromemt.insert("&rest".to_string(), rest);
         self.locals.push(enviromemt);
-        let expanded = self.eval(body);
+        let expanded = self.eval(Rc::clone(&mac.body));
         self.locals.pop().unwrap();
         expanded
     }
@@ -158,7 +154,7 @@ impl Interpreter {
             .and_then(|mut iter| iter.nth(3))
             .ok_or(Error::Parameters)?;
 
-        let mac = Object::Macro(body, parameters);
+        let mac = Object::Macro(object::Macro { body, parameters });
 
         self.globals.insert(macro_name, Rc::new(RefCell::new(mac)));
 
@@ -196,16 +192,17 @@ impl Interpreter {
 
     fn fncall(
         &mut self,
-        body: ObjectRef,
-        parameters: impl Iterator<Item = String>,
-        captures: impl Iterator<Item = (String, ObjectRef)>,
+        f: &object::Function,
         args: impl Iterator<Item = ObjectRef>,
     ) -> Result<ObjectRef, Error> {
-        let environment = captures
-            .chain(parameters.zip(args))
+        let environment = f
+            .captures
+            .iter()
+            .map(|(s, obj)| (s.clone(), Rc::clone(obj)))
+            .chain(f.parameters.iter().cloned().zip(args))
             .collect::<HashMap<_, _>>();
         self.locals.push(environment);
-        let ret = self.eval(body);
+        let ret = self.eval(Rc::clone(&f.body));
         self.locals.pop();
         ret
     }
@@ -250,7 +247,11 @@ impl Interpreter {
             .cloned()
             .unwrap_or_else(HashMap::new);
 
-        let lambda = Object::Function(body, parameters, captures);
+        let lambda = Object::Function(object::Function {
+            body,
+            parameters,
+            captures,
+        });
 
         Ok(Rc::new(RefCell::new(lambda)))
     }

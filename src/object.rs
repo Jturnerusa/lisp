@@ -17,14 +17,27 @@ pub type NativeFunction = dyn Fn(Box<NativeArgs>) -> Result<ObjectRef, Error>;
 #[derive(EnumAs, EnumIs, Clone)]
 pub enum Object {
     NativeFunction(Rc<NativeFunction>),
-    Function(ObjectRef, Vec<String>, HashMap<String, ObjectRef>),
-    Macro(ObjectRef, Vec<String>),
+    Function(Function),
+    Macro(Macro),
     Cons(ObjectRef, ObjectRef),
     Symbol(String),
     String(String),
     Int(i64),
     True,
     Nil,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Function {
+    pub body: ObjectRef,
+    pub parameters: Vec<String>,
+    pub captures: HashMap<String, ObjectRef>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Macro {
+    pub body: ObjectRef,
+    pub parameters: Vec<String>,
 }
 
 pub struct Iter(Option<(ObjectRef, ObjectRef)>);
@@ -95,8 +108,8 @@ impl std::fmt::Display for Object {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::NativeFunction(..) => write!(f, "<native function>"),
-            Self::Function(body, ..) => write!(f, "<lambda> {}", body.borrow()),
-            Self::Macro(body, _) => write!(f, "<macro> {}", body.borrow()),
+            Self::Function(Function { body, .. }) => write!(f, "<lambda> {}", body.borrow()),
+            Self::Macro(Macro { body, .. }) => write!(f, "<macro> {}", body.borrow()),
             Self::Cons(car, cdr) => write!(f, "({} . {})", car.borrow(), cdr.borrow()),
             Self::Symbol(symbol) => write!(f, "'{}", symbol.as_str()),
             Self::String(string) => write!(f, r#""{}""#, string.as_str()),
@@ -111,12 +124,16 @@ impl std::fmt::Debug for Object {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::NativeFunction(..) => write!(f, "Object::NativeFunction"),
-            Self::Function(body, parameters, captures) => write!(
+            Self::Function(Function {
+                body,
+                parameters,
+                captures,
+            }) => write!(
                 f,
                 "Object::Function({:?}, {:?} {:?})",
                 *body, parameters, captures
             ),
-            Self::Macro(body, parameters) => {
+            Self::Macro(Macro { body, parameters }) => {
                 write!(f, "Object::Macro({:?}, {:?})", body, parameters)
             }
             Self::Cons(car, cdr) => write!(f, "Object::Cons({:?}, {:?})", car, cdr),
@@ -134,7 +151,7 @@ impl PartialEq for Object {
         use Object::*;
         match (self, other) {
             (NativeFunction(_), _) => false,
-            (Function(a, b, c), Function(d, e, f)) => a == d && b == e && c == f,
+            (Function(a), Function(b)) => a == b,
             (Cons(a, b), Cons(c, d)) => a == c && b == d,
             (Symbol(a), Symbol(b)) => a == b,
             (String(a), String(b)) => a == b,
