@@ -23,6 +23,12 @@
 (defun cadr (cons)
   (car (cdr cons)))
 
+(defun do (f list)
+  (if (nil? list)
+      nil
+      (progn (f (car list))
+             (do f (cdr list)))))
+
 (defun map (f list)
   (if (nil? list)
       nil
@@ -31,7 +37,7 @@
 
 (defun filter (p list)
   (let ((acc nil))
-    (map (lambda (e)
+    (do (lambda (e)
            (if (p e)
                (set acc (push-back acc e))
                nil))
@@ -40,7 +46,7 @@
 
 (defun fold (f list)
   (let ((acc (car list)))
-    (map (lambda (e)
+    (do (lambda (e)
            (set acc (f acc e)))
          (cdr list))
     acc))
