@@ -46,7 +46,6 @@ impl Interpreter {
                     Object::Symbol(symbol) if symbol == "loop" => self.while_loop(object),
                     Object::Symbol(symbol) if symbol == "defmacro" => self.defmacro(object),
                     Object::Symbol(symbol) if symbol == "quote" => self.quote(object),
-                    Object::Symbol(symbol) if symbol == "progn" => self.progn(object),
                     Object::NativeFunction(f) => {
                         let args = cdr
                             .borrow()
@@ -91,7 +90,7 @@ impl Interpreter {
             Object::Symbol(symbol)
                 if matches!(
                     symbol.as_str(),
-                    "lambda" | "def" | "set" | "if" | "loop" | "defmacro" | "quote" | "progn"
+                    "lambda" | "def" | "set" | "if" | "loop" | "defmacro" | "quote"
                 ) =>
             {
                 Ok(object)
@@ -104,14 +103,6 @@ impl Interpreter {
             Object::Symbol(symbol) => Ok(self.get_variable(symbol.as_str()).unwrap()),
             _ => Ok(object),
         }
-    }
-
-    fn progn(&mut self, object: ObjectRef) -> Result<ObjectRef, Error> {
-        object
-            .borrow()
-            .iter_cars()
-            .and_then(|iter| iter.map(|expr| self.eval(expr)).last())
-            .ok_or(Error::Parameters)?
     }
 
     fn quote(&self, object: ObjectRef) -> Result<ObjectRef, Error> {

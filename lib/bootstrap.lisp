@@ -1,22 +1,33 @@
-(defmacro defun (name bindings)
-  (list 'def name (list 'lambda bindings (cons (list progn) &rest))))
+(defmacro progn ()
+  (progn-expand &rest))
 
-(defun cadr (cons)
-  (car (cdr cons)))
+(defmacro defun (name bindings)
+  (list 'def name (list 'lambda bindings (cons 'progn &rest))))
+
+(defmacro let (bindings)
+  (cons (list 'lambda (map car bindings)
+              (cons 'progn &rest))
+        (map cadr bindings)))
+
+(def progn-expand (lambda (exprs)
+                    (if (nil? (cdr exprs))
+                        (car exprs)
+                        (list (list 'lambda (list 'x) (if (nil? (cdr exprs))
+                                                          (car exprs)
+                                                          (progn-expand (cdr exprs))))
+                              (car exprs)))))
 
 (defun not (p)
   (if p nil t))
+
+(defun cadr (cons)
+  (car (cdr cons)))
 
 (defun map (f list)
   (if (nil? list)
       nil
       (cons (f (car list))
             (map f (cdr list)))))
-
-(defmacro let (bindings)
-  (cons (list 'lambda (map car bindings)
-              (cons 'progn &rest))
-        (map cadr bindings)))
 
 (defun filter (p list)
   (let ((acc nil))
