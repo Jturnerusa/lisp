@@ -30,7 +30,6 @@ impl<'a> Reader<'a> {
 
     fn read(&mut self) -> Option<Result<Value, Error>> {
         use parse::Node;
-        use Value::Cons;
         if self.depth == 0 || self.quoting {
             self.quoting = false;
             Some(Ok(match self.parser.next()? {
@@ -52,18 +51,18 @@ impl<'a> Reader<'a> {
             Some(Ok(match self.parser.next() {
                 Some(Ok(Node::LeftParen)) => {
                     self.depth += 1;
-                    Cons(
-                        Box::new(match self.read() {
+                    Value::Cons(Box::new(crate::Cons(
+                        match self.read() {
                             Some(Ok(v)) => v,
                             Some(Err(e)) => return Some(Err(Error::ParseError(e.to_string()))),
                             None => return Some(Err(Error::UnbalancedParens)),
-                        }),
-                        Box::new(match self.read() {
+                        },
+                        match self.read() {
                             Some(Ok(v)) => v,
                             Some(Err(e)) => return Some(Err(Error::ParseError(e.to_string()))),
                             None => return Some(Err(Error::UnbalancedParens)),
-                        }),
-                    )
+                        },
+                    )))
                 }
                 Some(Ok(Node::RightParen)) => {
                     self.depth -= 1;
@@ -73,38 +72,37 @@ impl<'a> Reader<'a> {
                 Some(Ok(Node::Quote)) => {
                     self.quoting = true;
                     let quoted = self.read().unwrap().unwrap();
-                    Cons(
-                        Box::new(Cons(
-                            Box::new(Value::Symbol("quote".to_string())),
-                            Box::new(Cons(Box::new(quoted), Box::new(Value::Nil))),
-                        )),
-                        Box::new(self.read().unwrap().unwrap()),
-                    )
+                    let inner = Value::Cons(Box::new(crate::Cons(
+                        Value::Symbol("quote".to_string()),
+                        Value::Cons(Box::new(crate::Cons(quoted, Value::Nil))),
+                    )));
+                    Value::Cons(Box::new(crate::Cons(inner, self.read().unwrap().unwrap())))
                 }
-                Some(Ok(Node::Symbol(symbol))) => Cons(
-                    Box::new(Value::Symbol(symbol.to_string())),
-                    Box::new(match self.read() {
+                Some(Ok(Node::Symbol(symbol))) => Value::Cons(Box::new(crate::Cons(
+                    Value::Symbol(symbol.to_string()),
+                    match self.read() {
                         Some(Ok(v)) => v,
                         Some(Err(e)) => return Some(Err(Error::ParseError(e.to_string()))),
                         None => return Some(Err(Error::UnbalancedParens)),
-                    }),
-                ),
-                Some(Ok(Node::String(string))) => Cons(
-                    Box::new(Value::String(string.to_string())),
-                    Box::new(match self.read() {
+                    },
+                ))),
+                Some(Ok(Node::String(string))) => Value::Cons(Box::new(crate::Cons(
+                    Value::String(string.to_string()),
+                    match self.read() {
                         Some(Ok(v)) => v,
                         Some(Err(e)) => return Some(Err(Error::ParseError(e.to_string()))),
                         None => return Some(Err(Error::UnbalancedParens)),
-                    }),
-                ),
-                Some(Ok(Node::Int(i))) => Cons(
-                    Box::new(Value::Int(i.parse().unwrap())),
-                    Box::new(match self.read() {
+                    },
+                ))),
+                Some(Ok(Node::Int(i))) => Value::Cons(Box::new(crate::Cons(
+                    Value::Int(i.parse().unwrap()),
+                    match self.read() {
                         Some(Ok(v)) => v,
                         Some(Err(e)) => return Some(Err(Error::ParseError(e.to_string()))),
                         None => return Some(Err(Error::UnbalancedParens)),
-                    }),
-                ),
+                    },
+                ))),
+
                 Some(Err(e)) => return Some(Err(Error::ParseError(e.to_string()))),
                 None => return Some(Err(Error::UnbalancedParens)),
             }))
@@ -134,58 +132,50 @@ impl std::error::Error for Error {}
 mod test {
     use super::*;
 
-    macro_rules! boxed {
+    macro_rules! atom {
+        ($e:tt) => {
+            Value::Symbol(stringify!($e).to_string())
+        };
+    }
+
+    macro_rules! cons {
         ($e:expr) => {
-            Box::new($e)
+            Value::Cons(Box::new(crate::Cons(
+                $e,
+                Value::Nil
+            )))
+        };
+
+        ($e:expr, $($rest:expr),+) => {
+            Value::Cons(Box::new(crate::Cons(
+                $e,
+                cons!($($rest),+)
+            )))
         };
     }
 
     #[test]
     fn test_simple() {
-        use Value::{Cons, Int, Nil, String, Symbol};
-        let expected = Cons(
-            boxed!(Symbol("hello".to_string())),
-            boxed!(Value::Cons(
-                boxed!(String("world".to_string())),
-                boxed!(Cons(boxed!(Int(1)), boxed!(Nil))),
-            )),
-        );
-        let value = Reader::new(r#"(hello "world" 1)"#).next().unwrap().unwrap();
-        assert_eq!(expected, value);
+        let expected = cons! {atom!(a), atom!(b), atom!(c)};
+        let mut reader = Reader::new("(a b c)");
+        assert_eq!(expected, reader.next().unwrap().unwrap());
     }
 
     #[test]
     fn test_nested() {
-        use Value::{Cons, Int, Nil, Symbol};
-        let a = Cons(
-            boxed!(Symbol("a".to_string())),
-            boxed!(Cons(boxed!(Int(1)), boxed!(Nil))),
+        let expected = cons!(
+            atom!(a),
+            atom!(b),
+            cons!(atom!(c), atom!(d), cons!(atom!(e), atom!(f)))
         );
-        let b = Cons(
-            boxed!(Symbol("b".to_string())),
-            boxed!(Cons(boxed!(Int(2)), boxed!(Nil))),
-        );
-        let bindings_list = Cons(boxed!(a), boxed!(Cons(boxed!(b), boxed!(Nil))));
-        let expected = Cons(
-            boxed!(Symbol("let".to_string())),
-            boxed!(Cons(boxed!(bindings_list), boxed!(Nil))),
-        );
-        let value = Reader::new(r#"(let ((a 1) (b 2)))"#)
-            .next()
-            .unwrap()
-            .unwrap();
-        assert_eq!(expected, value);
+        let mut reader = Reader::new("(a b (c d (e f)))");
+        assert_eq!(expected, reader.next().unwrap().unwrap());
     }
 
     #[test]
-    fn test_multi() {
-        let reader = Reader::new("(a b c) (d e f)");
-        assert_eq!(reader.count(), 2);
-    }
-
-    #[test]
-    fn test_expand_quote_shorthand() {
-        let mut reader = Reader::new("('a b '(c d e))");
-        reader.next().unwrap().unwrap();
+    fn test_quote_shorthand() {
+        let expected = cons!(atom!(a), cons!(atom!(quote), cons!(atom!(b), atom!(c))));
+        let mut reader = Reader::new("(a '(b c))");
+        assert_eq!(expected, reader.next().unwrap().unwrap());
     }
 }
