@@ -26,6 +26,8 @@ pub enum OpCode {
     SetGlobal(String),
     SetLocal(usize),
     GetLocal(usize),
+    SetUpValue(usize),
+    GetUpValue(usize),
     Call,
     Tail,
     Return,
