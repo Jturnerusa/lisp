@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+pub mod compiler;
 pub mod reader;
 pub mod vm;
 
