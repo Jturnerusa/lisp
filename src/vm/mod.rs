@@ -44,8 +44,8 @@ pub enum OpCode {
     Car,
     Cdr,
     Cons,
-    Jmp(usize),
-    Branch(usize),
+    Jmp(isize),
+    Branch(isize),
 }
 
 #[derive(Clone, Debug, EnumAs, EnumIs)]
