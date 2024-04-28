@@ -16,14 +16,14 @@ pub enum Ast {
 }
 
 pub struct Lambda {
-    parameters: Vec<String>,
-    body: Box<Ast>,
+    pub parameters: Vec<String>,
+    pub body: Box<Ast>,
 }
 
 pub struct If {
-    predicate: Box<Ast>,
-    then: Box<Ast>,
-    els: Box<Ast>,
+    pub predicate: Box<Ast>,
+    pub then: Box<Ast>,
+    pub els: Box<Ast>,
 }
 
 pub fn parse(value: &Value) -> Result<Ast, Error> {
