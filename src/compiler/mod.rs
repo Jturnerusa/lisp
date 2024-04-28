@@ -1,2 +1,6 @@
+mod ast;
+
 use crate::vm::OpCode;
-use crate::Value;
+use crate::{Cons, Value};
+
+use ast::Ast;
