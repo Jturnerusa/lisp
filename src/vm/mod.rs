@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use gc::{Context, Gc, GcBox, GcCell};
 use unwrap_enum::{EnumAs, EnumIs};
 
+use crate::Value;
+
 #[derive(Clone, Debug)]
 pub enum Type {
     Function,
@@ -35,7 +37,7 @@ pub enum OpCode {
         body: Vec<OpCode>,
         upvalues: Vec<UpValue>,
     },
-    Push(Object),
+    Push(Value),
     Pop,
     Add,
     Sub,
