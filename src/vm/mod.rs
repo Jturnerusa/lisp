@@ -51,7 +51,7 @@ pub enum OpCode {
 }
 
 #[derive(Clone, Debug, EnumAs, EnumIs)]
-pub enum Object {
+enum Object {
     Function(GcBox<GcCell<Lambda>>),
     Cons(Cons),
     String(String),
@@ -68,7 +68,7 @@ pub struct UpValue {
 }
 
 #[derive(Clone, Debug)]
-pub struct Lambda {
+struct Lambda {
     opcodes: Vec<OpCode>,
     upvalues: Vec<GcBox<GcCell<Object>>>,
 }
