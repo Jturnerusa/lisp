@@ -63,8 +63,8 @@ enum Object {
 
 #[derive(Clone, Copy, Debug)]
 pub struct UpValue {
-    frame: usize,
-    index: usize,
+    pub frame: usize,
+    pub index: usize,
 }
 
 #[derive(Clone, Debug)]
