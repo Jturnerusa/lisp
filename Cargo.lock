@@ -3,14 +3,14 @@
 version = 3
 
 [[package]]
+name = "cycle-collector"
+version = "0.1.0"
+
+[[package]]
 name = "either"
 version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "11157ac094ffbdde99aa67b23417ebdd801842852b500e395a45a9c0aac03e4a"
-
-[[package]]
-name = "gc"
-version = "0.1.0"
 
 [[package]]
 name = "itertools"
@@ -25,7 +25,7 @@ dependencies = [
 name = "lisp"
 version = "0.1.0"
 dependencies = [
- "gc",
+ "cycle-collector",
  "nom",
  "unwrap-enum",
 ]
