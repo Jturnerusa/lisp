@@ -1,6 +1,7 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
 
-use gc::{Context, Gc, GcBox, GcCell};
+use cycle_collector::{Cc, CcInner, Context, Trace};
 use unwrap_enum::{EnumAs, EnumIs};
 
 use crate::Value;
@@ -51,9 +52,9 @@ pub enum OpCode {
 }
 
 #[derive(Clone, Debug, EnumAs, EnumIs)]
-enum Object {
-    Function(GcBox<GcCell<Lambda>>),
-    Cons(Cons),
+enum Object<'ctx: 'static> {
+    Function(Cc<'ctx, RefCell<Lambda<'ctx>>>),
+    Cons(Cons<'ctx>),
     String(String),
     Symbol(String),
     Int(i64),
@@ -68,33 +69,36 @@ pub struct UpValue {
 }
 
 #[derive(Clone, Debug)]
-struct Lambda {
+struct Lambda<'ctx: 'static> {
     opcodes: Vec<OpCode>,
-    upvalues: Vec<GcBox<GcCell<Object>>>,
+    upvalues: Vec<Cc<'ctx, RefCell<Object<'ctx>>>>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Cons(GcBox<GcCell<Object>>, GcBox<GcCell<Object>>);
+pub struct Cons<'ctx: 'static>(
+    Cc<'ctx, RefCell<Object<'ctx>>>,
+    Cc<'ctx, RefCell<Object<'ctx>>>,
+);
 
-struct Frame {
-    function: GcBox<GcCell<Lambda>>,
+struct Frame<'ctx: 'static> {
+    function: Cc<'ctx, RefCell<Lambda<'ctx>>>,
     pc: usize,
     bp: usize,
 }
 
-pub struct Vm {
-    gc: Context,
-    globals: HashMap<String, GcBox<GcCell<Object>>>,
-    stack: Vec<GcBox<GcCell<Object>>>,
-    frames: Vec<Frame>,
+pub struct Vm<'ctx: 'static> {
+    cc: &'static Context,
+    globals: HashMap<String, Cc<'ctx, RefCell<Object<'ctx>>>>,
+    stack: Vec<Cc<'ctx, RefCell<Object<'ctx>>>>,
+    frames: Vec<Frame<'ctx>>,
     pc: usize,
     bp: usize,
 }
 
-impl Vm {
-    pub fn new() -> Self {
+impl<'ctx> Vm<'ctx> {
+    pub fn new(ctx: &'static Context) -> Self {
         Self {
-            gc: Context::new(),
+            cc: ctx,
             globals: HashMap::new(),
             stack: Vec::new(),
             frames: Vec::new(),
@@ -179,12 +183,12 @@ impl Vm {
             values.push(self.stack[i].clone());
         }
 
-        let function = self.gc.create(GcCell::new(Lambda {
+        let function = self.cc.create(RefCell::new(Lambda {
             opcodes: opcodes.collect(),
             upvalues: values,
         }));
 
-        let object = self.gc.create(GcCell::new(Object::Function(function)));
+        let object = self.cc.create(RefCell::new(Object::Function(function)));
 
         self.stack.push(object);
 
@@ -209,7 +213,7 @@ impl Vm {
             });
         };
 
-        let result = self.gc.create(GcCell::new(Object::Int(f(a, b))));
+        let result = self.cc.create(RefCell::new(Object::Int(f(a, b))));
 
         self.stack.push(result);
 
@@ -218,7 +222,7 @@ impl Vm {
 
     fn car(&mut self) -> Result<(), Error> {
         let car = match &*(*self.stack.last().unwrap()).borrow() {
-            Object::Cons(Cons(car, _)) => GcBox::clone(car),
+            Object::Cons(Cons(car, _)) => Cc::clone(car),
             object => {
                 return Err(Error::Type {
                     expected: Type::Cons,
@@ -234,7 +238,7 @@ impl Vm {
 
     fn cdr(&mut self) -> Result<(), Error> {
         let car = match &*(*self.stack.last().unwrap()).borrow() {
-            Object::Cons(Cons(_, cdr)) => GcBox::clone(cdr),
+            Object::Cons(Cons(_, cdr)) => Cc::clone(cdr),
             object => {
                 return Err(Error::Type {
                     expected: Type::Cons,
@@ -254,7 +258,7 @@ impl Vm {
 
         let cons = Object::Cons(Cons(a, b));
 
-        let object = self.gc.create(GcCell::new(cons));
+        let object = self.cc.create(RefCell::new(cons));
 
         self.stack.push(object);
 
@@ -272,7 +276,7 @@ impl Vm {
     }
 }
 
-impl From<&Object> for Type {
+impl<'ctx> From<&Object<'ctx>> for Type {
     fn from(value: &Object) -> Self {
         match value {
             Object::Function(_) => Type::Function,
@@ -286,65 +290,28 @@ impl From<&Object> for Type {
     }
 }
 
-unsafe impl Gc for Cons {
-    unsafe fn root(&self) {
-        GcBox::root(&self.0);
-        GcBox::root(&self.1);
-    }
-
-    unsafe fn unroot(&self) {
-        GcBox::unroot(&self.0);
-        GcBox::unroot(&self.1);
-    }
-
-    unsafe fn trace(&self) {
-        GcBox::trace(&self.0);
-        GcBox::trace(&self.1);
-    }
-}
-
-unsafe impl Gc for Lambda {
-    unsafe fn root(&self) {
-        for upvalute in &self.upvalues {
-            upvalute.root();
-        }
-    }
-
-    unsafe fn unroot(&self) {
-        for upvalue in &self.upvalues {
-            upvalue.root();
-        }
-    }
-
-    unsafe fn trace(&self) {
-        for upvalue in &self.upvalues {
-            upvalue.trace();
+unsafe impl<'ctx: 'static> Trace for Object<'ctx> {
+    unsafe fn refs(&self, ptrs: &mut Vec<std::ptr::NonNull<CcInner<dyn Trace>>>) {
+        match self {
+            Self::Function(function) => function.refs(ptrs),
+            Self::Cons(cons) => cons.refs(ptrs),
+            _ => (),
         }
     }
 }
 
-unsafe impl Gc for Object {
-    unsafe fn root(&self) {
-        match self {
-            Object::Function(function) => GcBox::root(function),
-            Object::Cons(cons) => cons.root(),
-            _ => (),
-        }
+unsafe impl<'ctx: 'static> Trace for Cons<'ctx> {
+    unsafe fn refs(&self, ptrs: &mut Vec<std::ptr::NonNull<CcInner<dyn Trace>>>) {
+        let (car, cdr) = (&self.0, &self.1);
+        car.refs(ptrs);
+        cdr.refs(ptrs);
     }
+}
 
-    unsafe fn unroot(&self) {
-        match self {
-            Object::Function(function) => GcBox::unroot(function),
-            Object::Cons(cons) => cons.unroot(),
-            _ => (),
-        }
-    }
-
-    unsafe fn trace(&self) {
-        match self {
-            Object::Function(function) => GcBox::trace(function),
-            Object::Cons(cons) => cons.trace(),
-            _ => (),
+unsafe impl<'ctx: 'static> Trace for Lambda<'ctx> {
+    unsafe fn refs(&self, ptrs: &mut Vec<std::ptr::NonNull<CcInner<dyn Trace>>>) {
+        for upvalue in &self.upvalues {
+            upvalue.refs(ptrs);
         }
     }
 }
