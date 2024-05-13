@@ -3,7 +3,6 @@ mod parse;
 use std::fmt;
 
 use parse::Parser;
-use unwrap_enum::{EnumAs, EnumIs};
 
 use crate::Value;
 
