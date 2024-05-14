@@ -61,6 +61,10 @@ impl Environment {
         })
     }
 
+    pub fn pop_scope(&mut self) {
+        self.scopes.pop();
+    }
+
     pub fn insert(&mut self, var: &str) {
         if self
             .scopes
