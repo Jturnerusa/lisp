@@ -6,6 +6,7 @@ pub enum Error {
     If(&'static str),
 }
 
+#[derive(Clone, Debug)]
 pub enum Ast {
     Lambda(Lambda),
     If(If),
@@ -15,11 +16,13 @@ pub enum Ast {
     Int(i64),
 }
 
+#[derive(Clone, Debug)]
 pub struct Lambda {
     pub parameters: Vec<String>,
     pub body: Box<Ast>,
 }
 
+#[derive(Clone, Debug)]
 pub struct If {
     pub predicate: Box<Ast>,
     pub then: Box<Ast>,
