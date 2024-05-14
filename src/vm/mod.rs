@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
 
-use cycle_collector::{Cc, CcInner, Context, Trace};
 use unwrap_enum::{EnumAs, EnumIs};
 
 use crate::Value;
@@ -52,9 +52,9 @@ pub enum OpCode {
 }
 
 #[derive(Clone, Debug, EnumAs, EnumIs)]
-enum Object<'ctx: 'static> {
-    Function(Cc<'ctx, RefCell<Lambda<'ctx>>>),
-    Cons(Cons<'ctx>),
+enum Object {
+    Function(Rc<RefCell<Lambda>>),
+    Cons(Cons),
     String(String),
     Symbol(String),
     Int(i64),
@@ -69,36 +69,31 @@ pub struct UpValue {
 }
 
 #[derive(Clone, Debug)]
-struct Lambda<'ctx: 'static> {
+struct Lambda {
     opcodes: Vec<OpCode>,
-    upvalues: Vec<Cc<'ctx, RefCell<Object<'ctx>>>>,
+    upvalues: Vec<Rc<RefCell<Object>>>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Cons<'ctx: 'static>(
-    Cc<'ctx, RefCell<Object<'ctx>>>,
-    Cc<'ctx, RefCell<Object<'ctx>>>,
-);
+pub struct Cons(Rc<RefCell<Object>>, Rc<RefCell<Object>>);
 
-struct Frame<'ctx: 'static> {
-    function: Cc<'ctx, RefCell<Lambda<'ctx>>>,
+struct Frame {
+    function: Rc<RefCell<Lambda>>,
     pc: usize,
     bp: usize,
 }
 
-pub struct Vm<'ctx: 'static> {
-    cc: &'static Context,
-    globals: HashMap<String, Cc<'ctx, RefCell<Object<'ctx>>>>,
-    stack: Vec<Cc<'ctx, RefCell<Object<'ctx>>>>,
-    frames: Vec<Frame<'ctx>>,
+pub struct Vm {
+    globals: HashMap<String, Rc<RefCell<Object>>>,
+    stack: Vec<Rc<RefCell<Object>>>,
+    frames: Vec<Frame>,
     pc: usize,
     bp: usize,
 }
 
-impl<'ctx> Vm<'ctx> {
-    pub fn new(ctx: &'static Context) -> Self {
+impl Vm {
+    pub fn new() -> Self {
         Self {
-            cc: ctx,
             globals: HashMap::new(),
             stack: Vec::new(),
             frames: Vec::new(),
@@ -183,12 +178,12 @@ impl<'ctx> Vm<'ctx> {
             values.push(self.stack[i].clone());
         }
 
-        let function = self.cc.create(RefCell::new(Lambda {
+        let function = Rc::new(RefCell::new(Lambda {
             opcodes: opcodes.collect(),
             upvalues: values,
         }));
 
-        let object = self.cc.create(RefCell::new(Object::Function(function)));
+        let object = Rc::new(RefCell::new(Object::Function(function)));
 
         self.stack.push(object);
 
@@ -213,7 +208,7 @@ impl<'ctx> Vm<'ctx> {
             });
         };
 
-        let result = self.cc.create(RefCell::new(Object::Int(f(a, b))));
+        let result = Rc::new(RefCell::new(Object::Int(f(a, b))));
 
         self.stack.push(result);
 
@@ -222,7 +217,7 @@ impl<'ctx> Vm<'ctx> {
 
     fn car(&mut self) -> Result<(), Error> {
         let car = match &*(*self.stack.last().unwrap()).borrow() {
-            Object::Cons(Cons(car, _)) => Cc::clone(car),
+            Object::Cons(Cons(car, _)) => Rc::clone(car),
             object => {
                 return Err(Error::Type {
                     expected: Type::Cons,
@@ -238,7 +233,7 @@ impl<'ctx> Vm<'ctx> {
 
     fn cdr(&mut self) -> Result<(), Error> {
         let car = match &*(*self.stack.last().unwrap()).borrow() {
-            Object::Cons(Cons(_, cdr)) => Cc::clone(cdr),
+            Object::Cons(Cons(_, cdr)) => Rc::clone(cdr),
             object => {
                 return Err(Error::Type {
                     expected: Type::Cons,
@@ -258,7 +253,7 @@ impl<'ctx> Vm<'ctx> {
 
         let cons = Object::Cons(Cons(a, b));
 
-        let object = self.cc.create(RefCell::new(cons));
+        let object = Rc::new(RefCell::new(cons));
 
         self.stack.push(object);
 
@@ -276,7 +271,7 @@ impl<'ctx> Vm<'ctx> {
     }
 }
 
-impl<'ctx> From<&Object<'ctx>> for Type {
+impl From<&Object> for Type {
     fn from(value: &Object) -> Self {
         match value {
             Object::Function(_) => Type::Function,
@@ -286,32 +281,6 @@ impl<'ctx> From<&Object<'ctx>> for Type {
             Object::Int(_) => Type::Int,
             Object::True => Type::True,
             Object::Nil => Type::Nil,
-        }
-    }
-}
-
-unsafe impl<'ctx: 'static> Trace for Object<'ctx> {
-    unsafe fn refs(&self, ptrs: &mut Vec<std::ptr::NonNull<CcInner<dyn Trace>>>) {
-        match self {
-            Self::Function(function) => function.refs(ptrs),
-            Self::Cons(cons) => cons.refs(ptrs),
-            _ => (),
-        }
-    }
-}
-
-unsafe impl<'ctx: 'static> Trace for Cons<'ctx> {
-    unsafe fn refs(&self, ptrs: &mut Vec<std::ptr::NonNull<CcInner<dyn Trace>>>) {
-        let (car, cdr) = (&self.0, &self.1);
-        car.refs(ptrs);
-        cdr.refs(ptrs);
-    }
-}
-
-unsafe impl<'ctx: 'static> Trace for Lambda<'ctx> {
-    unsafe fn refs(&self, ptrs: &mut Vec<std::ptr::NonNull<CcInner<dyn Trace>>>) {
-        for upvalue in &self.upvalues {
-            upvalue.refs(ptrs);
         }
     }
 }
