@@ -1,3 +1,5 @@
+use unwrap_enum::{EnumAs, EnumIs};
+
 use crate::{Cons, Value};
 
 #[derive(Clone, Copy, Debug)]
@@ -6,7 +8,7 @@ pub enum Error {
     If(&'static str),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, EnumAs, EnumIs)]
 pub enum Ast {
     Lambda(Lambda),
     If(If),
@@ -106,4 +108,53 @@ fn parse_list(cons: &Cons) -> Result<Ast, Error> {
             .map(parse)
             .collect::<Result<Vec<_>, Error>>()?,
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse(input: &str) -> Result<Ast, Error> {
+        let mut reader = crate::reader::Reader::new(input);
+        let read = reader.next().unwrap().unwrap();
+        super::parse(&read)
+    }
+
+    #[test]
+    fn test_parse_lambda() {
+        let input = "(lambda (a b c) (+ a b c))";
+        let ast = parse(input).unwrap();
+        let lambda = ast.as_lambda().unwrap();
+
+        assert!(lambda
+            .parameters
+            .iter()
+            .map(String::as_str)
+            .eq(["a", "b", "c"].into_iter()));
+    }
+
+    #[test]
+    fn test_parse_if() {
+        let input = "(if (= 1 1) (+ 1 1) (+ 2 2))";
+        let ast = parse(input).unwrap();
+
+        assert!(ast.is_if());
+    }
+
+    #[test]
+    fn test_parse_list() {
+        let input = "(a b c)";
+        let ast = parse(input).unwrap();
+        let list = ast.as_list().unwrap();
+
+        assert!(matches!(
+            &list[0], Ast::Symbol(a) if a.as_str() == "a"
+        ));
+        assert!(matches!(
+            &list[1], Ast::Symbol(a) if a.as_str() == "b"
+        ));
+        assert!(matches!(
+            &list[2], Ast::Symbol(a) if a.as_str() == "c"
+        ));
+    }
 }
