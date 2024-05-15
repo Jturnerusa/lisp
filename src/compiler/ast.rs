@@ -123,6 +123,7 @@ pub fn parse(value: &Value) -> Result<Ast, Error> {
                 .collect::<Result<Vec<_>, Error>>()?,
         )),
         Value::Symbol(symbol) if symbol.as_str() == "t" => Ok(Ast::True),
+        Value::Symbol(symbol) if symbol.as_str() == "nil" => Ok(Ast::Nil),
         Value::Symbol(symbol) => Ok(Ast::Symbol(symbol.clone())),
         Value::String(string) => Ok(Ast::String(string.clone())),
         Value::Int(i) => Ok(Ast::Int(*i)),
