@@ -27,6 +27,7 @@ pub enum Error {
 pub enum OpCode {
     DefGlobal(String),
     SetGlobal(String),
+    GetGlobal(String),
     SetLocal(usize),
     GetLocal(usize),
     SetUpValue(usize),
