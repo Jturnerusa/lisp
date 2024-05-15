@@ -32,8 +32,8 @@ pub enum OpCode {
     GetLocal(usize),
     SetUpValue(usize),
     GetUpValue(usize),
-    Call,
-    Tail,
+    Call(usize),
+    Tail(usize),
     Return,
     Lambda {
         body: Vec<OpCode>,
