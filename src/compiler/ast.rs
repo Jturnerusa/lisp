@@ -51,7 +51,11 @@ pub fn parse(value: &Value) -> Result<Ast, Error> {
         {
             parse_if(cons)
         }
-        Value::Cons(cons) => parse_list(cons),
+        Value::Cons(cons) => Ok(Ast::List(
+            cons.iter_cars()
+                .map(parse)
+                .collect::<Result<Vec<_>, Error>>()?,
+        )),
         Value::Symbol(symbol) => Ok(Ast::Symbol(symbol.clone())),
         Value::String(string) => Ok(Ast::String(string.clone())),
         Value::Int(i) => Ok(Ast::Int(*i)),
@@ -100,14 +104,6 @@ fn parse_if(cons: &Cons) -> Result<Ast, Error> {
         then: Box::new(then),
         els: Box::new(els),
     }))
-}
-
-fn parse_list(cons: &Cons) -> Result<Ast, Error> {
-    Ok(Ast::List(
-        cons.iter_cars()
-            .map(parse)
-            .collect::<Result<Vec<_>, Error>>()?,
-    ))
 }
 
 #[cfg(test)]
