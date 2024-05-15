@@ -54,6 +54,10 @@ impl Environment {
         Self { scopes: Vec::new() }
     }
 
+    pub fn is_global_scope(&self) -> bool {
+        self.scopes.is_empty()
+    }
+
     pub fn push_scope<'a>(&mut self, locals: impl Iterator<Item = &'a str>) {
         self.scopes.push(Scope {
             locals: locals.map(|s| s.to_string()).collect(),
