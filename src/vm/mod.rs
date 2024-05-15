@@ -23,7 +23,7 @@ pub enum Error {
     NotFound(String),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, EnumAs, EnumIs)]
 pub enum OpCode {
     DefGlobal(String),
     SetGlobal(String),
