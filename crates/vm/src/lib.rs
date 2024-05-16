@@ -8,6 +8,13 @@ use unwrap_enum::{EnumAs, EnumIs};
 
 use value::Value;
 
+#[derive(Clone, Copy, Debug)]
+pub enum Arity {
+    Nullary,
+    Nary(usize),
+    Variadic,
+}
+
 #[derive(Clone, Debug)]
 pub enum Type {
     Function,
@@ -38,6 +45,7 @@ pub enum OpCode {
     Tail(usize),
     Return,
     Lambda {
+        arity: Arity,
         body: Vec<OpCode>,
         upvalues: Vec<UpValue>,
     },
