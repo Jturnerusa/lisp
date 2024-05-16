@@ -117,6 +117,39 @@ impl Vm {
         }
     }
 
+    pub fn eval(&mut self, opcodes: &[OpCode]) -> Result<(), Error> {
+        loop {
+            if self.pc > opcodes.len() && self.current_function.is_none() {
+                return Ok(());
+            }
+
+            let opcode = if let Some(function) = &self.current_function {
+                function.borrow().opcodes[self.pc].clone()
+            } else {
+                opcodes[self.pc].clone()
+            };
+
+            self.pc += 1;
+
+            match opcode {
+                OpCode::DefGlobal(global) => self.def_global(global.as_str())?,
+                OpCode::SetGlobal(global) => self.set_global(global.as_str())?,
+                OpCode::GetLocal(local) => self.get_local(local)?,
+                OpCode::SetLocal(local) => self.set_local(local)?,
+                OpCode::Call(args) => self.call(args)?,
+                OpCode::Return => self.ret()?,
+                OpCode::Add(_) => self.add()?,
+                OpCode::Sub(_) => self.sub()?,
+                OpCode::Mul(_) => self.mul()?,
+                OpCode::Div(_) => self.div()?,
+                OpCode::Car => self.car()?,
+                OpCode::Cdr => self.cdr()?,
+                OpCode::Cons => self.cons()?,
+                _ => todo!(),
+            }
+        }
+    }
+
     fn def_global(&mut self, name: &str) -> Result<(), Error> {
         let val = self.stack.pop().unwrap();
         self.globals.insert(name.to_string(), val);
