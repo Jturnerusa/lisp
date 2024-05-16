@@ -200,8 +200,9 @@ mod tests {
     fn test_compile_lambda() {
         let input = "(lambda (a b) (+ a b c))";
         let opcodes = compile(input).unwrap();
-        let (body, upvalues) = opcodes[0].as_lambda().unwrap();
+        let (parameters, body, upvalues) = opcodes[0].as_lambda().unwrap();
 
+        assert!(matches!(parameters, vm::Arity::Nary(2)));
         assert!(matches!(&body[0], OpCode::GetLocal(0)));
         assert!(matches!(&body[1], OpCode::GetLocal(1)));
         assert!(matches!(&body[2], OpCode::GetGlobal(global) if global.as_str() == "c"));
