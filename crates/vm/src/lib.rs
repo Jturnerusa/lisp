@@ -229,6 +229,22 @@ impl Vm {
         Ok(())
     }
 
+    fn add(&mut self) -> Result<(), Error> {
+        self.binary_integer_op(|a, b| a + b)
+    }
+
+    fn sub(&mut self) -> Result<(), Error> {
+        self.binary_integer_op(|a, b| a - b)
+    }
+
+    fn mul(&mut self) -> Result<(), Error> {
+        self.binary_integer_op(|a, b| a * b)
+    }
+
+    fn div(&mut self) -> Result<(), Error> {
+        self.binary_integer_op(|a, b| a / b)
+    }
+
     fn car(&mut self) -> Result<(), Error> {
         let car = match &*(*self.stack.last().unwrap()).borrow() {
             Object::Cons(Cons(car, _)) => Rc::clone(car),
