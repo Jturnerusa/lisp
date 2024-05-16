@@ -1,0 +1,8 @@
+[package]
+name = "vm"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+value = { path = "../value" }
+unwrap-enum = { path = "../../../unwrap-enum" }

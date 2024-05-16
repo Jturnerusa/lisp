@@ -1,0 +1,10 @@
+[package]
+name = "compiler"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+value = { path = "../value" }
+reader = { path = "../reader" }
+vm = { path = "../vm" }
+unwrap-enum = { path = "../../../unwrap-enum" }

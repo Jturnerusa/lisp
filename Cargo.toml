@@ -1,8 +1,9 @@
-[package]
-name = "lisp"
-version = "0.1.0"
-edition = "2021"
+[workspace]
+members = [
+    "crates/value",
+    "crates/reader",
+    "crates/compiler",
+    "crates/vm"
+]
 
-[dependencies]
-nom = "7.1.3"
-unwrap-enum = { path = "../unwrap-enum" }
+resolver = "2"

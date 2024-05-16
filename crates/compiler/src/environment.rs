@@ -1,4 +1,5 @@
-use crate::vm::UpValue;
+use vm::UpValue;
+
 use unwrap_enum::EnumIs;
 
 #[derive(EnumIs)]

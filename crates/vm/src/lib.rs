@@ -1,10 +1,12 @@
+#![allow(dead_code)]
+
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
 use unwrap_enum::{EnumAs, EnumIs};
 
-use crate::Value;
+use value::Value;
 
 #[derive(Clone, Debug)]
 pub enum Type {

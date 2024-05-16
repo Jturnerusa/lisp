@@ -1,6 +1,6 @@
 use unwrap_enum::{EnumAs, EnumIs};
 
-use crate::{Cons, Value};
+use value::{Cons, Value};
 
 #[derive(Clone, Copy, Debug)]
 pub enum Error {
@@ -179,7 +179,7 @@ mod tests {
     use super::*;
 
     fn parse(input: &str) -> Result<Ast, Error> {
-        let mut reader = crate::reader::Reader::new(input);
+        let mut reader = reader::Reader::new(input);
         let read = reader.next().unwrap().unwrap();
         super::parse(&read)
     }

@@ -1,9 +1,5 @@
 #![allow(dead_code)]
 
-pub mod compiler;
-pub mod reader;
-pub mod vm;
-
 use unwrap_enum::{EnumAs, EnumIs};
 
 // A unified lisp value representation.
@@ -17,7 +13,7 @@ pub enum Value {
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub struct Cons(Value, Value);
+pub struct Cons(pub Value, pub Value);
 
 pub struct Iter<'a>(Option<&'a Cons>);
 

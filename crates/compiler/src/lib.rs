@@ -1,10 +1,13 @@
+#![allow(dead_code)]
+
 mod ast;
 mod environment;
 
 use std::iter::ExactSizeIterator;
 
-use crate::vm::OpCode;
-use crate::Value;
+use value::Value;
+use vm::OpCode;
+
 use ast::Ast;
 use environment::{Environment, Variable};
 
@@ -170,9 +173,9 @@ mod tests {
     use super::*;
 
     fn compile(input: &str) -> Result<Vec<OpCode>, Error> {
-        let mut reader = crate::reader::Reader::new(input);
+        let mut reader = reader::Reader::new(input);
         let read = reader.next().unwrap().unwrap();
-        let ast = self::ast::parse(&read).unwrap();
+        let ast = crate::ast::parse(&read).unwrap();
         let mut opcodes = Vec::new();
         let mut compiler = Compiler::new();
         compiler.compile(&ast, &mut opcodes)?;

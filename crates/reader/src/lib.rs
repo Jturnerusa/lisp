@@ -4,7 +4,7 @@ use std::fmt;
 
 use parse::Parser;
 
-use crate::Value;
+use value::Value;
 
 #[derive(Clone, Debug)]
 pub enum Error {
@@ -50,7 +50,7 @@ impl<'a> Reader<'a> {
             Some(Ok(match self.parser.next() {
                 Some(Ok(Node::LeftParen)) => {
                     self.depth += 1;
-                    Value::Cons(Box::new(crate::Cons(
+                    Value::Cons(Box::new(value::Cons(
                         match self.read() {
                             Some(Ok(v)) => v,
                             Some(Err(e)) => return Some(Err(Error::ParseError(e.to_string()))),
@@ -71,13 +71,13 @@ impl<'a> Reader<'a> {
                 Some(Ok(Node::Quote)) => {
                     self.quoting = true;
                     let quoted = self.read().unwrap().unwrap();
-                    let inner = Value::Cons(Box::new(crate::Cons(
+                    let inner = Value::Cons(Box::new(value::Cons(
                         Value::Symbol("quote".to_string()),
-                        Value::Cons(Box::new(crate::Cons(quoted, Value::Nil))),
+                        Value::Cons(Box::new(value::Cons(quoted, Value::Nil))),
                     )));
-                    Value::Cons(Box::new(crate::Cons(inner, self.read().unwrap().unwrap())))
+                    Value::Cons(Box::new(value::Cons(inner, self.read().unwrap().unwrap())))
                 }
-                Some(Ok(Node::Symbol(symbol))) => Value::Cons(Box::new(crate::Cons(
+                Some(Ok(Node::Symbol(symbol))) => Value::Cons(Box::new(value::Cons(
                     Value::Symbol(symbol.to_string()),
                     match self.read() {
                         Some(Ok(v)) => v,
@@ -85,7 +85,7 @@ impl<'a> Reader<'a> {
                         None => return Some(Err(Error::UnbalancedParens)),
                     },
                 ))),
-                Some(Ok(Node::String(string))) => Value::Cons(Box::new(crate::Cons(
+                Some(Ok(Node::String(string))) => Value::Cons(Box::new(value::Cons(
                     Value::String(string.to_string()),
                     match self.read() {
                         Some(Ok(v)) => v,
@@ -93,7 +93,7 @@ impl<'a> Reader<'a> {
                         None => return Some(Err(Error::UnbalancedParens)),
                     },
                 ))),
-                Some(Ok(Node::Int(i))) => Value::Cons(Box::new(crate::Cons(
+                Some(Ok(Node::Int(i))) => Value::Cons(Box::new(value::Cons(
                     Value::Int(i.parse().unwrap()),
                     match self.read() {
                         Some(Ok(v)) => v,
@@ -139,14 +139,14 @@ mod test {
 
     macro_rules! cons {
         ($e:expr) => {
-            Value::Cons(Box::new(crate::Cons(
+            Value::Cons(Box::new(value::Cons(
                 $e,
                 Value::Nil
             )))
         };
 
         ($e:expr, $($rest:expr),+) => {
-            Value::Cons(Box::new(crate::Cons(
+            Value::Cons(Box::new(value::Cons(
                 $e,
                 cons!($($rest),+)
             )))

@@ -3,6 +3,16 @@
 version = 3
 
 [[package]]
+name = "compiler"
+version = "0.1.0"
+dependencies = [
+ "reader",
+ "unwrap-enum",
+ "value",
+ "vm",
+]
+
+[[package]]
 name = "either"
 version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -15,14 +25,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b0fd2260e829bddf4cb6ea802289de2f86d6a7a690192fbe91b3f46e0f2c8473"
 dependencies = [
  "either",
-]
-
-[[package]]
-name = "lisp"
-version = "0.1.0"
-dependencies = [
- "nom",
- "unwrap-enum",
 ]
 
 [[package]]
@@ -84,6 +86,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "reader"
+version = "0.1.0"
+dependencies = [
+ "nom",
+ "value",
+]
+
+[[package]]
 name = "syn"
 version = "2.0.53"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -108,4 +118,19 @@ dependencies = [
  "quasiquote",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "value"
+version = "0.1.0"
+dependencies = [
+ "unwrap-enum",
+]
+
+[[package]]
+name = "vm"
+version = "0.1.0"
+dependencies = [
+ "unwrap-enum",
+ "value",
 ]
