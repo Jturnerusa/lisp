@@ -64,7 +64,7 @@ pub enum OpCode {
 }
 
 #[derive(Clone, Debug, EnumAs, EnumIs)]
-enum Object {
+pub enum Object {
     Function(Rc<RefCell<Lambda>>),
     Cons(Cons),
     String(String),
@@ -81,7 +81,7 @@ pub struct UpValue {
 }
 
 #[derive(Clone, Debug)]
-struct Lambda {
+pub struct Lambda {
     arity: Arity,
     opcodes: Vec<OpCode>,
     upvalues: Vec<Rc<RefCell<Object>>>,
@@ -148,6 +148,10 @@ impl Vm {
                 _ => todo!(),
             }
         }
+    }
+
+    pub fn stack(&self) -> &[Rc<RefCell<Object>>] {
+        self.stack.as_slice()
     }
 
     fn def_global(&mut self, name: &str) -> Result<(), Error> {
