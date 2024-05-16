@@ -90,7 +90,7 @@ struct Lambda {
 pub struct Cons(Rc<RefCell<Object>>, Rc<RefCell<Object>>);
 
 struct Frame {
-    function: Rc<RefCell<Lambda>>,
+    function: Option<Rc<RefCell<Lambda>>>,
     pc: usize,
     bp: usize,
 }
@@ -99,6 +99,7 @@ pub struct Vm {
     globals: HashMap<String, Rc<RefCell<Object>>>,
     stack: Vec<Rc<RefCell<Object>>>,
     frames: Vec<Frame>,
+    current_function: Option<Rc<RefCell<Lambda>>>,
     pc: usize,
     bp: usize,
 }
@@ -144,37 +145,42 @@ impl Vm {
         Ok(())
     }
 
-    fn call(&mut self) -> Result<(), Error> {
-        let val = self.stack.pop().unwrap();
-        let Object::Function(function) = (*val).clone().into_inner() else {
-            return Err(Error::Type {
-                expected: Type::Function,
-                recived: Type::from(&*(*val).borrow()),
-            });
+    fn call(&mut self, args: usize) -> Result<(), Error> {
+        let f = match &*self.stack[self.stack.len() - args].borrow() {
+            Object::Function(function) => Rc::clone(function),
+            _ => todo!(),
         };
 
-        let frame = Frame {
-            function: function.clone(),
-            pc: self.pc,
+        match &f.borrow().arity {
+            Arity::Nullary if args != 0 => todo!(),
+            Arity::Nary(_) if args == 0 => todo!(),
+            _ => (),
+        }
+
+        self.frames.push(Frame {
+            function: self.current_function.clone(),
             bp: self.bp,
-        };
+            pc: self.pc,
+        });
 
-        self.frames.push(frame);
-        self.pc = 0;
         self.bp = self.stack.len();
+        self.pc = 0;
+
+        self.stack.extend_from_within(self.stack.len() - args..);
 
         Ok(())
     }
 
     fn tail(&mut self) -> Result<(), Error> {
-        self.pc = 0;
-        Ok(())
+        todo!()
     }
 
     fn ret(&mut self) -> Result<(), Error> {
+        self.stack.truncate(self.bp);
         let frame = self.frames.pop().unwrap();
         self.pc = frame.pc;
         self.bp = frame.bp;
+        self.current_function = frame.function;
         Ok(())
     }
 
