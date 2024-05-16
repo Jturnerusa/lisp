@@ -81,6 +81,7 @@ pub struct UpValue {
 
 #[derive(Clone, Debug)]
 struct Lambda {
+    arity: Arity,
     opcodes: Vec<OpCode>,
     upvalues: Vec<Rc<RefCell<Object>>>,
 }
@@ -179,6 +180,7 @@ impl Vm {
 
     fn lambda(
         &mut self,
+        arity: Arity,
         opcodes: impl Iterator<Item = OpCode>,
         upvalues: impl Iterator<Item = UpValue>,
     ) -> Result<(), Error> {
@@ -190,6 +192,7 @@ impl Vm {
         }
 
         let function = Rc::new(RefCell::new(Lambda {
+            arity,
             opcodes: opcodes.collect(),
             upvalues: values,
         }));
