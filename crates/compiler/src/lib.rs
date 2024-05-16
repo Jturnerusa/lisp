@@ -53,6 +53,10 @@ impl Compiler {
         lambda_opcodes.push(OpCode::Return);
 
         opcodes.push(OpCode::Lambda {
+            arity: match lambda.parameters.len() {
+                0 => vm::Arity::Nullary,
+                i => vm::Arity::Nary(i),
+            },
             body: lambda_opcodes,
             upvalues: self.environment.upvalues().collect(),
         });
