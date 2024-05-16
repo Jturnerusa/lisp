@@ -30,6 +30,7 @@ pub enum Type {
 pub enum Error {
     Type { expected: Type, recived: Type },
     NotFound(String),
+    Parameters(String),
 }
 
 #[derive(Clone, Debug, EnumAs, EnumIs)]
