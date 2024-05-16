@@ -110,6 +110,7 @@ impl Vm {
             globals: HashMap::new(),
             stack: Vec::new(),
             frames: Vec::new(),
+            current_function: None,
             pc: 0,
             bp: 0,
         }
