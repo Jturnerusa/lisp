@@ -28,6 +28,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "lisp"
+version = "0.0.1"
+dependencies = [
+ "compiler",
+ "reader",
+ "value",
+ "vm",
+]
+
+[[package]]
 name = "memchr"
 version = "2.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

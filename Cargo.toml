@@ -1,9 +1,12 @@
 [workspace]
-members = [
-    "crates/value",
-    "crates/reader",
-    "crates/compiler",
-    "crates/vm"
-]
 
-resolver = "2"
+[package]
+name = "lisp"
+version = "0.0.1"
+edition = "2021"
+
+[dependencies]
+value = { path = "crates/value" }
+reader = { path = "crates/reader" }
+compiler = { path = "crates/compiler" }
+vm = { path = "crates/vm" }
