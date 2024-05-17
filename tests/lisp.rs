@@ -16,7 +16,6 @@ fn eval(input: &str) -> Result<Value, Box<dyn std::error::Error>> {
         let ast = compiler::ast::parse(&read).unwrap();
         opcodes.clear();
         compiler.compile(&ast, &mut opcodes).unwrap();
-        dbg!(&opcodes);
         vm.eval(opcodes.as_slice()).unwrap();
     }
 
