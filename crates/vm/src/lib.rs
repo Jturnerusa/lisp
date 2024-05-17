@@ -359,3 +359,28 @@ impl From<&Object> for Type {
         }
     }
 }
+
+impl TryFrom<&Object> for Value {
+    type Error = ();
+    fn try_from(object: &Object) -> Result<Self, Self::Error> {
+        Ok(match object {
+            Object::Function(_) => return Err(()),
+            Object::Cons(cons) => Value::Cons(Box::new(value::Cons::try_from(cons)?)),
+            Object::String(string) => Value::String(string.clone()),
+            Object::Symbol(symbol) => Value::Symbol(symbol.clone()),
+            Object::Int(i) => Value::Int(*i),
+            Object::True => Value::True,
+            Object::Nil => Value::Nil,
+        })
+    }
+}
+
+impl TryFrom<&crate::Cons> for value::Cons {
+    type Error = ();
+    fn try_from(value: &crate::Cons) -> Result<Self, Self::Error> {
+        Ok(value::Cons(
+            Value::try_from(&*value.0.borrow())?,
+            Value::try_from(&*value.1.borrow())?,
+        ))
+    }
+}
