@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-mod ast;
+pub mod ast;
 mod environment;
 
 use std::iter::ExactSizeIterator;
