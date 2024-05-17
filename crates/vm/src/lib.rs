@@ -145,6 +145,7 @@ impl Vm {
                 OpCode::Car => self.car()?,
                 OpCode::Cdr => self.cdr()?,
                 OpCode::Cons => self.cons()?,
+                OpCode::Push(value) => self.stack.push(Rc::new(RefCell::new(Object::from(&value)))),
                 _ => todo!(),
             }
         }
