@@ -360,6 +360,28 @@ impl From<&Object> for Type {
     }
 }
 
+impl From<&Value> for Object {
+    fn from(value: &Value) -> Self {
+        match value {
+            Value::Cons(cons) => Object::Cons(crate::Cons::from(&**cons)),
+            Value::String(string) => Object::String(string.clone()),
+            Value::Symbol(symbol) => Object::Symbol(symbol.clone()),
+            Value::Int(i) => Object::Int(*i),
+            Value::True => Object::True,
+            Value::Nil => Object::Nil,
+        }
+    }
+}
+
+impl From<&value::Cons> for crate::Cons {
+    fn from(value: &value::Cons) -> Self {
+        crate::Cons(
+            Rc::new(RefCell::new(Object::from(&value.0))),
+            Rc::new(RefCell::new(Object::from(&value.1))),
+        )
+    }
+}
+
 impl TryFrom<&Object> for Value {
     type Error = ();
     fn try_from(object: &Object) -> Result<Self, Self::Error> {
