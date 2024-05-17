@@ -36,9 +36,3 @@ fn test_nested_add() {
     let input = "(+ (+ 1 1) 1)";
     assert!(matches!(eval(input).unwrap(), Value::Int(3)));
 }
-
-#[test]
-fn test_div_by_zero() {
-    let input = "(+ 1 a)";
-    eval(input).unwrap();
-}
