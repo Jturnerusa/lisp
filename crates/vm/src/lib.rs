@@ -119,7 +119,7 @@ impl Vm {
 
     pub fn eval(&mut self, opcodes: &[OpCode]) -> Result<(), Error> {
         loop {
-            if self.pc > opcodes.len() && self.current_function.is_none() {
+            if self.pc >= opcodes.len() && self.current_function.is_none() {
                 return Ok(());
             }
 
