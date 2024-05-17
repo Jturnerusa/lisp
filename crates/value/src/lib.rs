@@ -9,6 +9,7 @@ pub enum Value {
     Symbol(String),
     String(String),
     Int(i64),
+    True,
     Nil,
 }
 

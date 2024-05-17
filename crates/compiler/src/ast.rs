@@ -127,6 +127,7 @@ pub fn parse(value: &Value) -> Result<Ast, Error> {
         Value::Symbol(symbol) => Ok(Ast::Symbol(symbol.clone())),
         Value::String(string) => Ok(Ast::String(string.clone())),
         Value::Int(i) => Ok(Ast::Int(*i)),
+        Value::True => Ok(Ast::True),
         Value::Nil => Ok(Ast::Nil),
     }
 }
