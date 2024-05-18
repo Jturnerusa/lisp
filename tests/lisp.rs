@@ -13,7 +13,7 @@ fn eval(input: &str) -> Result<Value, Box<dyn std::error::Error>> {
 
     for read in reader {
         let read = read.unwrap();
-        let ast = compiler::ast::parse(&read).unwrap();
+        let ast = compiler::Ast::parse(&read).unwrap();
         opcodes.clear();
         compiler.compile(&ast, &mut opcodes).unwrap();
         vm.eval(opcodes.as_slice()).unwrap();
