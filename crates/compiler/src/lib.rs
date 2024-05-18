@@ -8,7 +8,7 @@ use std::iter::ExactSizeIterator;
 use value::Value;
 use vm::OpCode;
 
-use ast::Ast;
+pub use ast::Ast;
 use environment::{Environment, Variable};
 
 #[derive(Debug)]
