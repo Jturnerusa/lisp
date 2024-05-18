@@ -8,3 +8,4 @@ value = { path = "../value" }
 reader = { path = "../reader" }
 vm = { path = "../vm" }
 unwrap-enum = { path = "../../../unwrap-enum" }
+thiserror = "1.0.61"

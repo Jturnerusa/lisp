@@ -5,13 +5,15 @@ mod environment;
 
 use std::iter::ExactSizeIterator;
 
+use thiserror::Error;
+
 use value::Value;
 use vm::OpCode;
 
 pub use ast::Ast;
 use environment::{Environment, Variable};
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum Error {}
 
 pub struct Compiler {
