@@ -105,20 +105,20 @@ impl Ast {
 
 fn parse_lambda(cons: &Cons) -> Result<Ast, Error> {
     if cons.iter_cars().count() != 3 {
-        return Err(Error::Lambda(format!("wrong amount of expressions")));
+        return Err(Error::Lambda("wrong amount of expressions".to_string()));
     }
 
     let parmeters_list = cons
         .iter_cars()
         .nth(1)
         .and_then(|param| param.as_cons())
-        .ok_or(Error::Lambda(format!("invalid parameter list")))?;
+        .ok_or(Error::Lambda("invalid parameter list".to_string()))?;
 
     let parameters = parmeters_list
         .iter_cars()
         .map(|value| match value {
             Value::Symbol(symbol) => Ok(symbol.clone()),
-            _ => Err(Error::Lambda(format!("parameter not a symbol"))),
+            _ => Err(Error::Lambda("parameter not a symbol".to_string())),
         })
         .collect::<Result<Vec<String>, Error>>()?;
 
@@ -132,7 +132,7 @@ fn parse_lambda(cons: &Cons) -> Result<Ast, Error> {
 
 fn parse_if(cons: &Cons) -> Result<Ast, Error> {
     if cons.iter_cars().count() != 4 {
-        return Err(Error::If(format!("wrong amount of expressions")));
+        return Err(Error::If("wrong amount of expressions".to_string()));
     }
 
     let predicate = Ast::parse(cons.iter_cars().nth(1).unwrap())?;
