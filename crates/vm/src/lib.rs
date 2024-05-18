@@ -303,7 +303,7 @@ impl Vm {
             object => {
                 return Err(Error::Type {
                     expected: Type::Cons,
-                    recived: Type::from(object),
+                    recieved: Type::from(object),
                 })
             }
         };
