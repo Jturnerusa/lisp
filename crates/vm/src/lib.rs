@@ -1,8 +1,11 @@
 #![allow(dead_code)]
 
+use core::fmt;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
+
+use thiserror::Error;
 
 use unwrap_enum::{EnumAs, EnumIs};
 
@@ -26,10 +29,13 @@ pub enum Type {
     Nil,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Error)]
 pub enum Error {
-    Type { expected: Type, recived: Type },
+    #[error("type error: expected {expected}: received: {recieved}")]
+    Type { expected: Type, recieved: Type },
+    #[error("variable not found: {0}")]
     NotFound(String),
+    #[error("invalid parameters: {0}")]
     Parameters(String),
 }
 
@@ -257,14 +263,14 @@ impl Vm {
         let Object::Int(a) = *(*a).borrow() else {
             return Err(Error::Type {
                 expected: Type::Int,
-                recived: Type::from(&*(*a).borrow()),
+                recieved: Type::from(&*(*a).borrow()),
             });
         };
 
         let Object::Int(b) = *(*b).borrow() else {
             return Err(Error::Type {
                 expected: Type::Int,
-                recived: Type::from(&*(*b).borrow()),
+                recieved: Type::from(&*(*b).borrow()),
             });
         };
 
@@ -313,7 +319,7 @@ impl Vm {
             object => {
                 return Err(Error::Type {
                     expected: Type::Cons,
-                    recived: Type::from(object),
+                    recieved: Type::from(object),
                 })
             }
         };
@@ -357,6 +363,20 @@ impl From<&Object> for Type {
             Object::Int(_) => Type::Int,
             Object::True => Type::True,
             Object::Nil => Type::Nil,
+        }
+    }
+}
+
+impl fmt::Display for Type {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::Function => write!(f, "function"),
+            Self::Cons => write!(f, "cons"),
+            Self::Symbol => write!(f, "symbol"),
+            Self::String => write!(f, "string"),
+            Self::Int => write!(f, "int"),
+            Self::True => write!(f, "true"),
+            Self::Nil => write!(f, "nil"),
         }
     }
 }
