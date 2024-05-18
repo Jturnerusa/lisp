@@ -123,10 +123,10 @@ impl Vm {
         }
     }
 
-    pub fn eval(&mut self, opcodes: &[OpCode]) -> Result<(), Error> {
+    pub fn eval(&mut self, opcodes: &[OpCode]) -> Result<Rc<RefCell<Object>>, Error> {
         loop {
             if self.pc >= opcodes.len() && self.current_function.is_none() {
-                return Ok(());
+                return Ok(self.stack.pop().unwrap());
             }
 
             let opcode = if let Some(function) = &self.current_function {
