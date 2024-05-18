@@ -28,10 +28,10 @@ impl Compiler {
     pub fn compile(&mut self, ast: &Ast, opcodes: &mut Vec<OpCode>) -> Result<(), Error> {
         match ast {
             Ast::Lambda(lambda) => self.compile_lambda(lambda, opcodes),
-            Ast::Add(args) => self.compile_add(args.iter(), opcodes),
-            Ast::Sub(args) => self.compile_sub(args.iter(), opcodes),
-            Ast::Mul(args) => self.compile_mul(args.iter(), opcodes),
-            Ast::Div(args) => self.compile_div(args.iter(), opcodes),
+            Ast::Add(a, b) => self.compile_binary_op(a, b, || OpCode::Add, opcodes),
+            Ast::Sub(a, b) => self.compile_binary_op(a, b, || OpCode::Sub, opcodes),
+            Ast::Mul(a, b) => self.compile_binary_op(a, b, || OpCode::Mul, opcodes),
+            Ast::Div(a, b) => self.compile_binary_op(a, b, || OpCode::Div, opcodes),
             Ast::List(list) => self.compile_list(list.iter(), opcodes),
             Ast::Symbol(symbol) => self.compile_symbol(symbol, opcodes),
             Ast::String(string) => self.compile_string(string, opcodes),
@@ -66,67 +66,16 @@ impl Compiler {
         Ok(())
     }
 
-    fn compile_add<'a>(
+    fn compile_binary_op(
         &mut self,
-        args: impl ExactSizeIterator<Item = &'a Ast>,
+        a: &Ast,
+        b: &Ast,
+        op: impl Fn() -> OpCode,
         opcodes: &mut Vec<OpCode>,
     ) -> Result<(), Error> {
-        let parameter_count = args.len();
-
-        for arg in args {
-            self.compile(arg, opcodes)?;
-        }
-
-        opcodes.push(OpCode::Add(parameter_count));
-
-        Ok(())
-    }
-
-    fn compile_sub<'a>(
-        &mut self,
-        args: impl ExactSizeIterator<Item = &'a Ast>,
-        opcodes: &mut Vec<OpCode>,
-    ) -> Result<(), Error> {
-        let parameter_count = args.len();
-
-        for arg in args {
-            self.compile(arg, opcodes)?;
-        }
-
-        opcodes.push(OpCode::Sub(parameter_count));
-
-        Ok(())
-    }
-
-    fn compile_mul<'a>(
-        &mut self,
-        args: impl ExactSizeIterator<Item = &'a Ast>,
-        opcodes: &mut Vec<OpCode>,
-    ) -> Result<(), Error> {
-        let parameter_count = args.len();
-
-        for arg in args {
-            self.compile(arg, opcodes)?;
-        }
-
-        opcodes.push(OpCode::Mul(parameter_count));
-
-        Ok(())
-    }
-
-    fn compile_div<'a>(
-        &mut self,
-        args: impl ExactSizeIterator<Item = &'a Ast>,
-        opcodes: &mut Vec<OpCode>,
-    ) -> Result<(), Error> {
-        let parameter_count = args.len();
-
-        for arg in args {
-            self.compile(arg, opcodes)?;
-        }
-
-        opcodes.push(OpCode::Div(parameter_count));
-
+        self.compile(a, opcodes)?;
+        self.compile(b, opcodes)?;
+        opcodes.push(op());
         Ok(())
     }
 
@@ -179,7 +128,7 @@ mod tests {
     fn compile(input: &str) -> Result<Vec<OpCode>, Error> {
         let mut reader = reader::Reader::new(input);
         let read = reader.next().unwrap().unwrap();
-        let ast = crate::ast::parse(&read).unwrap();
+        let ast = crate::Ast::parse(&read).unwrap();
         let mut opcodes = Vec::new();
         let mut compiler = Compiler::new();
         compiler.compile(&ast, &mut opcodes)?;
@@ -193,19 +142,18 @@ mod tests {
 
         assert!(matches!(&opcodes[0], OpCode::Push(Value::Int(1))));
         assert!(matches!(&opcodes[1], OpCode::Push(Value::Int(1))));
-        assert!(matches!(&opcodes[2], OpCode::Add(2)));
+        assert!(matches!(&opcodes[2], OpCode::Add));
     }
 
     #[test]
     fn test_compile_lambda() {
-        let input = "(lambda (a b) (+ a b c))";
+        let input = "(lambda (a) (+ a b))";
         let opcodes = compile(input).unwrap();
         let (parameters, body, upvalues) = opcodes[0].as_lambda().unwrap();
 
-        assert!(matches!(parameters, vm::Arity::Nary(2)));
+        assert!(matches!(parameters, vm::Arity::Nary(1)));
         assert!(matches!(&body[0], OpCode::GetLocal(0)));
-        assert!(matches!(&body[1], OpCode::GetLocal(1)));
-        assert!(matches!(&body[2], OpCode::GetGlobal(global) if global.as_str() == "c"));
+        assert!(matches!(&body[1], OpCode::GetGlobal(global) if global == "b"));
         assert!(upvalues.is_empty());
     }
 
