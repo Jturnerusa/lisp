@@ -6,3 +6,4 @@ edition = "2021"
 [dependencies]
 value = { path = "../value" }
 unwrap-enum = { path = "../../../unwrap-enum" }
+thiserror = "1.0.61"
