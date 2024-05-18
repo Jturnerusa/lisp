@@ -1,14 +1,16 @@
 mod parse;
 
-use std::fmt;
+use thiserror::Error;
 
 use parse::Parser;
 
 use value::Value;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Error)]
 pub enum Error {
+    #[error("unbalanced parens")]
     UnbalancedParens,
+    #[error("parser error: {0}")]
     ParseError(String),
 }
 
@@ -115,17 +117,6 @@ impl<'a> Iterator for Reader<'a> {
         self.read()
     }
 }
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::UnbalancedParens => write!(f, "unbalanced parens"),
-            Self::ParseError(e) => write!(f, "parser error: {}", e),
-        }
-    }
-}
-
-impl std::error::Error for Error {}
 
 #[cfg(test)]
 mod test {
