@@ -117,10 +117,11 @@ impl Ast {
                 if matches!(cons.0.as_symbol().map(|s| s.as_str()), Some("def" | "set")) =>
             {
                 if cons.iter_cars().count() != 3 {
-                    return Err(Error::Parameters(format!(
-                        "{} expression expects 2 parameters",
-                        cons.0.as_symbol().unwrap().as_str()
-                    )));
+                    match cons.0.as_symbol().unwrap().as_str() {
+                        "def" => return Err(Error::Def("expected 2 parameters".to_string())),
+                        "set" => return Err(Error::Set("expected 2 parameters".to_string())),
+                        _ => unreachable!(),
+                    }
                 } else if !cons.iter_cars().nth(1).unwrap().is_symbol() {
                     match cons.0.as_symbol().unwrap().as_str() {
                         "def" => {
@@ -193,9 +194,7 @@ fn parse_lambda(cons: &Cons) -> Result<Ast, Error> {
 
 fn parse_defmacro(cons: &Cons) -> Result<Ast, Error> {
     if cons.iter_cars().count() != 4 {
-        return Err(Error::Parameters(
-            "defmacro expects 3 parameters".to_string(),
-        ));
+        return Err(Error::DefMacro("expected 3 parameters".to_string()));
     }
 
     let name = cons
