@@ -228,10 +228,9 @@ impl Vm {
             pc: self.pc,
         });
 
-        self.bp = self.stack.len();
+        self.current_function = Some(f);
+        self.bp = self.stack.len() - args;
         self.pc = 0;
-
-        self.stack.extend_from_within(self.stack.len() - args..);
 
         Ok(())
     }
@@ -241,7 +240,9 @@ impl Vm {
     }
 
     fn ret(&mut self) -> Result<(), Error> {
-        self.stack.truncate(self.bp);
+        let ret = self.stack.pop().unwrap();
+        self.stack.truncate(self.bp - 1);
+        self.stack.push(ret);
         let frame = self.frames.pop().unwrap();
         self.pc = frame.pc;
         self.bp = frame.bp;
