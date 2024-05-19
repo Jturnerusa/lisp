@@ -30,6 +30,10 @@ impl Compiler {
     pub fn compile(&mut self, ast: &Ast, opcodes: &mut Vec<OpCode>) -> Result<(), Error> {
         match ast {
             Ast::Lambda(lambda) => self.compile_lambda(lambda, opcodes),
+            Ast::Def(name, expr) => {
+                self.compile_def(expr, || OpCode::DefGlobal(name.clone()), opcodes)
+            }
+            Ast::Set(name, expr) => self.compile_set(name, expr, opcodes),
             Ast::Add(a, b) => self.compile_binary_op(a, b, || OpCode::Add, opcodes),
             Ast::Sub(a, b) => self.compile_binary_op(a, b, || OpCode::Sub, opcodes),
             Ast::Mul(a, b) => self.compile_binary_op(a, b, || OpCode::Mul, opcodes),
@@ -64,6 +68,38 @@ impl Compiler {
         });
 
         self.environment.pop_scope();
+
+        Ok(())
+    }
+
+    fn compile_def(
+        &mut self,
+        expr: &Ast,
+        opcode: impl Fn() -> OpCode,
+        opcodes: &mut Vec<OpCode>,
+    ) -> Result<(), Error> {
+        self.compile(expr, opcodes)?;
+        opcodes.push(opcode());
+        Ok(())
+    }
+
+    fn compile_set(
+        &mut self,
+        name: &str,
+        expr: &Ast,
+        opcodes: &mut Vec<OpCode>,
+    ) -> Result<(), Error> {
+        self.compile(expr, opcodes)?;
+
+        opcodes.push(if self.environment.is_global_scope() {
+            OpCode::SetGlobal(name.to_string())
+        } else {
+            match self.environment.get(name) {
+                Some(Variable::Local(index)) => OpCode::SetLocal(index),
+                Some(Variable::Upvalue(index)) => OpCode::SetUpValue(index),
+                None => OpCode::SetGlobal(name.to_string()),
+            }
+        });
 
         Ok(())
     }
@@ -168,5 +204,30 @@ mod tests {
         assert!(matches!(&opcodes[1], OpCode::GetGlobal(global) if global.as_str() == "a"));
         assert!(matches!(&opcodes[2], OpCode::GetGlobal(global) if global.as_str() == "b"));
         assert!(matches!(&opcodes[3], OpCode::Call(2)));
+    }
+
+    #[test]
+    fn test_compile_def() {
+        let input = "(def x 1)";
+        let opcodes = compile(input).unwrap();
+
+        dbg!(&opcodes);
+
+        assert!(matches!(&opcodes[0], OpCode::Push(Value::Int(1))));
+
+        assert!(matches!(
+            &opcodes[1],
+            OpCode::DefGlobal(global) if global == "x"
+        ));
+    }
+
+    #[test]
+    fn test_compile_set() {
+        let input = "(lambda (x) (set x 1))";
+        let opcodes = compile(input).unwrap();
+        let (_, body, _) = &opcodes[0].as_lambda().unwrap();
+
+        assert!(matches!(&body[0], OpCode::Push(Value::Int(1))));
+        assert!(matches!(&body[1], OpCode::SetLocal(0)));
     }
 }

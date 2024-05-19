@@ -10,6 +10,10 @@ pub enum Error {
     Lambda(String),
     #[error("invalid if expression: {0}")]
     If(String),
+    #[error("invalid def expression: {0}")]
+    Def(String),
+    #[error("invalid set expression: {0}")]
+    Set(String),
     #[error("invalid parameters: {0}")]
     Parameters(String),
 }
@@ -26,6 +30,8 @@ pub enum Ast {
     Car(Box<Ast>),
     Cdr(Box<Ast>),
     Cons(Box<Ast>, Box<Ast>),
+    Def(String, Box<Ast>),
+    Set(String, Box<Ast>),
     Symbol(String),
     String(String),
     Int(i64),
@@ -90,6 +96,44 @@ impl Ast {
                     match cons.0.as_symbol().unwrap().as_str() {
                         "car" => Ast::Car(a),
                         "cdr" => Ast::Cdr(a),
+                        _ => unreachable!(),
+                    }
+                }
+            }
+            Value::Cons(cons)
+                if matches!(cons.0.as_symbol().map(|s| s.as_str()), Some("def" | "set")) =>
+            {
+                if cons.iter_cars().count() != 3 {
+                    return Err(Error::Parameters(format!(
+                        "{} expression expects 2 parameters",
+                        cons.0.as_symbol().unwrap().as_str()
+                    )));
+                } else if !cons.iter_cars().nth(1).unwrap().is_symbol() {
+                    match cons.0.as_symbol().unwrap().as_str() {
+                        "def" => {
+                            return Err(Error::Def(
+                                "expected symbol as first parameter".to_string(),
+                            ))
+                        }
+                        "set" => {
+                            return Err(Error::Set(
+                                "expected symbol as first parameter".to_string(),
+                            ))
+                        }
+                        _ => unreachable!(),
+                    }
+                } else {
+                    let expr = Box::new(Ast::parse(cons.iter_cars().nth(2).unwrap())?);
+                    let name = cons
+                        .iter_cars()
+                        .nth(1)
+                        .unwrap()
+                        .as_symbol()
+                        .cloned()
+                        .unwrap();
+                    match cons.0.as_symbol().unwrap().as_str() {
+                        "def" => Ast::Def(name, expr),
+                        "set" => Ast::Set(name, expr),
                         _ => unreachable!(),
                     }
                 }
@@ -197,5 +241,43 @@ mod tests {
         assert!(matches!(
             &list[2], Ast::Symbol(a) if a.as_str() == "c"
         ));
+    }
+
+    #[test]
+    fn test_def() {
+        let input = "(def x 1)";
+        let ast = parse(input).unwrap();
+
+        assert!(matches!(
+            ast,
+            Ast::Def(name, _) if name == "x"
+        ));
+    }
+
+    #[test]
+    fn test_set() {
+        let input = "(set x 1)";
+        let ast = parse(input).unwrap();
+
+        assert!(matches!(
+            ast,
+            Ast::Set(name, _) if name == "x"
+        ));
+    }
+
+    #[test]
+    fn test_def_err() {
+        let input = "(def (+ 1 1) 1)";
+        let err = parse(input);
+
+        assert!(matches!(err, Err(Error::Def(_))));
+    }
+
+    #[test]
+    fn test_set_err() {
+        let input = "(set (+ 1 1) 1)";
+        let err = parse(input);
+
+        assert!(matches!(err, Err(Error::Set(_))));
     }
 }
