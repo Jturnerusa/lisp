@@ -247,8 +247,8 @@ impl Vm {
     fn lambda(
         &mut self,
         arity: Arity,
-        opcodes: impl Iterator<Item = OpCode>,
-        upvalues: impl Iterator<Item = UpValue>,
+        opcodes: &[OpCode],
+        upvalues: &[UpValue],
     ) -> Result<(), Error> {
         let mut values = Vec::new();
 
@@ -259,7 +259,7 @@ impl Vm {
 
         let function = Rc::new(RefCell::new(Lambda {
             arity,
-            opcodes: opcodes.collect(),
+            opcodes: opcodes.to_vec(),
             upvalues: values,
         }));
 
