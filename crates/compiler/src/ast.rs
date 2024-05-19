@@ -16,6 +16,8 @@ pub enum Error {
     Set(String),
     #[error("invalid defmacro expression: {0}")]
     DefMacro(String),
+    #[error("invalid quote expression: {0}")]
+    Quote(String),
     #[error("invalid parameters: {0}")]
     Parameters(String),
 }
@@ -24,6 +26,7 @@ pub enum Error {
 pub enum Ast {
     Lambda(Lambda),
     DefMacro(Macro),
+    Quote(Value),
     If(If),
     List(Vec<Ast>),
     Add(Box<Ast>, Box<Ast>),
@@ -72,6 +75,13 @@ impl Ast {
                 parse_defmacro(cons)?
             }
             Value::Cons(cons) if cons.0.as_symbol().is_some_and(|s| s == "if") => parse_if(cons)?,
+            Value::Cons(cons) if cons.0.as_symbol().is_some_and(|s| s == "quote") => {
+                if cons.iter_cars().count() != 2 {
+                    return Err(Error::Quote("expected 1 parameter".to_string()));
+                } else {
+                    Ast::Quote(cons.iter_cars().nth(1).cloned().unwrap())
+                }
+            }
             Value::Cons(cons)
                 if matches!(
                     cons.0.as_symbol().map(|s| s.as_str()),
@@ -345,5 +355,14 @@ mod tests {
         let defmacro = ast.as_defmacro().unwrap();
 
         assert_eq!(defmacro.name, "let");
+    }
+
+    #[test]
+    fn test_quote() {
+        let input = "(quote (a b c))";
+        let ast = parse(input).unwrap();
+        let quote = ast.as_quote().unwrap();
+
+        assert!(quote.is_cons());
     }
 }
