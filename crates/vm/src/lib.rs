@@ -126,6 +126,7 @@ impl Vm {
     pub fn eval(&mut self, opcodes: &[OpCode]) -> Result<Rc<RefCell<Object>>, Error> {
         loop {
             if self.pc >= opcodes.len() && self.current_function.is_none() {
+                self.pc = 0;
                 return Ok(self.stack.pop().unwrap());
             }
 
