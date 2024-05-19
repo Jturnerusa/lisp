@@ -1,9 +1,9 @@
 #![allow(dead_code)]
 
 use core::fmt;
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::{cell::RefCell, ops::Deref};
 
 use thiserror::Error;
 
@@ -27,6 +27,7 @@ pub enum Type {
     Int,
     True,
     Nil,
+    Predicate,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -66,7 +67,7 @@ pub enum OpCode {
     Cdr,
     Cons,
     Jmp(isize),
-    Branch(isize),
+    Branch(usize),
 }
 
 #[derive(Clone, Debug, EnumAs, EnumIs)]
@@ -159,6 +160,10 @@ impl Vm {
                 OpCode::Cdr => self.cdr()?,
                 OpCode::Cons => self.cons()?,
                 OpCode::Push(value) => self.stack.push(Rc::new(RefCell::new(Object::from(&value)))),
+                OpCode::Branch(i) => self.branch(i)?,
+                OpCode::Jmp(i) => {
+                    self.pc += i as usize;
+                }
                 _ => todo!(),
             }
         }
@@ -365,8 +370,17 @@ impl Vm {
     fn branch(&mut self, i: usize) -> Result<(), Error> {
         let p = self.stack.pop().unwrap();
 
-        if p.borrow().is_true() {
-            self.pc += i;
+        match p.borrow().deref() {
+            Object::True => (),
+            Object::Nil => {
+                self.pc += i;
+            }
+            object => {
+                return Err(Error::Type {
+                    expected: Type::Predicate,
+                    recieved: Type::from(object),
+                });
+            }
         }
 
         Ok(())
@@ -397,6 +411,7 @@ impl fmt::Display for Type {
             Self::Int => write!(f, "int"),
             Self::True => write!(f, "true"),
             Self::Nil => write!(f, "nil"),
+            Self::Predicate => write!(f, "predicate"),
         }
     }
 }

@@ -30,6 +30,11 @@ impl Compiler {
     pub fn compile(&mut self, ast: &Ast, opcodes: &mut Vec<OpCode>) -> Result<(), Error> {
         match ast {
             Ast::Lambda(lambda) => self.compile_lambda(lambda, opcodes),
+            Ast::If(ast::If {
+                predicate,
+                then,
+                els,
+            }) => self.compile_if(predicate, then, els, opcodes),
             Ast::Def(name, expr) => {
                 self.compile_def(expr, || OpCode::DefGlobal(name.clone()), opcodes)
             }
@@ -40,8 +45,22 @@ impl Compiler {
             Ast::Div(a, b) => self.compile_binary_op(a, b, || OpCode::Div, opcodes),
             Ast::List(list) => self.compile_list(list.iter(), opcodes),
             Ast::Symbol(symbol) => self.compile_symbol(symbol, opcodes),
-            Ast::String(string) => self.compile_string(string, opcodes),
-            Ast::Int(int) => self.compile_int(*int, opcodes),
+            Ast::String(string) => {
+                opcodes.push(OpCode::Push(Value::String(string.clone())));
+                Ok(())
+            }
+            Ast::Int(i) => {
+                opcodes.push(OpCode::Push(Value::Int(*i)));
+                Ok(())
+            }
+            Ast::True => {
+                opcodes.push(OpCode::Push(Value::True));
+                Ok(())
+            }
+            Ast::Nil => {
+                opcodes.push(OpCode::Push(Value::Nil));
+                Ok(())
+            }
             _ => todo!(),
         }
     }
@@ -68,6 +87,29 @@ impl Compiler {
         });
 
         self.environment.pop_scope();
+
+        Ok(())
+    }
+
+    fn compile_if(
+        &mut self,
+        predicate: &Ast,
+        then: &Ast,
+        els: &Ast,
+        opcodes: &mut Vec<OpCode>,
+    ) -> Result<(), Error> {
+        self.compile(predicate, opcodes)?;
+
+        let mut then_ops = Vec::new();
+        let mut els_ops = Vec::new();
+
+        self.compile(then, &mut then_ops)?;
+        self.compile(els, &mut els_ops)?;
+
+        opcodes.push(OpCode::Branch(then_ops.len() + 1));
+        opcodes.extend(then_ops);
+        opcodes.push(OpCode::Jmp(els_ops.len().try_into().unwrap()));
+        opcodes.extend(els_ops);
 
         Ok(())
     }
@@ -148,13 +190,12 @@ impl Compiler {
         Ok(())
     }
 
-    fn compile_string(&mut self, string: &str, opcodes: &mut Vec<OpCode>) -> Result<(), Error> {
-        opcodes.push(OpCode::Push(Value::String(string.to_string())));
-        Ok(())
-    }
-
-    fn compile_int(&mut self, int: i64, opcodes: &mut Vec<OpCode>) -> Result<(), Error> {
-        opcodes.push(OpCode::Push(Value::Int(int)));
+    fn compile_value(
+        &mut self,
+        op: impl Fn() -> OpCode,
+        opcodes: &mut Vec<OpCode>,
+    ) -> Result<(), Error> {
+        opcodes.push(op());
         Ok(())
     }
 }
@@ -229,5 +270,14 @@ mod tests {
 
         assert!(matches!(&body[0], OpCode::Push(Value::Int(1))));
         assert!(matches!(&body[1], OpCode::SetLocal(0)));
+    }
+
+    #[test]
+    fn test_compile_if() {
+        let input = "(if (= 1 1) (+ 1 1) (+ 2 2))";
+        let opcodes = compile(input).unwrap();
+
+        assert!(matches!(&opcodes[4], OpCode::Branch(4)));
+        assert!(matches!(&opcodes[8], OpCode::Jmp(3)));
     }
 }
