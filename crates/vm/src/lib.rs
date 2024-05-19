@@ -172,7 +172,8 @@ impl Vm {
     fn set_global(&mut self, name: &str) -> Result<(), Error> {
         let val = self.stack.pop().unwrap();
         if let Some(var) = self.globals.get_mut(name) {
-            *var = val;
+            *var = Rc::clone(&val);
+            self.stack.push(val);
             Ok(())
         } else {
             Err(Error::NotFound(name.to_string()))
@@ -192,6 +193,7 @@ impl Vm {
         let val = self.stack.pop().unwrap();
         let i = self.bp + local;
         *self.stack[i].borrow_mut() = (*val).clone().into_inner();
+        self.stack.push(val);
         Ok(())
     }
 
