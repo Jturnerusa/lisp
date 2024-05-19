@@ -14,6 +14,8 @@ pub enum Error {
     Def(String),
     #[error("invalid set expression: {0}")]
     Set(String),
+    #[error("invalid defmacro expression: {0}")]
+    DefMacro(String),
     #[error("invalid parameters: {0}")]
     Parameters(String),
 }
@@ -21,6 +23,7 @@ pub enum Error {
 #[derive(Clone, Debug, EnumAs, EnumIs)]
 pub enum Ast {
     Lambda(Lambda),
+    DefMacro(Macro),
     If(If),
     List(Vec<Ast>),
     Add(Box<Ast>, Box<Ast>),
@@ -52,11 +55,21 @@ pub struct If {
     pub els: Box<Ast>,
 }
 
+#[derive(Clone, Debug)]
+pub struct Macro {
+    pub name: String,
+    pub parameters: Vec<String>,
+    pub body: Box<Ast>,
+}
+
 impl Ast {
     pub fn parse(value: &Value) -> Result<Self, Error> {
         Ok(match value {
             Value::Cons(cons) if cons.0.as_symbol().is_some_and(|s| s == "lambda") => {
                 parse_lambda(cons)?
+            }
+            Value::Cons(cons) if cons.0.as_symbol().is_some_and(|s| s == "defmacro") => {
+                parse_defmacro(cons)?
             }
             Value::Cons(cons) if cons.0.as_symbol().is_some_and(|s| s == "if") => parse_if(cons)?,
             Value::Cons(cons)
@@ -178,6 +191,41 @@ fn parse_lambda(cons: &Cons) -> Result<Ast, Error> {
     }))
 }
 
+fn parse_defmacro(cons: &Cons) -> Result<Ast, Error> {
+    if cons.iter_cars().count() != 4 {
+        return Err(Error::Parameters(
+            "defmacro expects 3 parameters".to_string(),
+        ));
+    }
+
+    let name = cons
+        .iter_cars()
+        .nth(1)
+        .unwrap()
+        .as_symbol()
+        .cloned()
+        .ok_or_else(|| Error::DefMacro("macro name must be a symbol".to_string()))?;
+
+    let parameters = match cons.iter_cars().nth(2).unwrap() {
+        Value::Cons(cons) => cons
+            .iter_cars()
+            .map(|car| {
+                car.as_symbol()
+                    .cloned()
+                    .ok_or_else(|| Error::Lambda("non symbol in parameter list".to_string()))
+            })
+            .collect::<Result<Vec<_>, Error>>()?,
+        Value::Nil => Vec::new(),
+        _ => return Err(Error::DefMacro("invalid parameter list".to_string())),
+    };
+
+    Ok(Ast::DefMacro(Macro {
+        name,
+        parameters,
+        body: Box::new(Ast::parse(cons.iter_cars().nth(2).unwrap())?),
+    }))
+}
+
 fn parse_if(cons: &Cons) -> Result<Ast, Error> {
     if cons.iter_cars().count() != 4 {
         return Err(Error::If("wrong amount of expressions".to_string()));
@@ -287,5 +335,16 @@ mod tests {
         let err = parse(input);
 
         assert!(matches!(err, Err(Error::Set(_))));
+    }
+
+    #[test]
+    fn test_defmacro() {
+        let input = "(defmacro let (&rest)
+                       todo)";
+        let ast = parse(input).unwrap();
+
+        let defmacro = ast.as_defmacro().unwrap();
+
+        assert_eq!(defmacro.name, "let");
     }
 }
