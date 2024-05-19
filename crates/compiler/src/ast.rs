@@ -1,11 +1,16 @@
+use thiserror::Error;
+
 use unwrap_enum::{EnumAs, EnumIs};
 
 use value::{Cons, Value};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Error)]
 pub enum Error {
+    #[error("invalid lambda expression: {0}")]
     Lambda(String),
+    #[error("invalid if expression: {0}")]
     If(String),
+    #[error("invalid parameters: {0}")]
     Parameters(String),
 }
 
