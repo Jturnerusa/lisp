@@ -35,6 +35,10 @@ impl Compiler {
                 then,
                 els,
             }) => self.compile_if(predicate, then, els, opcodes),
+            Ast::Quote(value) => {
+                opcodes.push(OpCode::Push(value.clone()));
+                Ok(())
+            }
             Ast::Def(name, expr) => {
                 self.compile_def(expr, || OpCode::DefGlobal(name.clone()), opcodes)
             }
@@ -279,5 +283,13 @@ mod tests {
 
         assert!(matches!(&opcodes[4], OpCode::Branch(4)));
         assert!(matches!(&opcodes[8], OpCode::Jmp(3)));
+    }
+
+    #[test]
+    fn test_compile_quote() {
+        let input = "(quote (a b c))";
+        let opcodes = compile(input).unwrap();
+
+        assert!(matches!(&opcodes[0], OpCode::Push(Value::Cons(_))));
     }
 }
