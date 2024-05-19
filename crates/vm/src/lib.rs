@@ -211,7 +211,7 @@ impl Vm {
     }
 
     fn call(&mut self, args: usize) -> Result<(), Error> {
-        let f = match &*self.stack[self.stack.len() - args].borrow() {
+        let f = match &*self.stack[self.stack.len() - args - 1].borrow() {
             Object::Function(function) => Rc::clone(function),
             _ => todo!(),
         };
