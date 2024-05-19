@@ -43,7 +43,7 @@ fn test_nested_add() {
 }
 
 #[test]
-fn test_def() {
+fn test_def_global() {
     let input = "(def x 1) x";
     assert!(matches!(
         eval(input).unwrap().borrow().deref(),
