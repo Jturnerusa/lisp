@@ -50,3 +50,12 @@ fn test_def_global() {
         vm::Object::Int(1)
     ));
 }
+
+#[test]
+fn test_set_global() {
+    let input = "(def x 1) (set x 2) 2";
+    assert!(matches!(
+        eval(input).unwrap().borrow().deref(),
+        vm::Object::Int(2)
+    ));
+}
