@@ -43,6 +43,8 @@ impl<'a> Reader<'a> {
                     }
                 }
                 Ok(Node::String(string)) => Value::String(string.to_string()),
+                Ok(Node::Symbol("t")) => Value::True,
+                Ok(Node::Symbol("nil")) => Value::Nil,
                 Ok(Node::Symbol(symbol)) => Value::Symbol(symbol.to_string()),
                 Ok(Node::Int(i)) => Value::Int(i.parse().unwrap()),
                 Err(e) => return Some(Err(Error::ParseError(e.to_string()))),
@@ -80,7 +82,11 @@ impl<'a> Reader<'a> {
                     Value::Cons(Box::new(value::Cons(inner, self.read().unwrap().unwrap())))
                 }
                 Some(Ok(Node::Symbol(symbol))) => Value::Cons(Box::new(value::Cons(
-                    Value::Symbol(symbol.to_string()),
+                    match symbol {
+                        "t" => Value::True,
+                        "nil" => Value::Nil,
+                        _ => Value::Symbol(symbol.to_string()),
+                    },
                     match self.read() {
                         Some(Ok(v)) => v,
                         Some(Err(e)) => return Some(Err(Error::ParseError(e.to_string()))),
