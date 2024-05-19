@@ -4,4 +4,4 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-unwrap-enum = { path = "../../../unwrap-enum" }
+unwrap-enum = "=0.0.2"

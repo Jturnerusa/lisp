@@ -72,6 +72,8 @@ dependencies = [
 [[package]]
 name = "quasiquote"
 version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c6b2c3c29a1c04cbc91359073dd4a7e844ff631dcd1b77900ba72f721d1e8aac"
 dependencies = [
  "proc-macro2",
  "quasiquote-proc-macro",
@@ -81,6 +83,8 @@ dependencies = [
 [[package]]
 name = "quasiquote-proc-macro"
 version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "943ba4e8d09c798341a0e4795e9dc9dffcf0a4f4c723c81fbc83ab9b6053f9ca"
 dependencies = [
  "itertools",
  "proc-macro2",
@@ -145,6 +149,17 @@ checksum = "3354b9ac3fae1ff6755cb6db53683adb661634f67557942dea4facebec0fee4b"
 [[package]]
 name = "unwrap-enum"
 version = "0.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a2911859b2cedfe6e50abce11622894cc108fa03a48baa3cfc6a4270fd6c1a03"
+dependencies = [
+ "unwrap-enum-proc-macro",
+]
+
+[[package]]
+name = "unwrap-enum-proc-macro"
+version = "0.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2e13d52144ba75894a74a5a66356d8c47ca34f7390a09891807d8c627567f059"
 dependencies = [
  "proc-macro2",
  "quasiquote",

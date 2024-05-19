@@ -7,5 +7,5 @@ edition = "2021"
 value = { path = "../value" }
 reader = { path = "../reader" }
 vm = { path = "../vm" }
-unwrap-enum = { path = "../../../unwrap-enum" }
+unwrap-enum = "=0.0.2"
 thiserror = "1.0.61"
