@@ -166,6 +166,7 @@ impl Vm {
     fn def_global(&mut self, name: &str) -> Result<(), Error> {
         let val = self.stack.pop().unwrap();
         self.globals.insert(name.to_string(), val);
+        self.stack.push(Rc::new(RefCell::new(Object::Nil)));
         Ok(())
     }
 

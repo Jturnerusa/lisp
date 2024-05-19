@@ -44,7 +44,7 @@ fn test_nested_add() {
 
 #[test]
 fn test_def() {
-    let input = "(set x 1) x";
+    let input = "(def x 1) x";
     assert!(matches!(
         eval(input).unwrap().borrow().deref(),
         vm::Object::Int(1)
