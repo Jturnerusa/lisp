@@ -64,7 +64,7 @@ fn test_set_global() {
 fn test_lambda_expr() {
     let input = "((lambda () (+ 1 1)))";
     assert!(matches!(
-        dbg!(eval(input).unwrap().borrow().deref()),
+        eval(input).unwrap().borrow().deref(),
         vm::Object::Int(2)
     ));
 }
