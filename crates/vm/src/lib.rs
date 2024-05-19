@@ -145,6 +145,11 @@ impl Vm {
                 OpCode::GetLocal(local) => self.get_local(local)?,
                 OpCode::SetLocal(local) => self.set_local(local)?,
                 OpCode::Call(args) => self.call(args)?,
+                OpCode::Lambda {
+                    arity,
+                    body,
+                    upvalues,
+                } => self.lambda(arity, body.as_slice(), upvalues.as_slice())?,
                 OpCode::Return => self.ret()?,
                 OpCode::Add => self.add()?,
                 OpCode::Sub => self.sub()?,
