@@ -122,7 +122,7 @@ impl Compiler {
         list: impl ExactSizeIterator<Item = &'a Ast>,
         opcodes: &mut Vec<OpCode>,
     ) -> Result<(), Error> {
-        let parameter_count = dbg!(list.len()) - 1;
+        let parameter_count = list.len() - 1;
 
         for element in list {
             self.compile(element, opcodes)?;
