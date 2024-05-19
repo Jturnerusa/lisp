@@ -157,19 +157,18 @@ fn parse_lambda(cons: &Cons) -> Result<Ast, Error> {
         return Err(Error::Lambda("wrong amount of expressions".to_string()));
     }
 
-    let parmeters_list = cons
-        .iter_cars()
-        .nth(1)
-        .and_then(|param| param.as_cons())
-        .ok_or(Error::Lambda("invalid parameter list".to_string()))?;
-
-    let parameters = parmeters_list
-        .iter_cars()
-        .map(|value| match value {
-            Value::Symbol(symbol) => Ok(symbol.clone()),
-            _ => Err(Error::Lambda("parameter not a symbol".to_string())),
-        })
-        .collect::<Result<Vec<String>, Error>>()?;
+    let parameters = match cons.iter_cars().nth(1).unwrap() {
+        Value::Cons(cons) => cons
+            .iter_cars()
+            .map(|car| {
+                car.as_symbol()
+                    .cloned()
+                    .ok_or_else(|| Error::Lambda("non symbol in parameter list".to_string()))
+            })
+            .collect::<Result<Vec<_>, Error>>()?,
+        Value::Nil => Vec::new(),
+        _ => todo!(),
+    };
 
     let body = cons.iter_cars().nth(2).unwrap();
 
@@ -216,6 +215,15 @@ mod tests {
             .iter()
             .map(String::as_str)
             .eq(["a", "b", "c"].into_iter()));
+    }
+
+    #[test]
+    fn test_parse_lambda_empty_parameter_list() {
+        let input = "(lambda () (+ 1 1))";
+        let ast = parse(input).unwrap();
+        let lambda = ast.as_lambda().unwrap();
+
+        assert!(lambda.parameters.is_empty())
     }
 
     #[test]
