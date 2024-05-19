@@ -140,6 +140,7 @@ impl Vm {
             match opcode {
                 OpCode::DefGlobal(global) => self.def_global(global.as_str())?,
                 OpCode::SetGlobal(global) => self.set_global(global.as_str())?,
+                OpCode::GetGlobal(global) => self.get_global(global.as_str())?,
                 OpCode::GetLocal(local) => self.get_local(local)?,
                 OpCode::SetLocal(local) => self.set_local(local)?,
                 OpCode::Call(args) => self.call(args)?,
@@ -175,6 +176,15 @@ impl Vm {
         } else {
             Err(Error::NotFound(name.to_string()))
         }
+    }
+
+    fn get_global(&mut self, name: &str) -> Result<(), Error> {
+        if let Some(var) = self.globals.get(name) {
+            self.stack.push(Rc::clone(var))
+        } else {
+            return Err(Error::NotFound(name.to_string()));
+        }
+        Ok(())
     }
 
     fn set_local(&mut self, local: usize) -> Result<(), Error> {
