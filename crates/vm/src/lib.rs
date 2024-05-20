@@ -66,6 +66,7 @@ pub enum OpCode {
     Car,
     Cdr,
     Cons,
+    List(usize),
     Jmp(isize),
     Branch(usize),
 }
@@ -160,6 +161,7 @@ impl Vm {
                 OpCode::Cdr => self.cdr()?,
                 OpCode::Cons => self.cons()?,
                 OpCode::Push(value) => self.stack.push(Rc::new(RefCell::new(Object::from(&value)))),
+                OpCode::List(args) => self.list(args)?,
                 OpCode::Branch(i) => self.branch(i)?,
                 OpCode::Jmp(i) => {
                     self.pc += i as usize;
@@ -367,6 +369,13 @@ impl Vm {
         Ok(())
     }
 
+    fn list(&mut self, args: usize) -> Result<(), Error> {
+        let list = make_list(&self.stack[self.stack.len() - args..]);
+        self.stack.truncate(self.stack.len() - args);
+        self.stack.push(list);
+        Ok(())
+    }
+
     fn branch(&mut self, i: usize) -> Result<(), Error> {
         let p = self.stack.pop().unwrap();
 
@@ -384,6 +393,17 @@ impl Vm {
         }
 
         Ok(())
+    }
+}
+
+fn make_list(objects: &[Rc<RefCell<Object>>]) -> Rc<RefCell<Object>> {
+    if !objects.is_empty() {
+        Rc::new(RefCell::new(Object::Cons(Cons(
+            Rc::clone(&objects[0]),
+            make_list(&objects[1..]),
+        ))))
+    } else {
+        Rc::new(RefCell::new(Object::Nil))
     }
 }
 
