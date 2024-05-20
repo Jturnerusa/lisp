@@ -129,7 +129,9 @@ impl Vm {
         loop {
             if self.pc >= opcodes.len() && self.current_function.is_none() {
                 self.pc = 0;
-                return Ok(self.stack.pop());
+                let ret = self.stack.pop();
+                self.stack.clear();
+                return Ok(ret);
             }
 
             let opcode = if let Some(function) = &self.current_function {
