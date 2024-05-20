@@ -38,6 +38,7 @@ pub enum Ast {
     Cons(Box<Ast>, Box<Ast>),
     Def(String, Box<Ast>),
     Set(String, Box<Ast>),
+    List(Vec<Ast>),
     Symbol(String),
     String(String),
     Int(i64),
@@ -162,6 +163,12 @@ impl Ast {
                     }
                 }
             }
+            Value::Cons(cons) if cons.0.as_symbol().is_some_and(|s| s == "list") => Ast::List(
+                cons.iter_cars()
+                    .skip(1)
+                    .map(Ast::parse)
+                    .collect::<Result<Vec<_>, Error>>()?,
+            ),
             Value::Cons(cons) => Ast::FnCall(
                 cons.iter_cars()
                     .map(Ast::parse)
@@ -292,7 +299,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_list() {
+    fn test_parse_fncall() {
         let input = "(a b c)";
         let ast = parse(input).unwrap();
         let list = ast.as_fncall().unwrap();
@@ -364,5 +371,13 @@ mod tests {
         let quote = ast.as_quote().unwrap();
 
         assert!(quote.is_cons());
+    }
+
+    #[test]
+    fn test_list() {
+        let input = "(list a b c)";
+        let ast = parse(input).unwrap();
+
+        assert!(ast.is_list());
     }
 }

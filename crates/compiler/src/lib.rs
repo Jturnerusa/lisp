@@ -47,7 +47,8 @@ impl Compiler {
             Ast::Sub(a, b) => self.compile_binary_op(a, b, || OpCode::Sub, opcodes),
             Ast::Mul(a, b) => self.compile_binary_op(a, b, || OpCode::Mul, opcodes),
             Ast::Div(a, b) => self.compile_binary_op(a, b, || OpCode::Div, opcodes),
-            Ast::FnCall(list) => self.compile_list(list.iter(), opcodes),
+            Ast::FnCall(list) => self.compile_fncall(list.iter(), opcodes),
+            Ast::List(list) => self.compile_list(list.as_slice(), opcodes),
             Ast::Symbol(symbol) => self.compile_symbol(symbol, opcodes),
             Ast::String(string) => {
                 opcodes.push(OpCode::Push(Value::String(string.clone())));
@@ -163,7 +164,7 @@ impl Compiler {
         Ok(())
     }
 
-    fn compile_list<'a>(
+    fn compile_fncall<'a>(
         &mut self,
         list: impl ExactSizeIterator<Item = &'a Ast>,
         opcodes: &mut Vec<OpCode>,
@@ -175,6 +176,16 @@ impl Compiler {
         }
 
         opcodes.push(OpCode::Call(parameter_count));
+
+        Ok(())
+    }
+
+    fn compile_list(&mut self, exprs: &[Ast], opcodes: &mut Vec<OpCode>) -> Result<(), Error> {
+        for expr in exprs {
+            self.compile(expr, opcodes)?;
+        }
+
+        opcodes.push(OpCode::List(exprs.len()));
 
         Ok(())
     }
