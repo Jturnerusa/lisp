@@ -185,14 +185,14 @@ impl Vm {
         self.stack.as_slice()
     }
 
-    fn def_global(&mut self, name: &str) -> Result<(), Error> {
+    pub fn def_global(&mut self, name: &str) -> Result<(), Error> {
         let val = self.stack.pop().unwrap();
         self.globals.insert(name.to_string(), val);
         self.stack.push(Rc::new(RefCell::new(Object::Nil)));
         Ok(())
     }
 
-    fn set_global(&mut self, name: &str) -> Result<(), Error> {
+    pub fn set_global(&mut self, name: &str) -> Result<(), Error> {
         let val = self.stack.pop().unwrap();
         if let Some(var) = self.globals.get_mut(name) {
             *var = Rc::clone(&val);
@@ -203,7 +203,7 @@ impl Vm {
         }
     }
 
-    fn get_global(&mut self, name: &str) -> Result<(), Error> {
+    pub fn get_global(&mut self, name: &str) -> Result<(), Error> {
         if let Some(var) = self.globals.get(name) {
             self.stack.push(Rc::clone(var))
         } else {
@@ -212,7 +212,7 @@ impl Vm {
         Ok(())
     }
 
-    fn set_local(&mut self, local: usize) -> Result<(), Error> {
+    pub fn set_local(&mut self, local: usize) -> Result<(), Error> {
         let val = self.stack.pop().unwrap();
         let i = self.bp + local;
         *self.stack[i].borrow_mut() = (*val).clone().into_inner();
@@ -220,14 +220,14 @@ impl Vm {
         Ok(())
     }
 
-    fn get_local(&mut self, local: usize) -> Result<(), Error> {
+    pub fn get_local(&mut self, local: usize) -> Result<(), Error> {
         let i = self.bp + local;
         let local = self.stack[i].clone();
         self.stack.push(local);
         Ok(())
     }
 
-    fn call(&mut self, args: usize) -> Result<(), Error> {
+    pub fn call(&mut self, args: usize) -> Result<(), Error> {
         let f = match self.stack[self.stack.len() - args - 1].borrow().deref() {
             Object::Function(function) => Rc::clone(function),
             _ => todo!(),
@@ -256,7 +256,7 @@ impl Vm {
         todo!()
     }
 
-    fn ret(&mut self) -> Result<(), Error> {
+    pub fn ret(&mut self) -> Result<(), Error> {
         let ret = self.stack.pop().unwrap();
         self.stack.truncate(self.bp - 1);
         self.stack.push(ret);
@@ -267,7 +267,7 @@ impl Vm {
         Ok(())
     }
 
-    fn lambda(
+    pub fn lambda(
         &mut self,
         arity: Arity,
         opcodes: &[OpCode],
@@ -318,23 +318,23 @@ impl Vm {
         Ok(())
     }
 
-    fn add(&mut self) -> Result<(), Error> {
+    pub fn add(&mut self) -> Result<(), Error> {
         self.binary_integer_op(|a, b| a + b)
     }
 
-    fn sub(&mut self) -> Result<(), Error> {
+    pub fn sub(&mut self) -> Result<(), Error> {
         self.binary_integer_op(|a, b| a - b)
     }
 
-    fn mul(&mut self) -> Result<(), Error> {
+    pub fn mul(&mut self) -> Result<(), Error> {
         self.binary_integer_op(|a, b| a * b)
     }
 
-    fn div(&mut self) -> Result<(), Error> {
+    pub fn div(&mut self) -> Result<(), Error> {
         self.binary_integer_op(|a, b| a / b)
     }
 
-    fn car(&mut self) -> Result<(), Error> {
+    pub fn car(&mut self) -> Result<(), Error> {
         let car = match &*(*self.stack.last().unwrap()).borrow() {
             Object::Cons(Cons(car, _)) => Rc::clone(car),
             object => {
@@ -350,7 +350,7 @@ impl Vm {
         Ok(())
     }
 
-    fn cdr(&mut self) -> Result<(), Error> {
+    pub fn cdr(&mut self) -> Result<(), Error> {
         let car = match &*(*self.stack.last().unwrap()).borrow() {
             Object::Cons(Cons(_, cdr)) => Rc::clone(cdr),
             object => {
@@ -366,7 +366,7 @@ impl Vm {
         Ok(())
     }
 
-    fn cons(&mut self) -> Result<(), Error> {
+    pub fn cons(&mut self) -> Result<(), Error> {
         let a = self.stack.pop().unwrap();
         let b = self.stack.pop().unwrap();
 
@@ -379,14 +379,14 @@ impl Vm {
         Ok(())
     }
 
-    fn list(&mut self, args: usize) -> Result<(), Error> {
+    pub fn list(&mut self, args: usize) -> Result<(), Error> {
         let list = make_list(&self.stack[self.stack.len() - args..]);
         self.stack.truncate(self.stack.len() - args);
         self.stack.push(list);
         Ok(())
     }
 
-    fn branch(&mut self, i: usize) -> Result<(), Error> {
+    pub fn branch(&mut self, i: usize) -> Result<(), Error> {
         let p = self.stack.pop().unwrap();
 
         match p.borrow().deref() {
