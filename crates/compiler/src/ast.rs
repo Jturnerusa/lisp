@@ -28,7 +28,7 @@ pub enum Ast {
     DefMacro(Macro),
     Quote(Value),
     If(If),
-    List(Vec<Ast>),
+    FnCall(Vec<Ast>),
     Add(Box<Ast>, Box<Ast>),
     Sub(Box<Ast>, Box<Ast>),
     Mul(Box<Ast>, Box<Ast>),
@@ -162,7 +162,7 @@ impl Ast {
                     }
                 }
             }
-            Value::Cons(cons) => Ast::List(
+            Value::Cons(cons) => Ast::FnCall(
                 cons.iter_cars()
                     .map(Ast::parse)
                     .collect::<Result<Vec<_>, Error>>()?,
@@ -295,7 +295,7 @@ mod tests {
     fn test_parse_list() {
         let input = "(a b c)";
         let ast = parse(input).unwrap();
-        let list = ast.as_list().unwrap();
+        let list = ast.as_fncall().unwrap();
 
         assert!(matches!(
             &list[0], Ast::Symbol(a) if a.as_str() == "a"

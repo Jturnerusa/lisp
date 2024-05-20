@@ -47,7 +47,7 @@ impl Compiler {
             Ast::Sub(a, b) => self.compile_binary_op(a, b, || OpCode::Sub, opcodes),
             Ast::Mul(a, b) => self.compile_binary_op(a, b, || OpCode::Mul, opcodes),
             Ast::Div(a, b) => self.compile_binary_op(a, b, || OpCode::Div, opcodes),
-            Ast::List(list) => self.compile_list(list.iter(), opcodes),
+            Ast::FnCall(list) => self.compile_list(list.iter(), opcodes),
             Ast::Symbol(symbol) => self.compile_symbol(symbol, opcodes),
             Ast::String(string) => {
                 opcodes.push(OpCode::Push(Value::String(string.clone())));
