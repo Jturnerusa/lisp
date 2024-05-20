@@ -17,11 +17,11 @@ fn eval(input: &str) -> Result<Rc<RefCell<vm::Object>>, Box<dyn std::error::Erro
         let read = read.unwrap();
         let ast = compiler::Ast::parse(&read).unwrap();
         opcodes.clear();
-        compiler.compile(&ast, &mut opcodes).unwrap();
+        compiler.compile(&ast, &mut opcodes, &mut vm).unwrap();
         ret = Some(vm.eval(opcodes.as_slice())?);
     }
 
-    Ok(ret.unwrap())
+    Ok(ret.unwrap().unwrap())
 }
 
 #[test]
@@ -73,7 +73,18 @@ fn test_lambda_expr() {
 fn test_branch() {
     let input = "(if t 1 2)";
     assert!(matches!(
-        dbg!(eval(input).unwrap().borrow().deref()),
+        eval(input).unwrap().borrow().deref(),
         vm::Object::Int(1)
+    ));
+}
+
+#[test]
+fn test_defmacro() {
+    let input = "(defmacro ++ (a)
+                   (list '+ a 1))
+                 (++ 1)";
+    assert!(matches!(
+        eval(input).unwrap().borrow().deref(),
+        vm::Object::Int(2)
     ));
 }

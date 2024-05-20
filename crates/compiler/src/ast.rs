@@ -238,7 +238,7 @@ fn parse_defmacro(cons: &Cons) -> Result<Ast, Error> {
     Ok(Ast::DefMacro(Macro {
         name,
         parameters,
-        body: Box::new(Ast::parse(cons.iter_cars().nth(2).unwrap())?),
+        body: Box::new(Ast::parse(cons.iter_cars().nth(3).unwrap())?),
     }))
 }
 
@@ -273,7 +273,7 @@ mod tests {
         let input = "(lambda (a b c) (+ a b))";
         let ast = parse(input).unwrap();
         let lambda = ast.as_lambda().unwrap();
-        dbg!(&lambda);
+
         assert!(lambda
             .parameters
             .iter()

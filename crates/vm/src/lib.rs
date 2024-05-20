@@ -125,11 +125,11 @@ impl Vm {
         }
     }
 
-    pub fn eval(&mut self, opcodes: &[OpCode]) -> Result<Rc<RefCell<Object>>, Error> {
+    pub fn eval(&mut self, opcodes: &[OpCode]) -> Result<Option<Rc<RefCell<Object>>>, Error> {
         loop {
             if self.pc >= opcodes.len() && self.current_function.is_none() {
                 self.pc = 0;
-                return Ok(self.stack.pop().unwrap());
+                return Ok(self.stack.pop());
             }
 
             let opcode = if let Some(function) = &self.current_function {
@@ -218,7 +218,7 @@ impl Vm {
     }
 
     fn call(&mut self, args: usize) -> Result<(), Error> {
-        let f = match &*self.stack[self.stack.len() - args - 1].borrow() {
+        let f = match self.stack[self.stack.len() - args - 1].borrow().deref() {
             Object::Function(function) => Rc::clone(function),
             _ => todo!(),
         };
