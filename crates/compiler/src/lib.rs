@@ -46,10 +46,6 @@ impl Compiler {
                 then,
                 els,
             }) => self.compile_if(predicate, then, els, opcodes, vm),
-            Ast::Quote(value) => {
-                opcodes.push(OpCode::Push(value.clone()));
-                Ok(())
-            }
             Ast::Def(name, expr) => {
                 self.compile_def(expr, || OpCode::DefGlobal(name.clone()), opcodes, vm)
             }
@@ -96,6 +92,14 @@ impl Compiler {
             }
             _ => todo!(),
         }
+    }
+
+    fn quote(&mut self, ast: &Ast, opcodes: &mut Vec<OpCode>) -> Result<(), Error> {
+        match ast {
+            Ast::
+        }
+
+        todo!()
     }
 
     fn compile_lambda(

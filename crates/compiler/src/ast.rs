@@ -26,7 +26,7 @@ pub enum Error {
 pub enum Ast {
     Lambda(Lambda),
     DefMacro(Macro),
-    Quote(Value),
+    Quote(Box<Ast>),
     If(If),
     FnCall(Vec<Ast>),
     Add(Box<Ast>, Box<Ast>),
@@ -80,7 +80,7 @@ impl Ast {
                 if cons.iter_cars().count() != 2 {
                     return Err(Error::Quote("expected 1 parameter".to_string()));
                 } else {
-                    Ast::Quote(cons.iter_cars().nth(1).cloned().unwrap())
+                    Ast::Quote(Box::new(Ast::parse(cons.iter_cars().nth(1).unwrap())?))
                 }
             }
             Value::Cons(cons)
@@ -368,9 +368,8 @@ mod tests {
     fn test_quote() {
         let input = "(quote (a b c))";
         let ast = parse(input).unwrap();
-        let quote = ast.as_quote().unwrap();
 
-        assert!(quote.is_cons());
+        assert!(ast.is_quote());
     }
 
     #[test]
