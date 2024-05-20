@@ -171,6 +171,14 @@ impl Vm {
         }
     }
 
+    pub fn push(&mut self, object: Rc<RefCell<Object>>) {
+        self.stack.push(object);
+    }
+
+    pub fn pop(&mut self) -> Option<Rc<RefCell<Object>>> {
+        self.stack.pop()
+    }
+
     pub fn stack(&self) -> &[Rc<RefCell<Object>>] {
         self.stack.as_slice()
     }
