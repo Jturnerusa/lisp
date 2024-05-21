@@ -148,7 +148,29 @@ impl Vm {
     }
 
     pub fn eval(&mut self, opcodes: &[OpCode]) -> Result<Option<Rc<RefCell<Object>>>, Error> {
-        todo!()
+        loop {
+            let opcode = if let Some(function) = &self.current_function {
+                function.borrow().opcodes[self.pc]
+            } else if self.pc < opcodes.len() {
+                opcodes[self.pc]
+            } else {
+                let ret = self.stack.pop();
+                self.stack.clear();
+                self.pc = 0;
+                return Ok(ret);
+            };
+
+            match opcode {
+                OpCode::DefGlobal(global) => self.def_global(global)?,
+                OpCode::SetGlobal(global) => self.set_global(global)?,
+                OpCode::GetGlobal(global) => self.get_global(global)?,
+                OpCode::SetLocal(local) => self.set_local(local)?,
+                OpCode::GetLocal(local) => self.get_local(local)?,
+                OpCode::Call(args) => self.call(args)?,
+                OpCode::Return => self.ret()?,
+                _ => todo!(),
+            }
+        }
     }
 
     pub fn push(&mut self, object: Rc<RefCell<Object>>) {
@@ -163,29 +185,58 @@ impl Vm {
         self.stack.as_slice()
     }
 
-    pub fn def_global(&mut self, name: &str) -> Result<(), Error> {
+    pub fn def_global(&mut self, constant: u64) -> Result<(), Error> {
         let val = self.stack.pop().unwrap();
-        self.globals.insert(name.to_string(), val);
+        self.globals.insert(
+            self.constants
+                .get(&constant)
+                .unwrap()
+                .as_string()
+                .cloned()
+                .unwrap(),
+            val,
+        );
         self.stack.push(Rc::new(RefCell::new(Object::Nil)));
         Ok(())
     }
 
-    pub fn set_global(&mut self, name: &str) -> Result<(), Error> {
+    pub fn set_global(&mut self, constant: u64) -> Result<(), Error> {
         let val = self.stack.pop().unwrap();
-        if let Some(var) = self.globals.get_mut(name) {
+
+        if let Some(var) = self
+            .globals
+            .get_mut(self.constants.get(&constant).unwrap().as_string().unwrap())
+        {
             *var = Rc::clone(&val);
             self.stack.push(val);
             Ok(())
         } else {
-            Err(Error::NotFound(name.to_string()))
+            Err(Error::NotFound(
+                self.constants
+                    .get(&constant)
+                    .unwrap()
+                    .as_string()
+                    .cloned()
+                    .unwrap(),
+            ))
         }
     }
 
-    pub fn get_global(&mut self, name: &str) -> Result<(), Error> {
-        if let Some(var) = self.globals.get(name) {
+    pub fn get_global(&mut self, constant: u64) -> Result<(), Error> {
+        if let Some(var) = self
+            .globals
+            .get(self.constants.get(&constant).unwrap().as_string().unwrap())
+        {
             self.stack.push(Rc::clone(var))
         } else {
-            return Err(Error::NotFound(name.to_string()));
+            return Err(Error::NotFound(
+                self.constants
+                    .get(&constant)
+                    .unwrap()
+                    .as_string()
+                    .cloned()
+                    .unwrap(),
+            ));
         }
         Ok(())
     }
