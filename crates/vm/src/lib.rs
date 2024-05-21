@@ -42,9 +42,9 @@ pub enum Error {
 
 #[derive(Clone, Debug, EnumAs, EnumIs)]
 pub enum OpCode {
-    DefGlobal(String),
-    SetGlobal(String),
-    GetGlobal(String),
+    DefGlobal(u64),
+    SetGlobal(u64),
+    GetGlobal(u64),
     SetLocal(usize),
     GetLocal(usize),
     SetUpValue(usize),
@@ -52,12 +52,13 @@ pub enum OpCode {
     Call(usize),
     Tail(usize),
     Return,
-    Lambda {
-        arity: Arity,
-        body: Vec<OpCode>,
-        upvalues: Vec<UpValue>,
-    },
-    Push(Value),
+    Lambda { arity: Arity, body: u64 },
+    CreateUpValue(UpValue),
+    PushSymbol(u64),
+    PushInt(i64),
+    PushString(u64),
+    PushTrue,
+    PushNil,
     Pop,
     Add,
     Sub,
