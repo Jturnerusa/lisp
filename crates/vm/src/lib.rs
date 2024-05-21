@@ -168,6 +168,46 @@ impl Vm {
                 OpCode::GetLocal(local) => self.get_local(local)?,
                 OpCode::Call(args) => self.call(args)?,
                 OpCode::Return => self.ret()?,
+                OpCode::Lambda { arity, body } => self.lambda(arity, body)?,
+                OpCode::CreateUpValue(upvalue) => self.create_upvalue(upvalue)?,
+                OpCode::PushSymbol(symbol) => {
+                    let symbol_value = self
+                        .constants
+                        .get(&symbol)
+                        .unwrap()
+                        .as_symbol()
+                        .cloned()
+                        .unwrap();
+                    self.stack
+                        .push(Rc::new(RefCell::new(Object::Symbol(symbol_value))));
+                }
+                OpCode::PushString(string) => {
+                    let string_value = self
+                        .constants
+                        .get(&string)
+                        .unwrap()
+                        .as_string()
+                        .cloned()
+                        .unwrap();
+                    self.stack
+                        .push(Rc::new(RefCell::new(Object::String(string_value))));
+                }
+                OpCode::PushInt(i) => self.stack.push(Rc::new(RefCell::new(Object::Int(i)))),
+                OpCode::Pop => {
+                    self.stack.pop().unwrap();
+                }
+                OpCode::Add => self.add()?,
+                OpCode::Sub => self.sub()?,
+                OpCode::Mul => self.mul()?,
+                OpCode::Div => self.div()?,
+                OpCode::Cons => self.cons()?,
+                OpCode::Car => self.car()?,
+                OpCode::Cdr => self.cdr()?,
+                OpCode::List(args) => self.list(args)?,
+                OpCode::Branch(offset) => self.branch(offset)?,
+                OpCode::Jmp(offset) => {
+                    self.pc += offset as usize;
+                }
                 _ => todo!(),
             }
         }
