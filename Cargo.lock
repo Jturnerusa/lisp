@@ -6,11 +6,12 @@ version = 3
 name = "compiler"
 version = "0.1.0"
 dependencies = [
- "reader",
+ "identity-hasher",
  "thiserror",
  "unwrap-enum",
  "value",
  "vm",
+ "xxhash",
 ]
 
 [[package]]
