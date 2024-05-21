@@ -181,4 +181,16 @@ dependencies = [
  "thiserror",
  "unwrap-enum",
  "value",
+ "xxhash",
 ]
+
+[[package]]
+name = "xxhash"
+version = "0.1.0"
+dependencies = [
+ "xxhash-sys",
+]
+
+[[package]]
+name = "xxhash-sys"
+version = "0.1.0"
