@@ -104,7 +104,7 @@ pub struct UpValue {
 #[derive(Clone, Debug)]
 pub struct Lambda {
     arity: Arity,
-    opcodes: Vec<OpCode>,
+    opcodes: Rc<[OpCode]>,
     upvalues: Vec<Rc<RefCell<Object>>>,
 }
 
@@ -248,7 +248,7 @@ impl Vm {
     pub fn lambda(
         &mut self,
         arity: Arity,
-        opcodes: &[OpCode],
+        opcodes: u64,
         upvalues: &[UpValue],
     ) -> Result<(), Error> {
         let mut values = Vec::new();
@@ -260,7 +260,13 @@ impl Vm {
 
         let function = Rc::new(RefCell::new(Lambda {
             arity,
-            opcodes: opcodes.to_vec(),
+            opcodes: self
+                .constants
+                .get(&opcodes)
+                .unwrap()
+                .as_opcodes()
+                .cloned()
+                .unwrap(),
             upvalues: values,
         }));
 
