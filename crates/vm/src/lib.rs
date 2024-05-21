@@ -296,19 +296,7 @@ impl Vm {
         Ok(())
     }
 
-    pub fn lambda(
-        &mut self,
-        arity: Arity,
-        opcodes: u64,
-        upvalues: &[UpValue],
-    ) -> Result<(), Error> {
-        let mut values = Vec::new();
-
-        for upvalue in upvalues {
-            let i = self.frames[upvalue.frame].bp + upvalue.index;
-            values.push(self.stack[i].clone());
-        }
-
+    pub fn lambda(&mut self, arity: Arity, opcodes: u64) -> Result<(), Error> {
         let function = Rc::new(RefCell::new(Lambda {
             arity,
             opcodes: self
@@ -318,7 +306,7 @@ impl Vm {
                 .as_opcodes()
                 .cloned()
                 .unwrap(),
-            upvalues: values,
+            upvalues: Vec::new(),
         }));
 
         let object = Rc::new(RefCell::new(Object::Function(function)));
