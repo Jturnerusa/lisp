@@ -40,6 +40,13 @@ pub enum Error {
     Parameters(String),
 }
 
+#[derive(Clone, EnumAs, EnumIs, PartialEq, Eq, Hash)]
+pub enum Constant {
+    String(String),
+    Symbol(String),
+    Opcodes(Rc<[OpCode]>),
+}
+
 #[derive(Clone, Debug, EnumAs, EnumIs, PartialEq, Eq, Hash)]
 pub enum OpCode {
     DefGlobal(u64),
