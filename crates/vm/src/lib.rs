@@ -11,14 +11,14 @@ use unwrap_enum::{EnumAs, EnumIs};
 
 use value::Value;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Arity {
     Nullary,
     Nary(usize),
     Variadic,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Type {
     Function,
     Cons,
@@ -40,7 +40,7 @@ pub enum Error {
     Parameters(String),
 }
 
-#[derive(Clone, Debug, EnumAs, EnumIs)]
+#[derive(Clone, Debug, EnumAs, EnumIs, PartialEq, Eq, Hash)]
 pub enum OpCode {
     DefGlobal(u64),
     SetGlobal(u64),
@@ -83,7 +83,7 @@ pub enum Object {
     Nil,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct UpValue {
     pub frame: usize,
     pub index: usize,
