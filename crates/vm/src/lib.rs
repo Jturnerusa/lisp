@@ -126,51 +126,7 @@ impl Vm {
     }
 
     pub fn eval(&mut self, opcodes: &[OpCode]) -> Result<Option<Rc<RefCell<Object>>>, Error> {
-        loop {
-            if self.pc >= opcodes.len() && self.current_function.is_none() {
-                self.pc = 0;
-                let ret = self.stack.pop();
-                self.stack.clear();
-                return Ok(ret);
-            }
-
-            let opcode = if let Some(function) = &self.current_function {
-                function.borrow().opcodes[self.pc].clone()
-            } else {
-                opcodes[self.pc].clone()
-            };
-
-            self.pc += 1;
-
-            match opcode {
-                OpCode::DefGlobal(global) => self.def_global(global.as_str())?,
-                OpCode::SetGlobal(global) => self.set_global(global.as_str())?,
-                OpCode::GetGlobal(global) => self.get_global(global.as_str())?,
-                OpCode::GetLocal(local) => self.get_local(local)?,
-                OpCode::SetLocal(local) => self.set_local(local)?,
-                OpCode::Call(args) => self.call(args)?,
-                OpCode::Lambda {
-                    arity,
-                    body,
-                    upvalues,
-                } => self.lambda(arity, body.as_slice(), upvalues.as_slice())?,
-                OpCode::Return => self.ret()?,
-                OpCode::Add => self.add()?,
-                OpCode::Sub => self.sub()?,
-                OpCode::Mul => self.mul()?,
-                OpCode::Div => self.div()?,
-                OpCode::Car => self.car()?,
-                OpCode::Cdr => self.cdr()?,
-                OpCode::Cons => self.cons()?,
-                OpCode::Push(value) => self.stack.push(Rc::new(RefCell::new(Object::from(&value)))),
-                OpCode::List(args) => self.list(args)?,
-                OpCode::Branch(i) => self.branch(i)?,
-                OpCode::Jmp(i) => {
-                    self.pc += i as usize;
-                }
-                _ => todo!(),
-            }
-        }
+        todo!()
     }
 
     pub fn push(&mut self, object: Rc<RefCell<Object>>) {
