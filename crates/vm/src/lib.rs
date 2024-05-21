@@ -52,7 +52,7 @@ pub enum Constant {
     Opcodes(Rc<[OpCode]>),
 }
 
-#[derive(Clone, Debug, EnumAs, EnumIs, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, EnumAs, EnumIs, PartialEq, Eq, Hash)]
 pub enum OpCode {
     DefGlobal(u64),
     SetGlobal(u64),
