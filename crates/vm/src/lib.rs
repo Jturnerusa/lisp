@@ -2,10 +2,15 @@
 
 use core::fmt;
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 use std::{cell::RefCell, ops::Deref};
 
 use thiserror::Error;
+
+use xxhash::Xxh3;
+
+use identity_hasher::IdentityHasher;
 
 use unwrap_enum::{EnumAs, EnumIs};
 
@@ -114,6 +119,7 @@ struct Frame {
 
 pub struct Vm {
     globals: HashMap<String, Rc<RefCell<Object>>>,
+    constants: HashMap<u64, Constant, IdentityHasher>,
     stack: Vec<Rc<RefCell<Object>>>,
     frames: Vec<Frame>,
     current_function: Option<Rc<RefCell<Lambda>>>,
@@ -125,12 +131,20 @@ impl Vm {
     pub fn new() -> Self {
         Self {
             globals: HashMap::new(),
+            constants: HashMap::with_hasher(IdentityHasher::new()),
             stack: Vec::new(),
             frames: Vec::new(),
             current_function: None,
             pc: 0,
             bp: 0,
         }
+    }
+
+    pub fn load_constant(&mut self, constant: Constant) {
+        let mut hasher = Xxh3::new(0).unwrap();
+        constant.hash(&mut hasher);
+        let hash = hasher.finish();
+        self.constants.insert(hash, constant);
     }
 
     pub fn eval(&mut self, opcodes: &[OpCode]) -> Result<Option<Rc<RefCell<Object>>>, Error> {
