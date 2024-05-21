@@ -256,6 +256,20 @@ impl Vm {
         Ok(())
     }
 
+    pub fn create_upvalue(&mut self, upvalue: UpValue) -> Result<(), Error> {
+        let upvalue_index = self.frames[upvalue.frame].bp + upvalue.index;
+
+        let val = self.stack[upvalue_index].clone();
+
+        if let Object::Function(function) = self.stack.last().unwrap().borrow().deref() {
+            function.borrow_mut().upvalues.push(val);
+        } else {
+            panic!();
+        }
+
+        Ok(())
+    }
+
     pub fn call(&mut self, args: usize) -> Result<(), Error> {
         let f = match self.stack[self.stack.len() - args - 1].borrow().deref() {
             Object::Function(function) => Rc::clone(function),
