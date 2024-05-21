@@ -1,4 +1,4 @@
-use std::hash::Hasher;
+use std::hash::{BuildHasher, Hasher};
 
 use xxhash_sys::XXH3_state_t;
 
@@ -27,6 +27,13 @@ impl Xxh3 {
 
             Ok(Self { state })
         }
+    }
+}
+
+impl BuildHasher for Xxh3 {
+    type Hasher = Xxh3;
+    fn build_hasher(&self) -> Self::Hasher {
+        Self::new(0).unwrap()
     }
 }
 
