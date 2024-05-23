@@ -16,103 +16,47 @@ pub enum Error {
 
 pub struct Reader<'a> {
     parser: Parser<'a>,
-    depth: u64,
-    quoting: bool,
 }
 
 impl<'a> Reader<'a> {
     pub fn new(input: &'a str) -> Self {
         Self {
             parser: Parser::new(input),
-            depth: 0,
-            quoting: false,
         }
     }
 
-    fn read(&mut self) -> Option<Result<Value, Error>> {
-        use parse::Node;
-        if self.depth == 0 || self.quoting {
-            self.quoting = false;
-            Some(Ok(match self.parser.next()? {
-                Ok(Node::LeftParen) => {
-                    self.depth += 1;
-                    match self.read() {
-                        Some(Ok(v)) => v,
-                        Some(Err(e)) => return Some(Err(Error::ParseError(e.to_string()))),
-                        None => return Some(Err(Error::UnbalancedParens)),
-                    }
-                }
-                Ok(Node::String(string)) => Value::String(string.to_string()),
-                Ok(Node::Symbol("t")) => Value::True,
-                Ok(Node::Symbol("nil")) => Value::Nil,
-                Ok(Node::Symbol(symbol)) => Value::Symbol(symbol.to_string()),
-                Ok(Node::Int(i)) => Value::Int(i.parse().unwrap()),
+    fn parse_value(&mut self) -> Option<Result<Value, Error>> {
+        Some(Ok(match self.parser.next()? {
+            Ok(parse::Node::LeftParen) => Value::List(match self.parse_list() {
+                Ok(list) => list,
                 Err(e) => return Some(Err(Error::ParseError(e.to_string()))),
-                _ => unreachable!(),
-            }))
-        } else {
-            Some(Ok(match self.parser.next() {
-                Some(Ok(Node::LeftParen)) => {
-                    self.depth += 1;
-                    Value::Cons(Box::new(value::Cons(
-                        match self.read() {
-                            Some(Ok(v)) => v,
-                            Some(Err(e)) => return Some(Err(Error::ParseError(e.to_string()))),
-                            None => return Some(Err(Error::UnbalancedParens)),
-                        },
-                        match self.read() {
-                            Some(Ok(v)) => v,
-                            Some(Err(e)) => return Some(Err(Error::ParseError(e.to_string()))),
-                            None => return Some(Err(Error::UnbalancedParens)),
-                        },
-                    )))
-                }
-                Some(Ok(Node::RightParen)) => {
-                    self.depth -= 1;
-                    self.quoting = false;
-                    Value::Nil
-                }
-                Some(Ok(Node::Quote)) => {
-                    self.quoting = true;
-                    let quoted = self.read().unwrap().unwrap();
-                    let inner = Value::Cons(Box::new(value::Cons(
-                        Value::Symbol("quote".to_string()),
-                        Value::Cons(Box::new(value::Cons(quoted, Value::Nil))),
-                    )));
-                    Value::Cons(Box::new(value::Cons(inner, self.read().unwrap().unwrap())))
-                }
-                Some(Ok(Node::Symbol(symbol))) => Value::Cons(Box::new(value::Cons(
-                    match symbol {
-                        "t" => Value::True,
-                        "nil" => Value::Nil,
-                        _ => Value::Symbol(symbol.to_string()),
-                    },
-                    match self.read() {
-                        Some(Ok(v)) => v,
-                        Some(Err(e)) => return Some(Err(Error::ParseError(e.to_string()))),
-                        None => return Some(Err(Error::UnbalancedParens)),
-                    },
-                ))),
-                Some(Ok(Node::String(string))) => Value::Cons(Box::new(value::Cons(
-                    Value::String(string.to_string()),
-                    match self.read() {
-                        Some(Ok(v)) => v,
-                        Some(Err(e)) => return Some(Err(Error::ParseError(e.to_string()))),
-                        None => return Some(Err(Error::UnbalancedParens)),
-                    },
-                ))),
-                Some(Ok(Node::Int(i))) => Value::Cons(Box::new(value::Cons(
-                    Value::Int(i.parse().unwrap()),
-                    match self.read() {
-                        Some(Ok(v)) => v,
-                        Some(Err(e)) => return Some(Err(Error::ParseError(e.to_string()))),
-                        None => return Some(Err(Error::UnbalancedParens)),
-                    },
-                ))),
+            }),
+            Ok(parse::Node::Symbol(symbol)) => Value::Symbol(symbol.to_string()),
+            _ => todo!(),
+        }))
+    }
 
-                Some(Err(e)) => return Some(Err(Error::ParseError(e.to_string()))),
-                None => return Some(Err(Error::UnbalancedParens)),
-            }))
+    fn parse_list(&mut self) -> Result<Vec<Value>, Error> {
+        let mut list = Vec::new();
+        loop {
+            match self.parser.next() {
+                Some(Ok(parse::Node::LeftParen)) => list.push(Value::List(self.parse_list()?)),
+                Some(Ok(parse::Node::RightParen)) => return Ok(list),
+                Some(Ok(parse::Node::Quote)) => list.push(Value::List(vec![
+                    Value::Symbol("quote".to_string()),
+                    match self.parse_value() {
+                        Some(Ok(val)) => val,
+                        Some(Err(e)) => return Err(Error::ParseError(e.to_string())),
+                        None => return Err(Error::UnbalancedParens),
+                    },
+                ])),
+                Some(Ok(parse::Node::Symbol(symbol))) => {
+                    list.push(Value::Symbol(symbol.to_string()))
+                }
+                Some(Err(e)) => return Err(Error::ParseError(e.to_string())),
+                None => return Err(Error::UnbalancedParens),
+                _ => todo!(),
+            }
         }
     }
 }
@@ -120,58 +64,73 @@ impl<'a> Reader<'a> {
 impl<'a> Iterator for Reader<'a> {
     type Item = Result<Value, Error>;
     fn next(&mut self) -> Option<Self::Item> {
-        self.read()
+        self.parse_value()
     }
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
 
-    macro_rules! atom {
-        ($e:tt) => {
-            Value::Symbol(stringify!($e).to_string())
-        };
-    }
+    #[test]
+    fn test_list_simple() {
+        let input = "(a b c)";
+        let mut reader = Reader::new(input);
 
-    macro_rules! cons {
-        ($e:expr) => {
-            Value::Cons(Box::new(value::Cons(
-                $e,
-                Value::Nil
-            )))
-        };
-
-        ($e:expr, $($rest:expr),+) => {
-            Value::Cons(Box::new(value::Cons(
-                $e,
-                cons!($($rest),+)
-            )))
-        };
+        assert!(matches!(
+            reader
+                .next()
+                .unwrap()
+                .unwrap()
+                .as_list()
+                .unwrap()
+                .as_slice(),
+            [Value::Symbol(_), Value::Symbol(_), Value::Symbol(_)]
+        ));
     }
 
     #[test]
-    fn test_simple() {
-        let expected = cons! {atom!(a), atom!(b), atom!(c)};
-        let mut reader = Reader::new("(a b c)");
-        assert_eq!(expected, reader.next().unwrap().unwrap());
+    fn test_list_nested() {
+        let input = "(a (b c) d)";
+        let mut reader = Reader::new(input);
+
+        let inner_list = match reader
+            .next()
+            .unwrap()
+            .unwrap()
+            .as_list()
+            .unwrap()
+            .as_slice()
+        {
+            [Value::Symbol(_), Value::List(list), Value::Symbol(_)] => list.clone(),
+            _ => panic!(),
+        };
+
+        assert!(matches!(
+            inner_list.as_slice(),
+            [Value::Symbol(_), Value::Symbol(_)]
+        ));
     }
 
     #[test]
-    fn test_nested() {
-        let expected = cons!(
-            atom!(a),
-            atom!(b),
-            cons!(atom!(c), atom!(d), cons!(atom!(e), atom!(f)))
-        );
-        let mut reader = Reader::new("(a b (c d (e f)))");
-        assert_eq!(expected, reader.next().unwrap().unwrap());
-    }
+    fn test_quote() {
+        let input = "(a 'b c)";
+        let mut reader = Reader::new(input);
 
-    #[test]
-    fn test_quote_shorthand() {
-        let expected = cons!(atom!(a), cons!(atom!(quote), cons!(atom!(b), atom!(c))));
-        let mut reader = Reader::new("(a '(b c))");
-        assert_eq!(expected, reader.next().unwrap().unwrap());
+        let inner_list = match reader
+            .next()
+            .unwrap()
+            .unwrap()
+            .as_list()
+            .unwrap()
+            .as_slice()
+        {
+            [Value::Symbol(_), Value::List(list), Value::Symbol(_)] => list.clone(),
+            _ => panic!(),
+        };
+
+        assert!(matches!(inner_list.as_slice(),
+            [Value::Symbol(quote), Value::Symbol(_)] if quote == "quote"
+        ))
     }
 }
