@@ -59,9 +59,9 @@ impl Environment {
         self.scopes.is_empty()
     }
 
-    pub fn push_scope<'a>(&mut self, locals: impl Iterator<Item = &'a str>) {
+    pub fn push_scope(&mut self, locals: impl Iterator<Item = String>) {
         self.scopes.push(Scope {
-            locals: locals.map(|s| s.to_string()).collect(),
+            locals: locals.collect(),
             upvalues: Vec::new(),
         })
     }
@@ -125,7 +125,7 @@ mod tests {
     fn test_locals() {
         let mut env = Environment::new();
 
-        env.push_scope(["a", "b", "c"].into_iter());
+        env.push_scope(["a", "b", "c"].into_iter().map(str::to_string));
 
         assert!(matches!(env.get("a"), Some(Variable::Local(0))));
         assert!(env.get("d").is_none());
@@ -135,8 +135,8 @@ mod tests {
     fn test_upvalue() {
         let mut env = Environment::new();
 
-        env.push_scope(["a", "b", "c"].into_iter());
-        env.push_scope(["d", "e", "f"].into_iter());
+        env.push_scope(["a", "b", "c"].into_iter().map(str::to_string));
+        env.push_scope(["d", "e", "f"].into_iter().map(str::to_string));
         env.push_scope(std::iter::empty());
         env.insert("a");
         env.insert("f");
