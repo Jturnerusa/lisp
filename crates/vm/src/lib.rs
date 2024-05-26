@@ -3,6 +3,7 @@
 use core::fmt;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
+use std::ops::{DerefMut, Range};
 use std::rc::Rc;
 use std::{cell::RefCell, ops::Deref};
 
@@ -26,7 +27,7 @@ pub enum Arity {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Type {
     Function,
-    Cons,
+    Vec,
     String,
     Symbol,
     Int,
@@ -76,10 +77,12 @@ pub enum OpCode {
     Sub,
     Mul,
     Div,
-    Car,
-    Cdr,
-    Cons,
-    List(usize),
+    Vec(usize),
+    VecNth,
+    VecPush,
+    VecPop,
+    VecInsert,
+    VecSlice,
     Jmp(isize),
     Branch(usize),
 }
@@ -87,7 +90,7 @@ pub enum OpCode {
 #[derive(Clone, Debug, EnumAs, EnumIs)]
 pub enum Object {
     Function(Rc<RefCell<Lambda>>),
-    Cons(Cons),
+    Vec(Vec<Rc<RefCell<Object>>>),
     String(String),
     Symbol(String),
     Int(i64),
@@ -107,9 +110,6 @@ pub struct Lambda {
     opcodes: Rc<[OpCode]>,
     upvalues: Vec<Rc<RefCell<Object>>>,
 }
-
-#[derive(Clone, Debug)]
-pub struct Cons(Rc<RefCell<Object>>, Rc<RefCell<Object>>);
 
 struct Frame {
     function: Option<Rc<RefCell<Lambda>>>,
@@ -200,10 +200,12 @@ impl Vm {
                 OpCode::Sub => self.sub()?,
                 OpCode::Mul => self.mul()?,
                 OpCode::Div => self.div()?,
-                OpCode::Cons => self.cons()?,
-                OpCode::Car => self.car()?,
-                OpCode::Cdr => self.cdr()?,
-                OpCode::List(args) => self.list(args)?,
+                OpCode::Vec(args) => self.make_vec(args)?,
+                OpCode::VecPush => self.vec_push()?,
+                OpCode::VecPop => self.vec_pop()?,
+                OpCode::VecNth => self.vec_nth()?,
+                OpCode::VecInsert => self.vec_insert()?,
+                OpCode::VecSlice => self.vec_insert()?,
                 OpCode::Branch(offset) => self.branch(offset)?,
                 OpCode::Jmp(offset) => {
                     self.pc += offset as usize;
@@ -411,62 +413,145 @@ impl Vm {
         self.binary_integer_op(|a, b| a / b)
     }
 
-    pub fn car(&mut self) -> Result<(), Error> {
-        let car = match &*(*self.stack.last().unwrap()).borrow() {
-            Object::Cons(Cons(car, _)) => Rc::clone(car),
-            object => {
-                return Err(Error::Type {
-                    expected: Type::Cons,
-                    recieved: Type::from(object),
-                })
-            }
-        };
-
-        self.stack.push(car);
-
-        Ok(())
-    }
-
-    pub fn cdr(&mut self) -> Result<(), Error> {
-        let car = match &*(*self.stack.last().unwrap()).borrow() {
-            Object::Cons(Cons(_, cdr)) => Rc::clone(cdr),
-            object => {
-                return Err(Error::Type {
-                    expected: Type::Cons,
-                    recieved: Type::from(object),
-                })
-            }
-        };
-
-        self.stack.push(car);
-
-        Ok(())
-    }
-
-    pub fn cons(&mut self) -> Result<(), Error> {
-        let a = self.stack.pop().unwrap();
-        let b = self.stack.pop().unwrap();
-
-        let cons = Object::Cons(Cons(a, b));
-
-        let object = Rc::new(RefCell::new(cons));
-
-        self.stack.push(object);
-
-        Ok(())
-    }
-
-    pub fn list(&mut self, args: usize) -> Result<(), Error> {
-        let list = make_list(&self.stack[self.stack.len() - args..]);
+    pub fn make_vec(&mut self, args: usize) -> Result<(), Error> {
+        let vec = self.stack[self.stack.len() - args..].to_vec();
         self.stack.truncate(self.stack.len() - args);
-        self.stack.push(list);
+        self.stack.push(Rc::new(RefCell::new(Object::Vec(vec))));
+        Ok(())
+    }
+
+    pub fn vec_pop(&mut self) -> Result<(), Error> {
+        let val = match self.stack.last_mut().unwrap().borrow_mut().deref_mut() {
+            Object::Vec(vec) => vec.pop().unwrap(),
+            object => {
+                return Err(Error::Type {
+                    expected: Type::Vec,
+                    recieved: Type::from(&*object),
+                })
+            }
+        };
+
+        self.stack.push(val);
+
+        Ok(())
+    }
+
+    pub fn vec_push(&mut self) -> Result<(), Error> {
+        let val = self.stack.pop().unwrap();
+
+        match self.stack.last_mut().unwrap().borrow_mut().deref_mut() {
+            Object::Vec(vec) => vec.push(val),
+            object => {
+                return Err(Error::Type {
+                    expected: Type::Vec,
+                    recieved: Type::from(&*object),
+                })
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn vec_nth(&mut self) -> Result<(), Error> {
+        let index: usize = match self.stack.pop().unwrap().borrow().deref() {
+            Object::Int(i) => *i,
+            object => {
+                return Err(Error::Type {
+                    expected: Type::Int,
+                    recieved: Type::from(object),
+                })
+            }
+        }
+        .try_into()
+        .unwrap();
+
+        let element = match self.stack.last().unwrap().deref().borrow().deref() {
+            Object::Vec(vec) => Rc::clone(&vec[index]),
+            object => {
+                return Err(Error::Type {
+                    expected: Type::Vec,
+                    recieved: Type::from(object),
+                })
+            }
+        };
+
+        self.stack.push(element);
+
+        Ok(())
+    }
+
+    pub fn vec_insert(&mut self) -> Result<(), Error> {
+        let index = match self.stack.pop().unwrap().borrow().deref() {
+            Object::Int(i) => *i,
+            object => {
+                return Err(Error::Type {
+                    expected: Type::Int,
+                    recieved: Type::from(object),
+                })
+            }
+        }
+        .try_into()
+        .unwrap();
+
+        let val = self.stack.pop().unwrap();
+
+        match self.stack.last_mut().unwrap().borrow_mut().deref_mut() {
+            Object::Vec(vec) => vec.insert(index, val),
+            object => {
+                return Err(Error::Type {
+                    expected: Type::Vec,
+                    recieved: Type::from(&*object),
+                })
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn vec_slice(&mut self) -> Result<(), Error> {
+        let start: usize = match self.stack.pop().unwrap().deref().borrow().deref() {
+            Object::Int(i) => *i,
+            object => {
+                return Err(Error::Type {
+                    expected: Type::Int,
+                    recieved: Type::from(object),
+                })
+            }
+        }
+        .try_into()
+        .unwrap();
+
+        let stop: usize = match self.stack.pop().unwrap().deref().borrow().deref() {
+            Object::Int(i) => *i,
+            object => {
+                return Err(Error::Type {
+                    expected: Type::Int,
+                    recieved: Type::from(object),
+                })
+            }
+        }
+        .try_into()
+        .unwrap();
+
+        let slice = match self.stack.last().unwrap().deref().borrow().deref() {
+            Object::Vec(vec) => Rc::new(RefCell::new(Object::Vec(vec[start..stop].to_vec()))),
+            object => {
+                return Err(Error::Type {
+                    expected: Type::Vec,
+                    recieved: Type::from(object),
+                })
+            }
+        };
+
+        self.stack.push(slice);
+
         Ok(())
     }
 
     pub fn branch(&mut self, i: usize) -> Result<(), Error> {
         let p = self.stack.pop().unwrap();
 
-        match p.borrow().deref() {
+        match p.deref().borrow().deref() {
             Object::True => (),
             Object::Nil => {
                 self.pc += i;
@@ -483,22 +568,11 @@ impl Vm {
     }
 }
 
-fn make_list(objects: &[Rc<RefCell<Object>>]) -> Rc<RefCell<Object>> {
-    if !objects.is_empty() {
-        Rc::new(RefCell::new(Object::Cons(Cons(
-            Rc::clone(&objects[0]),
-            make_list(&objects[1..]),
-        ))))
-    } else {
-        Rc::new(RefCell::new(Object::Nil))
-    }
-}
-
 impl From<&Object> for Type {
     fn from(value: &Object) -> Self {
         match value {
             Object::Function(_) => Type::Function,
-            Object::Cons(_) => Type::Cons,
+            Object::Vec(_) => Type::Vec,
             Object::String(_) => Type::String,
             Object::Symbol(_) => Type::Symbol,
             Object::Int(_) => Type::Int,
@@ -512,7 +586,7 @@ impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::Function => write!(f, "function"),
-            Self::Cons => write!(f, "cons"),
+            Self::Vec => write!(f, "vec"),
             Self::Symbol => write!(f, "symbol"),
             Self::String => write!(f, "string"),
             Self::Int => write!(f, "int"),
@@ -528,22 +602,18 @@ impl TryFrom<&Object> for Value {
     fn try_from(object: &Object) -> Result<Self, Self::Error> {
         Ok(match object {
             Object::Function(_) => return Err(()),
-            Object::Cons(cons) => Value::Cons(Box::new(value::Cons::try_from(cons)?)),
+            Object::Vec(vec) => Value::List(
+                vec.iter()
+                    .cloned()
+                    .map(|object| Value::try_from(object.borrow().deref()))
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(|_| ())?,
+            ),
             Object::String(string) => Value::String(string.clone()),
             Object::Symbol(symbol) => Value::Symbol(symbol.clone()),
             Object::Int(i) => Value::Int(*i),
             Object::True => Value::True,
             Object::Nil => Value::Nil,
         })
-    }
-}
-
-impl TryFrom<&crate::Cons> for value::Cons {
-    type Error = ();
-    fn try_from(value: &crate::Cons) -> Result<Self, Self::Error> {
-        Ok(value::Cons(
-            Value::try_from(&*value.0.borrow())?,
-            Value::try_from(&*value.1.borrow())?,
-        ))
     }
 }
