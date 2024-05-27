@@ -162,6 +162,8 @@ impl Vm {
                 return Ok(ret);
             };
 
+            self.pc += 1;
+
             match opcode {
                 OpCode::DefGlobal(global) => self.def_global(global)?,
                 OpCode::SetGlobal(global) => self.set_global(global)?,
