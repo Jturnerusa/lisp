@@ -572,6 +572,12 @@ impl Vm {
     }
 }
 
+impl Lambda {
+    pub fn arity(&self) -> Arity {
+        self.arity
+    }
+}
+
 impl From<&Object> for Type {
     fn from(value: &Object) -> Self {
         match value {
