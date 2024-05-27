@@ -38,6 +38,7 @@ name = "lisp"
 version = "0.0.1"
 dependencies = [
  "compiler",
+ "identity-hasher",
  "reader",
  "value",
  "vm",
