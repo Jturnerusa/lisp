@@ -50,7 +50,7 @@ impl Compiler {
         opcodes: &mut Vec<OpCode>,
         constants: &mut ConstantsTable,
     ) -> Result<(), Error> {
-        match dbg!(value) {
+        match value {
             Value::List(list) => match list.as_slice() {
                 [Value::Symbol(symbol), _] if symbol == "eval-when-compile" => todo!(),
                 [Value::Symbol(symbol), Value::Symbol(name), Value::List(parameters), body]
