@@ -10,3 +10,4 @@ value = { path = "crates/value" }
 reader = { path = "crates/reader" }
 compiler = { path = "crates/compiler" }
 vm = { path = "crates/vm" }
+identity-hasher = { path = "crates/identity-hasher" }
