@@ -140,11 +140,13 @@ impl Vm {
         }
     }
 
-    pub fn load_constant(&mut self, constant: Constant) {
-        let mut hasher = Xxh3::new(0).unwrap();
-        constant.hash(&mut hasher);
-        let hash = hasher.finish();
-        self.constants.insert(hash, constant);
+    pub fn load_constants(&mut self, constants: impl Iterator<Item = Constant>) {
+        for constant in constants {
+            let mut hasher = Xxh3::new(0).unwrap();
+            constant.hash(&mut hasher);
+            let hash = hasher.finish();
+            self.constants.insert(hash, constant);
+        }
     }
 
     pub fn eval(&mut self, opcodes: &[OpCode]) -> Result<Option<Rc<RefCell<Object>>>, Error> {
