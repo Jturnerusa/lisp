@@ -53,9 +53,12 @@ impl<'a> Reader<'a> {
                 Some(Ok(parse::Node::Symbol(symbol))) => {
                     list.push(Value::Symbol(symbol.to_string()))
                 }
+                Some(Ok(parse::Node::String(string))) => {
+                    list.push(Value::String(string.to_string()))
+                }
+                Some(Ok(parse::Node::Int(i))) => list.push(Value::Int(i.parse().unwrap())),
                 Some(Err(e)) => return Err(Error::ParseError(e.to_string())),
                 None => return Err(Error::UnbalancedParens),
-                _ => todo!(),
             }
         }
     }
