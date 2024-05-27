@@ -237,7 +237,7 @@ impl Vm {
             self.constants
                 .get(&constant)
                 .unwrap()
-                .as_string()
+                .as_symbol()
                 .cloned()
                 .unwrap(),
             val,
@@ -271,7 +271,7 @@ impl Vm {
     pub fn get_global(&mut self, constant: u64) -> Result<(), Error> {
         if let Some(var) = self
             .globals
-            .get(self.constants.get(&constant).unwrap().as_string().unwrap())
+            .get(self.constants.get(&constant).unwrap().as_symbol().unwrap())
         {
             self.stack.push(Rc::clone(var))
         } else {
