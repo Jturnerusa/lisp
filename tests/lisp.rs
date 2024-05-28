@@ -1,8 +1,10 @@
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::ops::Deref;
 use std::rc::Rc;
 
 use compiler::Compiler;
+use identity_hasher::IdentityHasher;
 use reader::Reader;
 use vm::Vm;
 
@@ -11,17 +13,22 @@ fn eval(input: &str) -> Result<Rc<RefCell<vm::Object>>, Box<dyn std::error::Erro
     let mut compiler = Compiler::new();
     let mut vm = Vm::new();
     let mut opcodes = Vec::new();
+    let mut constants = HashMap::with_hasher(IdentityHasher::new());
     let mut ret = None;
 
     for read in reader {
-        let read = read.unwrap();
-        let ast = compiler::Ast::parse(&read).unwrap();
+        let value = read?;
+
         opcodes.clear();
-        compiler.compile(&ast, &mut opcodes, &mut vm).unwrap();
-        ret = Some(vm.eval(opcodes.as_slice())?);
+        constants.clear();
+
+        compiler.compile(&value, &mut opcodes, &mut constants)?;
+
+        vm.load_constants(constants.values().cloned());
+        ret = vm.eval(opcodes.as_slice()).unwrap();
     }
 
-    Ok(ret.unwrap().unwrap())
+    Ok(ret.unwrap())
 }
 
 #[test]
