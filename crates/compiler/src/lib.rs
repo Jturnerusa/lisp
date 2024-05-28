@@ -46,6 +46,7 @@ impl Compiler {
         opcodes: &mut Vec<OpCode>,
         constants: &mut ConstantTable,
     ) -> Result<(), Error> {
+        // def
         if let Value::Cons(cons) = value
             && cons.iter_cars().count() == 3
             && cons
@@ -58,7 +59,23 @@ impl Compiler {
         {
             let expr = cons.iter_cars().nth(2).unwrap();
             self.compile_def(name.as_str(), expr, opcodes, constants)
-        } else if let Value::Cons(cons) = value
+        }
+        //set
+        else if let Value::Cons(cons) = value
+            && cons.iter_cars().count() == 3
+            && cons
+                .iter_cars()
+                .nth(0)
+                .unwrap()
+                .as_symbol()
+                .is_some_and(|symbol| symbol == "set")
+            && let Value::Symbol(name) = cons.iter_cars().nth(1).unwrap()
+        {
+            let expr = cons.iter_cars().nth(2).unwrap();
+            self.compile_set(name, expr, opcodes, constants)
+        }
+        // add
+        else if let Value::Cons(cons) = value
             && cons.iter_cars().count() == 3
             && cons
                 .iter_cars()
@@ -70,7 +87,9 @@ impl Compiler {
             let lhs = cons.iter_cars().nth(1).unwrap();
             let rhs = cons.iter_cars().nth(2).unwrap();
             self.compile_binary_op(lhs, rhs, OpCode::Add, opcodes, constants)
-        } else if let Value::Int(i) = value {
+        }
+        // atoms
+        else if let Value::Int(i) = value {
             opcodes.push(OpCode::PushInt(*i));
             Ok(())
         } else if let Value::Symbol(symbol) = value {
@@ -92,6 +111,26 @@ impl Compiler {
         constants.insert(hash, constant);
         self.compile(expr, opcodes, constants)?;
         opcodes.push(OpCode::DefGlobal(hash));
+        Ok(())
+    }
+
+    fn compile_set(
+        &mut self,
+        name: &str,
+        expr: &Value,
+        opcodes: &mut Vec<OpCode>,
+        constants: &mut ConstantTable,
+    ) -> Result<(), Error> {
+        opcodes.push(
+            if self.environment.is_global_scope() || self.environment.get(name).is_none() {
+                let constant = vm::Constant::Symbol(name.to_string());
+                let hash = hash_constant(&constant);
+                constants.insert(hash, constant);
+                OpCode::GetGlobal(hash)
+            } else {
+                todo!()
+            },
+        );
         Ok(())
     }
 
