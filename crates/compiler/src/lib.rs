@@ -53,20 +53,46 @@ impl Compiler {
                 .nth(0)
                 .unwrap()
                 .as_symbol()
+                .is_some_and(|symbol| symbol == "def")
+            && let Value::Symbol(name) = cons.iter_cars().nth(1).unwrap()
+        {
+            let expr = cons.iter_cars().nth(2).unwrap();
+            self.compile_def(name.as_str(), expr, opcodes, constants)
+        } else if let Value::Cons(cons) = value
+            && cons.iter_cars().count() == 3
+            && cons
+                .iter_cars()
+                .nth(0)
+                .unwrap()
+                .as_symbol()
                 .is_some_and(|symbol| symbol == "+")
         {
             let lhs = cons.iter_cars().nth(1).unwrap();
             let rhs = cons.iter_cars().nth(2).unwrap();
             self.compile_binary_op(lhs, rhs, OpCode::Add, opcodes, constants)
+        } else if let Value::Int(i) = value {
+            opcodes.push(OpCode::PushInt(*i));
+            Ok(())
+        } else if let Value::Symbol(symbol) = value {
+            self.compile_symbol(symbol.as_str(), opcodes, constants)
         } else {
-            match value {
-                Value::Int(i) => {
-                    opcodes.push(OpCode::PushInt(*i));
-                    Ok(())
-                }
-                _ => todo!(),
-            }
+            todo!()
         }
+    }
+
+    fn compile_def(
+        &mut self,
+        name: &str,
+        expr: &Value,
+        opcodes: &mut Vec<OpCode>,
+        constants: &mut ConstantTable,
+    ) -> Result<(), Error> {
+        let constant = vm::Constant::Symbol(name.to_string());
+        let hash = hash_constant(&constant);
+        constants.insert(hash, constant);
+        self.compile(expr, opcodes, constants)?;
+        opcodes.push(OpCode::DefGlobal(hash));
+        Ok(())
     }
 
     fn compile_binary_op(
@@ -80,6 +106,25 @@ impl Compiler {
         self.compile(lhs, opcodes, constants)?;
         self.compile(rhs, opcodes, constants)?;
         opcodes.push(op);
+        Ok(())
+    }
+
+    fn compile_symbol(
+        &mut self,
+        symbol: &str,
+        opcodes: &mut Vec<OpCode>,
+        constants: &mut ConstantTable,
+    ) -> Result<(), Error> {
+        opcodes.push(
+            if self.environment.is_global_scope() || self.environment.get(symbol).is_none() {
+                let constant = vm::Constant::Symbol(symbol.to_string());
+                let hash = hash_constant(&constant);
+                constants.insert(hash, constant);
+                OpCode::GetGlobal(hash)
+            } else {
+                todo!()
+            },
+        );
         Ok(())
     }
 }
