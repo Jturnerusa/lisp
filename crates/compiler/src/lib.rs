@@ -12,7 +12,7 @@ use environment::Environment;
 use identity_hasher::IdentityHasher;
 use thiserror::Error;
 use value::{Cons, Value};
-use vm::{Constant, OpCode, Vm};
+use vm::{Arity, Constant, OpCode, Vm};
 use xxhash::Xxh3;
 
 type ConstantTable = HashMap<u64, Constant, IdentityHasher>;
@@ -46,8 +46,31 @@ impl Compiler {
         opcodes: &mut Vec<OpCode>,
         constants: &mut ConstantTable,
     ) -> Result<(), Error> {
-        // def
+        // lambda
         if let Value::Cons(cons) = value
+            && cons.iter_cars().count() == 3
+            && cons
+                .iter_cars()
+                .nth(0)
+                .unwrap()
+                .as_symbol()
+                .is_some_and(|s| s == "lambda")
+            && let Value::Cons(_) | Value::Nil = cons.iter_cars().nth(1).unwrap()
+        {
+            let body = cons.iter_cars().nth(2).unwrap();
+            let parameters = match cons.iter_cars().nth(1).unwrap() {
+                Value::Cons(cons) => cons
+                    .iter_cars()
+                    .map(|car| car.as_symbol().cloned())
+                    .collect::<Option<Vec<String>>>()
+                    .ok_or_else(|| Error::Compiler("".to_string()))?,
+                Value::Nil => Vec::new(),
+                _ => unreachable!(),
+            };
+            self.compile_lambda(parameters.into_iter(), body, opcodes, constants)
+        }
+        // def
+        else if let Value::Cons(cons) = value
             && cons.iter_cars().count() == 3
             && cons
                 .iter_cars()
@@ -87,6 +110,10 @@ impl Compiler {
             let lhs = cons.iter_cars().nth(1).unwrap();
             let rhs = cons.iter_cars().nth(2).unwrap();
             self.compile_binary_op(lhs, rhs, OpCode::Add, opcodes, constants)
+        }
+        // fncall
+        else if let Value::Cons(cons) = value {
+            self.compile_fncall(cons, opcodes, constants)
         }
         // atoms
         else if let Value::Int(i) = value {
@@ -131,6 +158,57 @@ impl Compiler {
                 todo!()
             },
         );
+        Ok(())
+    }
+
+    fn compile_lambda(
+        &mut self,
+        parameters: impl Iterator<Item = String> + Clone,
+        body: &Value,
+        opcodes: &mut Vec<OpCode>,
+        constants: &mut ConstantTable,
+    ) -> Result<(), Error> {
+        self.environment.push_scope(parameters.clone());
+
+        let mut lambda_opcodes = Vec::new();
+        self.compile(body, &mut lambda_opcodes, constants)?;
+        lambda_opcodes.push(OpCode::Return);
+
+        let opcodes_constant = Constant::Opcodes(lambda_opcodes.into());
+        let opcodes_hash = hash_constant(&opcodes_constant);
+        constants.insert(opcodes_hash, opcodes_constant);
+
+        let arity = match parameters.count() {
+            0 => Arity::Nullary,
+            n => Arity::Nary(n),
+        };
+
+        opcodes.push(OpCode::Lambda {
+            arity,
+            body: opcodes_hash,
+        });
+
+        for upvalue in self.environment.upvalues() {
+            opcodes.push(OpCode::CreateUpValue(upvalue));
+        }
+
+        self.environment.pop_scope();
+
+        Ok(())
+    }
+
+    fn compile_fncall(
+        &mut self,
+        exprs: &Cons,
+        opcodes: &mut Vec<OpCode>,
+        constants: &mut ConstantTable,
+    ) -> Result<(), Error> {
+        for expr in exprs.iter_cars() {
+            self.compile(expr, opcodes, constants)?
+        }
+
+        opcodes.push(OpCode::Call(exprs.iter_cars().count() - 1));
+
         Ok(())
     }
 
