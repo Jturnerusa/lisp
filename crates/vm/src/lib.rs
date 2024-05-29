@@ -249,7 +249,7 @@ impl Vm {
 
         if let Some(var) = self
             .globals
-            .get_mut(self.constants.get(&constant).unwrap().as_string().unwrap())
+            .get_mut(self.constants.get(&constant).unwrap().as_symbol().unwrap())
         {
             *var = Rc::clone(&val);
             self.stack.push(val);
