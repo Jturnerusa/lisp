@@ -500,6 +500,12 @@ fn make_list(objects: &[Rc<RefCell<Object>>]) -> Rc<RefCell<Object>> {
     }
 }
 
+impl Lambda {
+    pub fn arity(&self) -> Arity {
+        self.arity
+    }
+}
+
 impl From<&Object> for Type {
     fn from(value: &Object) -> Self {
         match value {
