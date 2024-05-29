@@ -197,6 +197,8 @@ impl Vm {
                         .push(Rc::new(RefCell::new(Object::String(string_value))));
                 }
                 OpCode::PushInt(i) => self.stack.push(Rc::new(RefCell::new(Object::Int(i)))),
+                OpCode::PushTrue => self.stack.push(Rc::new(RefCell::new(Object::True))),
+                OpCode::PushNil => self.stack.push(Rc::new(RefCell::new(Object::Nil))),
                 OpCode::Pop => {
                     self.stack.pop().unwrap();
                 }
