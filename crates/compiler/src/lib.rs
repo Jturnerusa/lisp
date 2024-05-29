@@ -4,8 +4,11 @@
 mod environment;
 
 use std::{
+    cell::RefCell,
     collections::HashMap,
     hash::{Hash, Hasher},
+    ops::Deref,
+    rc::Rc,
 };
 
 use environment::{Environment, Variable};
@@ -46,8 +49,32 @@ impl Compiler {
         opcodes: &mut Vec<OpCode>,
         constants: &mut ConstantTable,
     ) -> Result<(), Error> {
-        // lambda
+        // defmacro
         if let Value::Cons(cons) = value
+            && cons.iter_cars().count() == 4
+            && cons
+                .iter_cars()
+                .nth(0)
+                .unwrap()
+                .as_symbol()
+                .is_some_and(|symbol| symbol == "defmacro")
+            && let Value::Symbol(name) = cons.iter_cars().nth(1).unwrap()
+            && let Value::Cons(_) | Value::Nil = cons.iter_cars().nth(2).unwrap()
+        {
+            let parameters = match cons.iter_cars().nth(2).unwrap() {
+                Value::Cons(cons) => cons
+                    .iter_cars()
+                    .map(|car| car.as_symbol().cloned())
+                    .collect::<Option<Vec<String>>>()
+                    .ok_or_else(|| Error::Compiler("".to_string()))?,
+                Value::Nil => Vec::new(),
+                _ => unreachable!(),
+            };
+            let body = cons.iter_cars().nth(3).unwrap();
+            self.compile_defmacro(name.as_str(), parameters.into_iter(), body)
+        }
+        // lambda
+        else if let Value::Cons(cons) = value
             && cons.iter_cars().count() == 3
             && cons
                 .iter_cars()
@@ -112,6 +139,31 @@ impl Compiler {
             let els = cons.iter_cars().nth(3).unwrap();
             self.compile_branch(predicate, then, els, opcodes, constants)
         }
+        // quote
+        else if let Value::Cons(cons) = value
+            && cons.iter_cars().count() == 2
+            && cons
+                .iter_cars()
+                .nth(0)
+                .unwrap()
+                .as_symbol()
+                .is_some_and(|symbol| symbol == "quote")
+        {
+            self.quote(cons.iter_cars().nth(1).unwrap(), opcodes, constants)
+        }
+        //list
+        else if let Value::Cons(cons) = value
+            && cons.iter_cars().count() > 0
+            && let Value::Cons(exprs) = &cons.deref().1
+            && cons
+                .iter_cars()
+                .nth(0)
+                .unwrap()
+                .as_symbol()
+                .is_some_and(|symbol| symbol == "list")
+        {
+            self.compile_list(exprs, opcodes, constants)
+        }
         // add
         else if let Value::Cons(cons) = value
             && cons.iter_cars().count() == 3
@@ -125,6 +177,15 @@ impl Compiler {
             let lhs = cons.iter_cars().nth(1).unwrap();
             let rhs = cons.iter_cars().nth(2).unwrap();
             self.compile_binary_op(lhs, rhs, OpCode::Add, opcodes, constants)
+        }
+        // eval macro
+        else if let Value::Cons(cons) = value
+            && let Value::Cons(exprs) = &cons.deref().1
+            && cons.iter_cars().count() > 0
+            && let Value::Symbol(name) = cons.iter_cars().nth(0).unwrap()
+            && self.macros.contains_key(name)
+        {
+            self.eval_macro(name, exprs, opcodes, constants)
         }
         // fncall
         else if let Value::Cons(cons) = value {
@@ -142,6 +203,102 @@ impl Compiler {
         } else {
             todo!()
         }
+    }
+
+    fn compile_defmacro(
+        &mut self,
+        name: &str,
+        parameters: impl Iterator<Item = String> + Clone,
+        body: &Value,
+    ) -> Result<(), Error> {
+        if !self.environment.is_global_scope() {
+            return Err(Error::Compiler(
+                "defmacro must exist at the global scope".to_string(),
+            ));
+        }
+
+        self.environment.push_scope(
+            parameters
+                .clone()
+                .chain(std::iter::once("&rest".to_string())),
+        );
+
+        let mut defmacro_opcodes = Vec::new();
+        let mut defmacro_constants = ConstantTable::with_hasher(IdentityHasher::new());
+        self.compile(body, &mut defmacro_opcodes, &mut defmacro_constants)?;
+        defmacro_opcodes.push(OpCode::Return);
+        self.environment.pop_scope();
+
+        let defmacro_name_constant = Constant::Symbol(name.to_string());
+        let defmacro_name_hash = hash_constant(&defmacro_name_constant);
+        let defmacro_opcodes_constant = Constant::Opcodes(defmacro_opcodes.into());
+        let defmacro_opcodes_hash = hash_constant(&defmacro_opcodes_constant);
+
+        self.vm.load_constants(defmacro_constants.into_values());
+        self.vm
+            .load_constants(std::iter::once(defmacro_name_constant));
+        self.vm
+            .load_constants(std::iter::once(defmacro_opcodes_constant));
+
+        let arity = Arity::Nary(parameters.count());
+
+        self.vm.lambda(arity, defmacro_opcodes_hash)?;
+        self.vm.def_global(defmacro_name_hash)?;
+        self.macros.insert(name.to_string(), defmacro_name_hash);
+
+        Ok(())
+    }
+
+    fn eval_macro(
+        &mut self,
+        name: &str,
+        exprs: &Cons,
+        opcodes: &mut Vec<OpCode>,
+        constants: &mut ConstantTable,
+    ) -> Result<(), Error> {
+        let defmacro_name_hash = self.macros.get(name).unwrap();
+
+        self.vm.get_global(*defmacro_name_hash)?;
+
+        let arity = self
+            .vm
+            .stack()
+            .last()
+            .unwrap()
+            .borrow()
+            .as_function()
+            .unwrap()
+            .borrow()
+            .arity();
+
+        let rest = match (arity, exprs.iter_cars().count()) {
+            (Arity::Nary(n), count) if n > count => n - count,
+            (Arity::Nary(n), count) if n == count => 0,
+            _ => {
+                return Err(Error::Compiler(
+                    "invalid number of parameters to macro".to_string(),
+                ))
+            }
+        };
+
+        for expr in exprs.iter_cars() {
+            push_value(&mut self.vm, expr);
+        }
+
+        self.vm.list(rest)?;
+
+        self.vm.call(match arity {
+            Arity::Nary(n) => n + 1,
+            _ => unreachable!(),
+        })?;
+
+        let ret = self.vm.eval([].as_slice())?.unwrap();
+
+        let val = Value::try_from(ret.borrow().deref()).unwrap();
+
+        self.compile(&val, opcodes, constants)?;
+
+        Ok(())
     }
 
     fn compile_def(
@@ -290,10 +447,111 @@ impl Compiler {
         );
         Ok(())
     }
+
+    fn compile_list(
+        &mut self,
+        exprs: &Cons,
+        opcodes: &mut Vec<OpCode>,
+        constants: &mut ConstantTable,
+    ) -> Result<(), Error> {
+        for expr in exprs.iter_cars() {
+            self.compile(expr, opcodes, constants)?;
+        }
+
+        opcodes.push(OpCode::List(exprs.iter_cars().count()));
+
+        Ok(())
+    }
+
+    fn quote(
+        &mut self,
+        value: &Value,
+        opcodes: &mut Vec<OpCode>,
+        constants: &mut ConstantTable,
+    ) -> Result<(), Error> {
+        match value {
+            Value::Cons(cons) => self.quote_list(cons, opcodes, constants)?,
+            Value::Symbol(symbol) => self.quote_symbol(symbol, opcodes, constants)?,
+            Value::String(string) => self.quote_string(string, opcodes, constants)?,
+            Value::Int(i) => opcodes.push(OpCode::PushInt(*i)),
+            Value::True => opcodes.push(OpCode::PushTrue),
+            Value::Nil => opcodes.push(OpCode::PushNil),
+        }
+        Ok(())
+    }
+
+    fn quote_list(
+        &mut self,
+        list: &Cons,
+        opcodes: &mut Vec<OpCode>,
+        constants: &mut ConstantTable,
+    ) -> Result<(), Error> {
+        for element in list.iter_cars() {
+            self.quote(element, opcodes, constants)?
+        }
+
+        opcodes.push(OpCode::List(list.iter_cars().count()));
+
+        todo!()
+    }
+
+    fn quote_symbol(
+        &mut self,
+        symbol: &str,
+        opcodes: &mut Vec<OpCode>,
+        constants: &mut ConstantTable,
+    ) -> Result<(), Error> {
+        let constant = Constant::Symbol(symbol.to_string());
+        let hash = hash_constant(&constant);
+
+        constants.insert(hash, constant);
+
+        opcodes.push(OpCode::PushSymbol(hash));
+
+        Ok(())
+    }
+
+    fn quote_string(
+        &mut self,
+        string: &str,
+        opcodes: &mut Vec<OpCode>,
+        constants: &mut ConstantTable,
+    ) -> Result<(), Error> {
+        let constant = Constant::String(string.to_string());
+        let hash = hash_constant(&constant);
+
+        constants.insert(hash, constant);
+
+        opcodes.push(OpCode::PushString(hash));
+
+        Ok(())
+    }
 }
 
 fn hash_constant(constant: &Constant) -> u64 {
     let mut hasher = Xxh3::new(0).unwrap();
     constant.hash(&mut hasher);
     hasher.finish()
+}
+
+fn push_list(vm: &mut Vm, list: &Cons) {
+    for e in list.iter_cars() {
+        push_value(vm, e);
+    }
+    vm.list(list.iter_cars().count()).unwrap();
+}
+
+fn push_value(vm: &mut Vm, value: &Value) {
+    match value {
+        Value::Cons(cons) => push_list(vm, cons),
+        Value::Symbol(symbol) => vm.push(Rc::new(RefCell::new(vm::Object::Symbol(
+            symbol.to_string(),
+        )))),
+        Value::String(string) => vm.push(Rc::new(RefCell::new(vm::Object::String(
+            string.to_string(),
+        )))),
+        Value::Int(i) => vm.push(Rc::new(RefCell::new(vm::Object::Int(*i)))),
+        Value::True => vm.push(Rc::new(RefCell::new(vm::Object::True))),
+        Value::Nil => vm.push(Rc::new(RefCell::new(vm::Object::Nil))),
+    }
 }
