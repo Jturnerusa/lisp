@@ -60,7 +60,7 @@ fn test_def_global() {
 
 #[test]
 fn test_set_global() {
-    let input = "(def x 1) (set x 2) 2";
+    let input = "(def x 1) (set x 2) x";
     assert!(matches!(
         eval(input).unwrap().borrow().deref(),
         vm::Object::Int(2)

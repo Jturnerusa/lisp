@@ -148,12 +148,13 @@ impl Compiler {
         opcodes: &mut Vec<OpCode>,
         constants: &mut ConstantTable,
     ) -> Result<(), Error> {
+        self.compile(expr, opcodes, constants)?;
         opcodes.push(
             if self.environment.is_global_scope() || self.environment.get(name).is_none() {
                 let constant = vm::Constant::Symbol(name.to_string());
                 let hash = hash_constant(&constant);
                 constants.insert(hash, constant);
-                OpCode::GetGlobal(hash)
+                OpCode::SetGlobal(hash)
             } else {
                 todo!()
             },
