@@ -261,7 +261,7 @@ impl Vm {
                 self.constants
                     .get(&constant)
                     .unwrap()
-                    .as_string()
+                    .as_symbol()
                     .cloned()
                     .unwrap(),
             ))
@@ -279,7 +279,7 @@ impl Vm {
                 self.constants
                     .get(&constant)
                     .unwrap()
-                    .as_string()
+                    .as_symbol()
                     .cloned()
                     .unwrap(),
             ));
