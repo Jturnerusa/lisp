@@ -8,7 +8,7 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-use environment::Environment;
+use environment::{Environment, Variable};
 use identity_hasher::IdentityHasher;
 use thiserror::Error;
 use value::{Cons, Value};
@@ -240,7 +240,10 @@ impl Compiler {
                 constants.insert(hash, constant);
                 OpCode::GetGlobal(hash)
             } else {
-                todo!()
+                match self.environment.get(symbol).unwrap() {
+                    Variable::Local(i) => OpCode::GetLocal(i),
+                    _ => todo!(),
+                }
             },
         );
         Ok(())

@@ -77,6 +77,15 @@ fn test_lambda_expr() {
 }
 
 #[test]
+fn test_local_vars() {
+    let input = "((lambda (a) (+ a 1)) 1)";
+    assert!(matches!(
+        eval(input).unwrap().borrow().deref(),
+        vm::Object::Int(2)
+    ));
+}
+
+#[test]
 fn test_branch() {
     let input = "(if t 1 2)";
     assert!(matches!(
