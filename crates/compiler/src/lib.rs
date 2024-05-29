@@ -97,6 +97,21 @@ impl Compiler {
             let expr = cons.iter_cars().nth(2).unwrap();
             self.compile_set(name, expr, opcodes, constants)
         }
+        // if
+        else if let Value::Cons(cons) = value
+            && cons.iter_cars().count() == 4
+            && cons
+                .iter_cars()
+                .nth(0)
+                .unwrap()
+                .as_symbol()
+                .is_some_and(|symbol| symbol == "if")
+        {
+            let predicate = cons.iter_cars().nth(1).unwrap();
+            let then = cons.iter_cars().nth(2).unwrap();
+            let els = cons.iter_cars().nth(3).unwrap();
+            self.compile_branch(predicate, then, els, opcodes, constants)
+        }
         // add
         else if let Value::Cons(cons) = value
             && cons.iter_cars().count() == 3
@@ -121,6 +136,9 @@ impl Compiler {
             Ok(())
         } else if let Value::Symbol(symbol) = value {
             self.compile_symbol(symbol.as_str(), opcodes, constants)
+        } else if let Value::True = value {
+            opcodes.push(OpCode::PushTrue);
+            Ok(())
         } else {
             todo!()
         }
@@ -194,6 +212,30 @@ impl Compiler {
         }
 
         self.environment.pop_scope();
+
+        Ok(())
+    }
+
+    fn compile_branch(
+        &mut self,
+        predicate: &Value,
+        then: &Value,
+        els: &Value,
+        opcodes: &mut Vec<OpCode>,
+        constants: &mut ConstantTable,
+    ) -> Result<(), Error> {
+        let mut then_opcodes = Vec::new();
+        let mut els_opcodes = Vec::new();
+
+        self.compile(predicate, opcodes, constants)?;
+        self.compile(then, &mut then_opcodes, constants)?;
+        self.compile(els, &mut els_opcodes, constants)?;
+
+        opcodes.push(OpCode::Branch(then_opcodes.len() + 1));
+        then_opcodes.push(OpCode::Jmp(els_opcodes.len().try_into().unwrap()));
+
+        opcodes.extend(then_opcodes);
+        opcodes.extend(els_opcodes);
 
         Ok(())
     }
