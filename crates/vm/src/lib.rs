@@ -329,7 +329,11 @@ impl Vm {
     }
 
     pub fn create_upvalue(&mut self, upvalue: UpValue) -> Result<(), Error> {
-        let upvalue_index = self.frames[upvalue.frame].bp + upvalue.index;
+        let upvalue_index = if upvalue.frame == 0 {
+            self.bp + upvalue.index
+        } else {
+            self.frames[self.frames.len() - upvalue.frame].bp + upvalue.index
+        };
 
         let val = self.stack[upvalue_index].clone();
 
