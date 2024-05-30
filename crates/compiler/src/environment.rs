@@ -71,12 +71,7 @@ impl Environment {
     }
 
     pub fn insert(&mut self, var: &str) {
-        if self
-            .scopes
-            .last()
-            .and_then(|scope| scope.get_local(var))
-            .is_none()
-        {
+        if self.get(var).is_none() {
             if let Some(upvalue) = self.get_upvalue(var) {
                 self.scopes
                     .last_mut()
