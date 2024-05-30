@@ -260,17 +260,30 @@ impl Compiler {
         else if let Value::Cons(cons) = value {
             self.compile_fncall(cons, opcodes, constants)
         }
-        // atoms
+        // int
         else if let Value::Int(i) = value {
             opcodes.push(OpCode::PushInt(*i));
             Ok(())
-        } else if let Value::Symbol(symbol) = value {
+        }
+        // symbol
+        else if let Value::Symbol(symbol) = value {
             self.compile_symbol(symbol.as_str(), opcodes, constants)
-        } else if let Value::True = value {
+        }
+        // string
+        else if let Value::String(string) = value {
+            self.compile_string(string.as_str(), opcodes, constants)
+        }
+        // true
+        else if let Value::True = value {
             opcodes.push(OpCode::PushTrue);
             Ok(())
+        }
+        // nil
+        else if let Value::Nil = value {
+            opcodes.push(OpCode::PushNil);
+            Ok(())
         } else {
-            todo!()
+            unreachable!()
         }
     }
 
@@ -514,6 +527,19 @@ impl Compiler {
                 OpCode::GetGlobal(hash)
             }
         });
+        Ok(())
+    }
+
+    fn compile_string(
+        &mut self,
+        string: &str,
+        opcodes: &mut Vec<OpCode>,
+        constants: &mut ConstantTable,
+    ) -> Result<(), Error> {
+        let constant = Constant::String(string.to_string());
+        let hash = hash_constant(&constant);
+        constants.insert(hash, constant);
+        opcodes.push(OpCode::PushString(hash));
         Ok(())
     }
 
