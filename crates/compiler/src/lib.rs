@@ -344,9 +344,9 @@ impl Compiler {
             (Arity::Nary(n), count) if n > count => n - count,
             (Arity::Nary(n), count) if n == count => 0,
             _ => {
-                return Err(Error::Compiler(
-                    "invalid number of parameters to macro".to_string(),
-                ))
+                return Err(Error::Compiler(format!(
+                    "invalid number of parameters to macro {name}"
+                )))
             }
         };
 
