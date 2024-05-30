@@ -341,8 +341,8 @@ impl Compiler {
             .arity();
 
         let rest = match (arity, exprs.iter_cars().count()) {
-            (Arity::Nary(n), count) if n > count => n - count,
-            (Arity::Nary(n), count) if n == count => 0,
+            (Arity::Nary(n), count) if count > n => count - n,
+            (Arity::Nary(n), count) if count == n => 0,
             _ => {
                 return Err(Error::Compiler(format!(
                     "invalid number of parameters to macro {name}"
