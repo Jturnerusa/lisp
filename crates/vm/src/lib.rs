@@ -161,6 +161,7 @@ impl Vm {
                 let ret = self.stack.pop();
                 self.stack.clear();
                 self.pc = 0;
+                self.bp = 0;
                 return Ok(ret);
             };
 
