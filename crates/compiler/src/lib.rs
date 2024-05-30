@@ -481,19 +481,19 @@ impl Compiler {
         opcodes: &mut Vec<OpCode>,
         constants: &mut ConstantTable,
     ) -> Result<(), Error> {
-        opcodes.push(
-            if self.environment.is_global_scope() || self.environment.get(symbol).is_none() {
-                let constant = vm::Constant::Symbol(symbol.to_string());
+        if !self.environment.is_global_scope() {
+            self.environment.insert(symbol);
+        }
+        opcodes.push(match self.environment.get(symbol) {
+            Some(Variable::Local(i)) => OpCode::GetLocal(i),
+            Some(Variable::Upvalue(i)) => OpCode::GetUpValue(i),
+            None => {
+                let constant = Constant::Symbol(symbol.to_string());
                 let hash = hash_constant(&constant);
                 constants.insert(hash, constant);
                 OpCode::GetGlobal(hash)
-            } else {
-                match self.environment.get(symbol).unwrap() {
-                    Variable::Local(i) => OpCode::GetLocal(i),
-                    _ => todo!(),
-                }
-            },
-        );
+            }
+        });
         Ok(())
     }
 

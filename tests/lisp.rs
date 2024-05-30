@@ -122,3 +122,16 @@ fn test_cdr() {
         vm::Object::Int(2)
     ));
 }
+
+#[test]
+fn test_get_upvalue() {
+    let input = "
+(def x (lambda (a)
+        ((lambda () a))))
+(x 1)
+";
+    assert!(matches!(
+        dbg!(eval(input).unwrap().borrow().deref()),
+        vm::Object::Int(1)
+    ));
+}
