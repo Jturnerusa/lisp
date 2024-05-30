@@ -23,7 +23,7 @@ pub enum Arity {
     Variadic,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Type {
     Function,
     Cons,
@@ -82,6 +82,7 @@ pub enum OpCode {
     List(usize),
     Jmp(isize),
     Branch(usize),
+    IsType(Type),
 }
 
 #[derive(Clone, Debug, EnumAs, EnumIs)]
@@ -214,6 +215,7 @@ impl Vm {
                 OpCode::Jmp(offset) => {
                     self.pc += offset as usize;
                 }
+                OpCode::IsType(ty) => self.is_type(ty)?,
                 _ => todo!(),
             }
         }
@@ -485,6 +487,17 @@ impl Vm {
             }
         }
 
+        Ok(())
+    }
+
+    pub fn is_type(&mut self, ty: Type) -> Result<(), Error> {
+        self.stack.push(
+            if Type::from(self.stack.last().unwrap().borrow().deref()) == ty {
+                Rc::new(RefCell::new(Object::True))
+            } else {
+                Rc::new(RefCell::new(Object::Nil))
+            },
+        );
         Ok(())
     }
 }
