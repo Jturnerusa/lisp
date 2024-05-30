@@ -198,7 +198,7 @@ impl Compiler {
                 constants,
             )
         }
-        // car and cdr
+        // unary ops
         else if let Value::Cons(cons) = value
             && cons.iter_cars().count() == 2
             && cons
@@ -206,7 +206,20 @@ impl Compiler {
                 .nth(0)
                 .unwrap()
                 .as_symbol()
-                .is_some_and(|symbol| matches!(symbol.as_str(), "car" | "cdr"))
+                .is_some_and(|symbol| {
+                    matches!(
+                        symbol.as_str(),
+                        "car"
+                            | "cdr"
+                            | "cons?"
+                            | "lambda?"
+                            | "symbol?"
+                            | "string?"
+                            | "int?"
+                            | "true?"
+                            | "nil?"
+                    )
+                })
         {
             let expr = cons.iter_cars().nth(1).unwrap();
             self.compile_unary_op(
@@ -221,6 +234,13 @@ impl Compiler {
                 {
                     "car" => OpCode::Car,
                     "cdr" => OpCode::Cdr,
+                    "cons?" => OpCode::IsType(vm::Type::Cons),
+                    "lambda?" => OpCode::IsType(vm::Type::Function),
+                    "symbol?" => OpCode::IsType(vm::Type::Symbol),
+                    "string?" => OpCode::IsType(vm::Type::String),
+                    "int?" => OpCode::IsType(vm::Type::Int),
+                    "true?" => OpCode::IsType(vm::Type::True),
+                    "nil?" => OpCode::IsType(vm::Type::Nil),
                     _ => unreachable!(),
                 },
                 opcodes,

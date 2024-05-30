@@ -135,3 +135,12 @@ fn test_get_upvalue() {
         vm::Object::Int(1)
     ));
 }
+
+#[test]
+fn test_is_type() {
+    let input = "(int? 1)";
+    assert!(matches!(
+        eval(input).unwrap().borrow().deref(),
+        vm::Object::True
+    ));
+}
