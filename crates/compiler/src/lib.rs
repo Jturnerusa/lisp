@@ -178,6 +178,35 @@ impl Compiler {
             let rhs = cons.iter_cars().nth(2).unwrap();
             self.compile_binary_op(lhs, rhs, OpCode::Add, opcodes, constants)
         }
+        // car and cdr
+        else if let Value::Cons(cons) = value
+            && cons.iter_cars().count() == 2
+            && cons
+                .iter_cars()
+                .nth(0)
+                .unwrap()
+                .as_symbol()
+                .is_some_and(|symbol| matches!(symbol.as_str(), "car" | "cdr"))
+        {
+            let expr = cons.iter_cars().nth(1).unwrap();
+            self.compile_unary_op(
+                expr,
+                match cons
+                    .iter_cars()
+                    .nth(0)
+                    .unwrap()
+                    .as_symbol()
+                    .unwrap()
+                    .as_str()
+                {
+                    "car" => OpCode::Car,
+                    "cdr" => OpCode::Cdr,
+                    _ => unreachable!(),
+                },
+                opcodes,
+                constants,
+            )
+        }
         // eval macro
         else if let Value::Cons(cons) = value
             && let Value::Cons(exprs) = &cons.deref().1
@@ -445,6 +474,18 @@ impl Compiler {
                 }
             },
         );
+        Ok(())
+    }
+
+    fn compile_unary_op(
+        &mut self,
+        expr: &Value,
+        op: OpCode,
+        opcodes: &mut Vec<OpCode>,
+        constants: &mut ConstantTable,
+    ) -> Result<(), Error> {
+        self.compile(expr, opcodes, constants)?;
+        opcodes.push(op);
         Ok(())
     }
 

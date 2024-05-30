@@ -104,3 +104,21 @@ fn test_defmacro() {
         vm::Object::Int(2)
     ));
 }
+
+#[test]
+fn test_car() {
+    let input = "(car (list 1 2 3))";
+    assert!(matches!(
+        eval(input).unwrap().borrow().deref(),
+        vm::Object::Int(1)
+    ));
+}
+
+#[test]
+fn test_cdr() {
+    let input = "(car (cdr (list 1 2 3)))";
+    assert!(matches!(
+        eval(input).unwrap().borrow().deref(),
+        vm::Object::Int(2)
+    ));
+}
