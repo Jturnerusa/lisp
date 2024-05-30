@@ -311,11 +311,13 @@ impl Vm {
     pub fn set_upvalue(&mut self, upvalue: usize) -> Result<(), Error> {
         let val = self.stack.pop().unwrap();
 
-        self.current_function
+        *self
+            .current_function
             .as_mut()
             .unwrap()
             .borrow_mut()
-            .upvalues[upvalue] = val;
+            .upvalues[upvalue]
+            .borrow_mut() = val.borrow().deref().clone();
 
         Ok(())
     }
