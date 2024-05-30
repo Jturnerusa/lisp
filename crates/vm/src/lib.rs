@@ -171,6 +171,8 @@ impl Vm {
                 OpCode::GetGlobal(global) => self.get_global(global)?,
                 OpCode::SetLocal(local) => self.set_local(local)?,
                 OpCode::GetLocal(local) => self.get_local(local)?,
+                OpCode::SetUpValue(upvalue) => self.set_upvalue(upvalue)?,
+                OpCode::GetUpValue(upvalue) => self.get_upvalue(upvalue)?,
                 OpCode::Call(args) => self.call(args)?,
                 OpCode::Return => self.ret()?,
                 OpCode::Lambda { arity, body } => self.lambda(arity, body)?,
@@ -301,6 +303,26 @@ impl Vm {
         let i = self.bp + local;
         let local = self.stack[i].clone();
         self.stack.push(local);
+        Ok(())
+    }
+
+    pub fn set_upvalue(&mut self, upvalue: usize) -> Result<(), Error> {
+        let val = self.stack.pop().unwrap();
+
+        self.current_function
+            .as_mut()
+            .unwrap()
+            .borrow_mut()
+            .upvalues[upvalue] = val;
+
+        Ok(())
+    }
+
+    pub fn get_upvalue(&mut self, upvalue: usize) -> Result<(), Error> {
+        let val = Rc::clone(&self.current_function.as_ref().unwrap().borrow().upvalues[upvalue]);
+
+        self.stack.push(val);
+
         Ok(())
     }
 
