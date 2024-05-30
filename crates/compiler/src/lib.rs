@@ -172,11 +172,31 @@ impl Compiler {
                 .nth(0)
                 .unwrap()
                 .as_symbol()
-                .is_some_and(|symbol| symbol == "+")
+                .is_some_and(|symbol| matches!(symbol.as_str(), "+" | "-" | "*" | "/" | "cons"))
         {
             let lhs = cons.iter_cars().nth(1).unwrap();
             let rhs = cons.iter_cars().nth(2).unwrap();
-            self.compile_binary_op(lhs, rhs, OpCode::Add, opcodes, constants)
+            self.compile_binary_op(
+                lhs,
+                rhs,
+                match cons
+                    .iter_cars()
+                    .nth(0)
+                    .unwrap()
+                    .as_symbol()
+                    .unwrap()
+                    .as_str()
+                {
+                    "+" => OpCode::Add,
+                    "-" => OpCode::Sub,
+                    "*" => OpCode::Mul,
+                    "/" => OpCode::Div,
+                    "cons" => OpCode::Cons,
+                    _ => unreachable!(),
+                },
+                opcodes,
+                constants,
+            )
         }
         // car and cdr
         else if let Value::Cons(cons) = value
