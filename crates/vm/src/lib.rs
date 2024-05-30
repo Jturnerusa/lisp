@@ -351,7 +351,12 @@ impl Vm {
     pub fn call(&mut self, args: usize) -> Result<(), Error> {
         let f = match self.stack[self.stack.len() - args - 1].borrow().deref() {
             Object::Function(function) => Rc::clone(function),
-            _ => todo!(),
+            object => {
+                return Err(Error::Type {
+                    expected: Type::Function,
+                    recieved: Type::from(object),
+                })
+            }
         };
 
         match &f.borrow().arity {
