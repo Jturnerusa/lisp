@@ -112,6 +112,7 @@ pub struct Lambda {
 #[derive(Clone, Debug)]
 pub struct Cons(Rc<RefCell<Object>>, Rc<RefCell<Object>>);
 
+#[derive(Clone, Debug)]
 struct Frame {
     function: Option<Rc<RefCell<Lambda>>>,
     pc: usize,
