@@ -25,7 +25,7 @@ fn eval(input: &str) -> Result<Rc<RefCell<vm::Object>>, Box<dyn std::error::Erro
         compiler.compile(&value, &mut opcodes, &mut constants)?;
 
         vm.load_constants(constants.values().cloned());
-        ret = vm.eval(opcodes.as_slice()).unwrap();
+        ret = vm.eval(opcodes.as_slice())?;
     }
 
     Ok(ret.unwrap())
@@ -166,4 +166,10 @@ fn test_cons() {
         dbg!(eval(input).unwrap().borrow().deref()),
         vm::Object::Int(1)
     ));
+}
+
+#[test]
+fn test_assert() {
+    let input = "(assert (int? nil))";
+    assert!(eval(input).is_err());
 }
