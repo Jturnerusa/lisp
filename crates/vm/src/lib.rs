@@ -45,6 +45,8 @@ pub enum Error {
     Parameters(String),
     #[error("assertion failed: {0}")]
     Assert(String),
+    #[error("cannot compare this combination of types: {0} {1}")]
+    Cmp(Type, Type),
 }
 
 #[derive(Clone, EnumAs, EnumIs, PartialEq, Eq, Hash)]
@@ -86,9 +88,12 @@ pub enum OpCode {
     Branch(usize),
     IsType(Type),
     Assert,
+    Lt,
+    Gt,
+    Eq,
 }
 
-#[derive(Clone, Debug, EnumAs, EnumIs)]
+#[derive(Clone, Debug, EnumAs, EnumIs, PartialEq, Eq)]
 pub enum Object {
     Function(Rc<RefCell<Lambda>>),
     Cons(Cons),
@@ -105,14 +110,14 @@ pub struct UpValue {
     pub index: usize,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Lambda {
     arity: Arity,
     opcodes: Rc<[OpCode]>,
     upvalues: Vec<Rc<RefCell<Object>>>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Cons(Rc<RefCell<Object>>, Rc<RefCell<Object>>);
 
 #[derive(Clone, Debug)]
@@ -224,6 +229,9 @@ impl Vm {
                 }
                 OpCode::IsType(ty) => self.is_type(ty)?,
                 OpCode::Assert => self.assert()?,
+                OpCode::Lt => self.lt()?,
+                OpCode::Gt => self.gt()?,
+                OpCode::Eq => self.eq()?,
                 _ => todo!(),
             }
         }
@@ -545,6 +553,69 @@ impl Vm {
             Object::True => Ok(()),
             _ => Err(Error::Assert("assertion failed".to_string())),
         }
+    }
+
+    pub fn lt(&mut self) -> Result<(), Error> {
+        let rhs = self.stack.pop().unwrap();
+        let lhs = self.stack.pop().unwrap();
+
+        self.stack.push(
+            if match (lhs.borrow().deref(), rhs.borrow().deref()) {
+                (Object::Symbol(a), Object::Symbol(b)) => a < b,
+                (Object::String(a), Object::String(b)) => a < b,
+                (Object::Int(a), Object::Int(b)) => a < b,
+                (a, b) => return Err(Error::Cmp(Type::from(a), Type::from(b))),
+            } {
+                Rc::new(RefCell::new(Object::True))
+            } else {
+                Rc::new(RefCell::new(Object::Nil))
+            },
+        );
+
+        Ok(())
+    }
+
+    pub fn gt(&mut self) -> Result<(), Error> {
+        let rhs = self.stack.pop().unwrap();
+        let lhs = self.stack.pop().unwrap();
+
+        self.stack.push(
+            if match (lhs.borrow().deref(), rhs.borrow().deref()) {
+                (Object::Symbol(a), Object::Symbol(b)) => a > b,
+                (Object::String(a), Object::String(b)) => a > b,
+                (Object::Int(a), Object::Int(b)) => a > b,
+                (a, b) => return Err(Error::Cmp(Type::from(a), Type::from(b))),
+            } {
+                Rc::new(RefCell::new(Object::True))
+            } else {
+                Rc::new(RefCell::new(Object::Nil))
+            },
+        );
+
+        Ok(())
+    }
+
+    pub fn eq(&mut self) -> Result<(), Error> {
+        let rhs = self.stack.pop().unwrap();
+        let lhs = self.stack.pop().unwrap();
+
+        self.stack.push(
+            if match (lhs.borrow().deref(), rhs.borrow().deref()) {
+                (Object::Function(a), Object::Function(b)) => a == b,
+                (Object::Symbol(a), Object::Symbol(b)) => a == b,
+                (Object::String(a), Object::String(b)) => a == b,
+                (Object::Int(a), Object::Int(b)) => a == b,
+                (Object::True, Object::True) => true,
+                (Object::Nil, Object::Nil) => true,
+                (a, b) => return Err(Error::Cmp(Type::from(a), Type::from(b))),
+            } {
+                Rc::new(RefCell::new(Object::True))
+            } else {
+                Rc::new(RefCell::new(Object::Nil))
+            },
+        );
+
+        Ok(())
     }
 }
 
