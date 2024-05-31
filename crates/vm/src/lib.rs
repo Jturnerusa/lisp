@@ -455,7 +455,7 @@ impl Vm {
     }
 
     pub fn car(&mut self) -> Result<(), Error> {
-        let car = match &*(*self.stack.last().unwrap()).borrow() {
+        let car = match self.stack.pop().unwrap().borrow().deref() {
             Object::Cons(Cons(car, _)) => Rc::clone(car),
             object => {
                 return Err(Error::Type {
@@ -471,7 +471,7 @@ impl Vm {
     }
 
     pub fn cdr(&mut self) -> Result<(), Error> {
-        let car = match &*(*self.stack.last().unwrap()).borrow() {
+        let car = match self.stack.pop().unwrap().borrow().deref() {
             Object::Cons(Cons(_, cdr)) => Rc::clone(cdr),
             object => {
                 return Err(Error::Type {
