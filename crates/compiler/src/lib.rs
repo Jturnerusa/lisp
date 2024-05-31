@@ -177,7 +177,7 @@ impl Compiler {
         {
             self.compile_list(exprs, opcodes, constants)
         }
-        // add
+        // binary ops
         else if let Value::Cons(cons) = value
             && cons.iter_cars().count() == 3
             && cons
@@ -185,7 +185,12 @@ impl Compiler {
                 .nth(0)
                 .unwrap()
                 .as_symbol()
-                .is_some_and(|symbol| matches!(symbol.as_str(), "+" | "-" | "*" | "/" | "cons"))
+                .is_some_and(|symbol| {
+                    matches!(
+                        symbol.as_str(),
+                        "+" | "-" | "*" | "/" | "cons" | "=" | ">" | "<"
+                    )
+                })
         {
             let lhs = cons.iter_cars().nth(1).unwrap();
             let rhs = cons.iter_cars().nth(2).unwrap();
@@ -205,6 +210,9 @@ impl Compiler {
                     "*" => OpCode::Mul,
                     "/" => OpCode::Div,
                     "cons" => OpCode::Cons,
+                    "=" => OpCode::Eq,
+                    ">" => OpCode::Gt,
+                    "<" => OpCode::Lt,
                     _ => unreachable!(),
                 },
                 opcodes,
