@@ -43,6 +43,8 @@ pub enum Error {
     NotFound(String),
     #[error("invalid parameters: {0}")]
     Parameters(String),
+    #[error("assertion failed: {0}")]
+    Assert(String),
 }
 
 #[derive(Clone, EnumAs, EnumIs, PartialEq, Eq, Hash)]
@@ -83,6 +85,7 @@ pub enum OpCode {
     Jmp(isize),
     Branch(usize),
     IsType(Type),
+    Assert,
 }
 
 #[derive(Clone, Debug, EnumAs, EnumIs)]
@@ -220,6 +223,7 @@ impl Vm {
                     self.pc += offset as usize;
                 }
                 OpCode::IsType(ty) => self.is_type(ty)?,
+                OpCode::Assert => self.assert()?,
                 _ => todo!(),
             }
         }
@@ -534,6 +538,13 @@ impl Vm {
             },
         );
         Ok(())
+    }
+
+    pub fn assert(&mut self) -> Result<(), Error> {
+        match self.stack.pop().unwrap().borrow().deref() {
+            Object::True => Ok(()),
+            _ => Err(Error::Assert("assertion failed".to_string())),
+        }
     }
 }
 
