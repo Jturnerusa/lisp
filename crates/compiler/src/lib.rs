@@ -49,8 +49,21 @@ impl Compiler {
         opcodes: &mut Vec<OpCode>,
         constants: &mut ConstantTable,
     ) -> Result<(), Error> {
-        // defmacro
+        // eval-when-compile
         if let Value::Cons(cons) = value
+            && cons.iter_cars().count() > 1
+            && cons
+                .iter_cars()
+                .nth(0)
+                .unwrap()
+                .as_symbol()
+                .is_some_and(|symbol| symbol == "eval-when-compile")
+        {
+            let exprs = cons.iter().nth(1).unwrap();
+            self.eval_when_compile(exprs, opcodes, constants)
+        }
+        // defmacro
+        else if let Value::Cons(cons) = value
             && cons.iter_cars().count() == 4
             && cons
                 .iter_cars()
@@ -285,6 +298,46 @@ impl Compiler {
         } else {
             unreachable!()
         }
+    }
+
+    fn eval_when_compile(
+        &mut self,
+        exprs: &Cons,
+        opcodes: &mut Vec<OpCode>,
+        constants: &mut ConstantTable,
+    ) -> Result<(), Error> {
+        if !self.environment.is_global_scope() {
+            return Err(Error::Compiler(
+                "eval-when-compile must exist at the global scope".to_string(),
+            ));
+        }
+
+        let mut eval_when_compile_opcodes = Vec::new();
+        let mut eval_when_compile_constants = HashMap::with_hasher(IdentityHasher::new());
+
+        for expr in exprs.iter_cars() {
+            eval_when_compile_opcodes.clear();
+            eval_when_compile_constants.clear();
+
+            self.compile(
+                expr,
+                &mut eval_when_compile_opcodes,
+                &mut eval_when_compile_constants,
+            )?;
+
+            self.vm
+                .load_constants(eval_when_compile_constants.values().cloned());
+            self.vm.eval(eval_when_compile_opcodes.as_slice())?;
+
+            opcodes.extend(&eval_when_compile_opcodes);
+            constants.extend(
+                eval_when_compile_constants
+                    .iter()
+                    .map(|(hash, constant)| (*hash, constant.clone())),
+            );
+        }
+
+        Ok(())
     }
 
     fn compile_defmacro(
