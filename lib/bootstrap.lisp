@@ -1,52 +1,25 @@
-(defmacro progn ()
-  (progn-expand &rest))
-
 (defmacro defun (name bindings)
-  (list 'def name (list 'lambda bindings (cons 'progn &rest))))
+  (list 'def name (cons 'lambda (cons bindings &rest))))
 
 (defmacro let (bindings)
-  (cons (list 'lambda (map car bindings)
-              (cons 'progn &rest))
+  (cons (cons 'lambda (cons (map car bindings) &rest))
         (map cadr bindings)))
 
-(def progn-expand (lambda (exprs)
-                    (if (nil? (cdr exprs))
-                        (car exprs)
-                        (list (list 'lambda (list 'x) (if (nil? (cdr exprs))
-                                                          (car exprs)
-                                                          (progn-expand (cdr exprs))))
-                              (car exprs)))))
+(eval-when-compile
+  (defun car (cons)
+    (car cons))
 
-(defun not (p)
-  (if p nil t))
+  (defun cadr (cons)
+    (car (cdr cons)))
 
-(defun cadr (cons)
-  (car (cdr cons)))
+  (defun map (fn list)
+    (if (nil? list)
+        nil
+        (cons (fn (car list))
+              (map fn (cdr list))))))
 
-(defun do (f list)
-  (if (nil? list)
-      nil
-      (progn (f (car list))
-             (do f (cdr list)))))
+(defun and (a b)
+  (if a (if b t nil) nil))
 
-(defun map (f list)
-  (if (nil? list)
-      nil
-      (cons (f (car list))
-            (map f (cdr list)))))
-
-(defun filter (p list)
-  (let ((acc nil))
-    (do (lambda (e)
-           (if (p e)
-               (set acc (push-back acc e))
-               nil))
-         list)
-    acc))
-
-(defun fold (f list)
-  (let ((acc (car list)))
-    (do (lambda (e)
-           (set acc (f acc e)))
-         (cdr list))
-    acc))
+(defun or (a b)
+  (if a t (if b t nil)))
