@@ -426,21 +426,27 @@ impl Vm {
     }
 
     fn binary_integer_op(&mut self, f: impl Fn(i64, i64) -> i64) -> Result<(), Error> {
-        let a = self.stack.pop().unwrap();
-        let b = self.stack.pop().unwrap();
+        let rhs = self.stack.pop().unwrap();
+        let lhs = self.stack.pop().unwrap();
 
-        let Object::Int(a) = *(*a).borrow() else {
-            return Err(Error::Type {
-                expected: Type::Int,
-                recieved: Type::from(&*(*a).borrow()),
-            });
+        let a = match lhs.borrow().deref() {
+            Object::Int(i) => *i,
+            object => {
+                return Err(Error::Type {
+                    expected: Type::Int,
+                    recieved: Type::from(object),
+                })
+            }
         };
 
-        let Object::Int(b) = *(*b).borrow() else {
-            return Err(Error::Type {
-                expected: Type::Int,
-                recieved: Type::from(&*(*b).borrow()),
-            });
+        let b = match rhs.borrow().deref() {
+            Object::Int(i) => *i,
+            object => {
+                return Err(Error::Type {
+                    expected: Type::Int,
+                    recieved: Type::from(object),
+                })
+            }
         };
 
         let result = Rc::new(RefCell::new(Object::Int(f(a, b))));
