@@ -400,22 +400,28 @@ impl Compiler {
 
     fn compile_set(
         &mut self,
-        name: &str,
+        symbol: &str,
         expr: &Value,
         opcodes: &mut Vec<OpCode>,
         constants: &mut ConstantTable,
     ) -> Result<(), Error> {
         self.compile(expr, opcodes, constants)?;
-        opcodes.push(
-            if self.environment.is_global_scope() || self.environment.get(name).is_none() {
-                let constant = vm::Constant::Symbol(name.to_string());
+
+        if !self.environment.is_global_scope() {
+            self.environment.insert(symbol);
+        }
+
+        opcodes.push(match self.environment.get(symbol) {
+            Some(Variable::Local(i)) => OpCode::SetLocal(i),
+            Some(Variable::Upvalue(i)) => OpCode::SetUpValue(i),
+            None => {
+                let constant = Constant::Symbol(symbol.to_string());
                 let hash = hash_constant(&constant);
                 constants.insert(hash, constant);
                 OpCode::SetGlobal(hash)
-            } else {
-                todo!()
-            },
-        );
+            }
+        });
+
         Ok(())
     }
 
