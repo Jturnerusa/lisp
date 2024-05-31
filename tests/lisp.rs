@@ -8,15 +8,28 @@ use identity_hasher::IdentityHasher;
 use reader::Reader;
 use vm::Vm;
 
+static BOOTSTRAP_SOURCE: &str = include_str!("../lib/bootstrap.lisp");
+
 fn eval(input: &str) -> Result<Rc<RefCell<vm::Object>>, Box<dyn std::error::Error>> {
-    let reader = Reader::new(input);
     let mut compiler = Compiler::new();
     let mut vm = Vm::new();
     let mut opcodes = Vec::new();
     let mut constants = HashMap::with_hasher(IdentityHasher::new());
     let mut ret = None;
 
-    for read in reader {
+    for read in Reader::new(BOOTSTRAP_SOURCE) {
+        let value = read?;
+
+        opcodes.clear();
+        constants.clear();
+
+        compiler.compile(&value, &mut opcodes, &mut constants)?;
+
+        vm.load_constants(constants.values().cloned());
+        ret = vm.eval(opcodes.as_slice())?;
+    }
+
+    for read in Reader::new(input) {
         let value = read?;
 
         opcodes.clear();
