@@ -231,6 +231,7 @@ impl Compiler {
                             | "int?"
                             | "true?"
                             | "nil?"
+                            | "assert"
                     )
                 })
         {
@@ -254,6 +255,7 @@ impl Compiler {
                     "int?" => OpCode::IsType(vm::Type::Int),
                     "true?" => OpCode::IsType(vm::Type::True),
                     "nil?" => OpCode::IsType(vm::Type::Nil),
+                    "assert" => OpCode::Assert,
                     _ => unreachable!(),
                 },
                 opcodes,
