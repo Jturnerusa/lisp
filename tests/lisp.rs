@@ -158,3 +158,12 @@ fn test_multiexpr_lambda() {
         vm::Object::Int(2)
     ));
 }
+
+#[test]
+fn test_cons() {
+    let input = "(car (cons 1 2))";
+    assert!(matches!(
+        dbg!(eval(input).unwrap().borrow().deref()),
+        vm::Object::Int(1)
+    ));
+}
