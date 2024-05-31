@@ -487,10 +487,10 @@ impl Vm {
     }
 
     pub fn cons(&mut self) -> Result<(), Error> {
-        let a = self.stack.pop().unwrap();
-        let b = self.stack.pop().unwrap();
+        let rhs = self.stack.pop().unwrap();
+        let lhs = self.stack.pop().unwrap();
 
-        let cons = Object::Cons(Cons(a, b));
+        let cons = Object::Cons(Cons(lhs, rhs));
 
         let object = Rc::new(RefCell::new(cons));
 
