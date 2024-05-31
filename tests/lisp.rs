@@ -240,3 +240,12 @@ fn test_not_eq() {
         vm::Object::Nil
     ));
 }
+
+#[test]
+fn test_fact() {
+    let fact = include_str!("lisp/fact.lisp");
+    assert!(matches!(
+        dbg!(eval(fact).unwrap().borrow().deref()),
+        vm::Object::Int(3628800)
+    ));
+}
