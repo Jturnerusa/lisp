@@ -75,7 +75,7 @@ impl Compiler {
         }
         // lambda
         else if let Value::Cons(cons) = value
-            && cons.iter_cars().count() == 3
+            && cons.iter_cars().count() > 2
             && cons
                 .iter_cars()
                 .nth(0)
@@ -84,7 +84,6 @@ impl Compiler {
                 .is_some_and(|s| s == "lambda")
             && let Value::Cons(_) | Value::Nil = cons.iter_cars().nth(1).unwrap()
         {
-            let body = cons.iter_cars().nth(2).unwrap();
             let parameters = match cons.iter_cars().nth(1).unwrap() {
                 Value::Cons(cons) => cons
                     .iter_cars()
@@ -94,7 +93,8 @@ impl Compiler {
                 Value::Nil => Vec::new(),
                 _ => unreachable!(),
             };
-            self.compile_lambda(parameters.into_iter(), body, opcodes, constants)
+            let exprs = cons.iter().nth(2).unwrap();
+            self.compile_lambda(parameters.into_iter(), exprs, opcodes, constants)
         }
         // def
         else if let Value::Cons(cons) = value
@@ -428,14 +428,17 @@ impl Compiler {
     fn compile_lambda(
         &mut self,
         parameters: impl Iterator<Item = String> + Clone,
-        body: &Value,
+        exprs: &Cons,
         opcodes: &mut Vec<OpCode>,
         constants: &mut ConstantTable,
     ) -> Result<(), Error> {
         self.environment.push_scope(parameters.clone());
 
         let mut lambda_opcodes = Vec::new();
-        self.compile(body, &mut lambda_opcodes, constants)?;
+
+        for expr in exprs.iter_cars() {
+            self.compile(expr, &mut lambda_opcodes, constants)?;
+        }
         lambda_opcodes.push(OpCode::Return);
 
         let opcodes_constant = Constant::Opcodes(lambda_opcodes.into());

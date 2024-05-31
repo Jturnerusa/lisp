@@ -144,3 +144,17 @@ fn test_is_type() {
         vm::Object::True
     ));
 }
+
+#[test]
+fn test_multiexpr_lambda() {
+    let input = "
+((lambda (x)
+   (set x 1)
+   (+ x 1))
+ 0)
+";
+    assert!(matches!(
+        eval(input).unwrap().borrow().deref(),
+        vm::Object::Int(2)
+    ));
+}
