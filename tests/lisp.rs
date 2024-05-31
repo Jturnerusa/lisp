@@ -173,3 +173,57 @@ fn test_assert() {
     let input = "(assert (int? nil))";
     assert!(eval(input).is_err());
 }
+
+#[test]
+fn test_lt() {
+    let input = "(< 1 2)";
+    assert!(matches!(
+        dbg!(eval(input).unwrap().borrow().deref()),
+        vm::Object::True
+    ));
+}
+
+#[test]
+fn test_gt() {
+    let input = "(> 2 1)";
+    assert!(matches!(
+        dbg!(eval(input).unwrap().borrow().deref()),
+        vm::Object::True
+    ));
+}
+
+#[test]
+fn test_eq() {
+    let input = "(= 1 1)";
+    assert!(matches!(
+        dbg!(eval(input).unwrap().borrow().deref()),
+        vm::Object::True
+    ));
+}
+
+#[test]
+fn test_not_lt() {
+    let input = "(< 1 0)";
+    assert!(matches!(
+        dbg!(eval(input).unwrap().borrow().deref()),
+        vm::Object::Nil
+    ));
+}
+
+#[test]
+fn test_not_gt() {
+    let input = "(> 1 2)";
+    assert!(matches!(
+        dbg!(eval(input).unwrap().borrow().deref()),
+        vm::Object::Nil
+    ));
+}
+
+#[test]
+fn test_not_eq() {
+    let input = "(= 1 2)";
+    assert!(matches!(
+        dbg!(eval(input).unwrap().borrow().deref()),
+        vm::Object::Nil
+    ));
+}
