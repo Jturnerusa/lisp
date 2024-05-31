@@ -249,3 +249,12 @@ fn test_fact() {
         vm::Object::Int(3628800)
     ));
 }
+
+#[test]
+fn test_let() {
+    let fact = include_str!("lisp/let.lisp");
+    assert!(matches!(
+        dbg!(eval(fact).unwrap().borrow().deref()),
+        vm::Object::Int(3)
+    ));
+}
