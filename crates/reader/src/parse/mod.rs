@@ -25,10 +25,13 @@ pub struct Parser<'a> {
 }
 
 fn parse_node(input: &str) -> Result<&str, Node> {
-    sequence::delimited(
-        combinator::opt(whitespace),
-        branch::alt((left_paren, right_paren, quote, string, symbol, int)),
-        combinator::opt(whitespace),
+    sequence::preceded(
+        combinator::opt(comment),
+        sequence::delimited(
+            combinator::opt(whitespace),
+            branch::alt((left_paren, right_paren, quote, string, symbol, int)),
+            combinator::opt(whitespace),
+        ),
     )(input)
 }
 
@@ -85,6 +88,10 @@ fn whitespace(input: &str) -> Result {
     bytes::take_while1(|c: char| c.is_whitespace())(input)
 }
 
+fn comment(input: &str) -> Result {
+    sequence::terminated(bytes::tag(";"), bytes::take_while1(|c: char| c != '\n'))(input)
+}
+
 impl<'a> Parser<'a> {
     pub fn new(input: &'a str) -> Self {
         Self { data: input }
@@ -129,5 +136,13 @@ mod test {
         assert!(matches!(parser.next().unwrap().unwrap(), Node::Int("1")));
         assert!(matches!(parser.next().unwrap().unwrap(), Node::RightParen));
         assert!(parser.next().is_none());
+    }
+
+    #[test]
+    fn test_comment() {
+        let input = "; comment
+                     (hello world)";
+        let mut parser = Parser::new(input);
+        assert!(matches!(parser.next().unwrap().unwrap(), Node::LeftParen));
     }
 }
