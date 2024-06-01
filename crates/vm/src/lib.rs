@@ -3,7 +3,7 @@
 use core::fmt;
 use std::cmp::{Ordering, PartialOrd};
 use std::collections::HashMap;
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 use std::{cell::RefCell, ops::Deref};
@@ -742,6 +742,48 @@ impl PartialOrd for Object {
             (Object::Nil, Object::Nil) => Ordering::Equal,
             _ => return None,
         })
+    }
+}
+
+impl Display for Lambda {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.arity {
+            Arity::Nullary => write!(f, "nullary lambda"),
+            Arity::Nary(n) => write!(f, "{n}-ary lambda"),
+            Arity::Variadic => write!(f, "variadic lambda"),
+        }
+    }
+}
+
+impl Display for NativeFunction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "native function")
+    }
+}
+
+impl Display for Cons {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "({} {})",
+            self.0.borrow().deref(),
+            self.1.borrow().deref()
+        )
+    }
+}
+
+impl Display for Object {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NativeFunction(native_function) => write!(f, "{native_function}",),
+            Self::Function(function) => write!(f, "{}", function.borrow().deref()),
+            Self::Cons(cons) => write!(f, "{cons}"),
+            Self::Symbol(symbol) => write!(f, "'{symbol}"),
+            Self::String(string) => write!(f, r#""{string}""#),
+            Self::Int(i) => write!(f, "{i}"),
+            Self::True => write!(f, "true"),
+            Self::Nil => write!(f, "nil"),
+        }
     }
 }
 
