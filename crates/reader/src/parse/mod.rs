@@ -1,6 +1,7 @@
 use nom::branch;
 use nom::bytes::complete as bytes;
 use nom::combinator;
+use nom::multi;
 use nom::sequence;
 
 type Result<'a, I = &'a str, O = I> = nom::IResult<I, O>;
@@ -26,7 +27,7 @@ pub struct Parser<'a> {
 
 fn parse_node(input: &str) -> Result<&str, Node> {
     sequence::preceded(
-        combinator::opt(comment),
+        combinator::opt(multi::fold_many1(comment, || (), |_, _| ())),
         sequence::delimited(
             combinator::opt(whitespace),
             branch::alt((left_paren, right_paren, quote, string, symbol, int)),
@@ -89,7 +90,11 @@ fn whitespace(input: &str) -> Result {
 }
 
 fn comment(input: &str) -> Result {
-    sequence::terminated(bytes::tag(";"), bytes::take_while1(|c: char| c != '\n'))(input)
+    sequence::delimited(
+        combinator::opt(whitespace),
+        bytes::tag(";"),
+        bytes::take_while1(|c: char| c != '\n'),
+    )(input)
 }
 
 impl<'a> Parser<'a> {
@@ -141,6 +146,15 @@ mod test {
     #[test]
     fn test_comment() {
         let input = "; comment
+                     (hello world)";
+        let mut parser = Parser::new(input);
+        assert!(matches!(parser.next().unwrap().unwrap(), Node::LeftParen));
+    }
+
+    #[test]
+    fn test_multi_comment() {
+        let input = "; comment
+                     ; another comment
                      (hello world)";
         let mut parser = Parser::new(input);
         assert!(matches!(parser.next().unwrap().unwrap(), Node::LeftParen));
