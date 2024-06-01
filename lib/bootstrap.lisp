@@ -3,6 +3,16 @@
         (map cadr bindings)))
 
 (eval-when-compile
+  
+  ;; Some primitive operations like car, cdr, cons, etc are implemented
+  ;; as special operations in the compiler and aren't bound to a symbol
+  ;; as functions. This makes (map car (list (cons 'a 'b))) for example
+  ;; not work, so we create some functions with the same name as builtins
+  ;; that just call the builtin internally.
+
+  ;; These functions also should be available at compile time so they can
+  ;; be used in macros;
+  
   (def car (lambda (cons)
              (car cons)))
 
