@@ -368,33 +368,49 @@ impl Vm {
     }
 
     pub fn call(&mut self, args: usize) -> Result<(), Error> {
-        let f = match self.stack[self.stack.len() - args - 1].borrow().deref() {
-            Object::Function(function) => Rc::clone(function),
-            object => {
-                return Err(Error::Type {
-                    expected: Type::Function,
-                    recieved: Type::from(object),
-                })
+        match self.stack[self.stack.len() - args - 1]
+            .clone()
+            .borrow()
+            .deref()
+        {
+            Object::Function(function) => {
+                match &function.borrow().arity {
+                    Arity::Nullary if args != 0 => todo!(),
+                    Arity::Nary(_) if args == 0 => todo!(),
+                    _ => (),
+                }
+
+                self.frames.push(Frame {
+                    function: self.current_function.clone(),
+                    bp: self.bp,
+                    pc: self.pc,
+                });
+
+                self.current_function = Some(Rc::clone(function));
+                self.bp = self.stack.len() - args;
+                self.pc = 0;
+
+                Ok(())
             }
-        };
+            Object::NativeFunction(function) => {
+                let parameters = &self.stack[self.stack.len() - args..];
+                let ret = function.0(parameters);
 
-        match &f.borrow().arity {
-            Arity::Nullary if args != 0 => todo!(),
-            Arity::Nary(_) if args == 0 => todo!(),
-            _ => (),
+                self.stack.truncate(self.stack.len() - args - 1);
+
+                match ret {
+                    Ok(val) => {
+                        self.stack.push(val);
+                        Ok(())
+                    }
+                    Err(e) => Err(e),
+                }
+            }
+            object => Err(Error::Type {
+                expected: Type::Function,
+                recieved: Type::from(object),
+            }),
         }
-
-        self.frames.push(Frame {
-            function: self.current_function.clone(),
-            bp: self.bp,
-            pc: self.pc,
-        });
-
-        self.current_function = Some(f);
-        self.bp = self.stack.len() - args;
-        self.pc = 0;
-
-        Ok(())
     }
 
     fn tail(&mut self) -> Result<(), Error> {
