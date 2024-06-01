@@ -3,6 +3,7 @@
 use core::fmt;
 use std::cmp::{Ordering, PartialOrd};
 use std::collections::HashMap;
+use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 use std::{cell::RefCell, ops::Deref};
@@ -94,8 +95,9 @@ pub enum OpCode {
     Eq,
 }
 
-#[derive(Clone, Debug, EnumAs, EnumIs, PartialEq, Eq)]
+#[derive(Clone, Debug, EnumAs, EnumIs, PartialEq)]
 pub enum Object {
+    NativeFunction(NativeFunction),
     Function(Rc<RefCell<Lambda>>),
     Cons(Cons),
     String(String),
@@ -111,14 +113,18 @@ pub struct UpValue {
     pub index: usize,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Lambda {
     arity: Arity,
     opcodes: Rc<[OpCode]>,
     upvalues: Vec<Rc<RefCell<Object>>>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[allow(clippy::type_complexity)]
+#[derive(Clone)]
+pub struct NativeFunction(Rc<dyn Fn(&[Rc<RefCell<Object>>]) -> Result<Rc<RefCell<Object>>, Error>>);
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct Cons(Rc<RefCell<Object>>, Rc<RefCell<Object>>);
 
 #[derive(Clone, Debug)]
@@ -612,27 +618,43 @@ impl Vm {
     }
 }
 
-fn make_list(objects: &[Rc<RefCell<Object>>]) -> Rc<RefCell<Object>> {
-    if !objects.is_empty() {
-        Rc::new(RefCell::new(Object::Cons(Cons(
-            Rc::clone(&objects[0]),
-            make_list(&objects[1..]),
-        ))))
-    } else {
-        Rc::new(RefCell::new(Object::Nil))
-    }
-}
-
 impl Lambda {
     pub fn arity(&self) -> Arity {
         self.arity
     }
 }
 
+impl NativeFunction {
+    pub fn new<F>(f: F) -> Self
+    where
+        F: Fn(&[Rc<RefCell<Object>>]) -> Result<Rc<RefCell<Object>>, Error> + 'static,
+    {
+        Self(Rc::new(f))
+    }
+}
+
+impl PartialEq for NativeFunction {
+    fn eq(&self, _: &Self) -> bool {
+        false
+    }
+}
+
+impl PartialOrd for NativeFunction {
+    fn partial_cmp(&self, _: &Self) -> Option<Ordering> {
+        None
+    }
+}
+
+impl Debug for NativeFunction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("NativeFunction").finish()
+    }
+}
+
 impl From<&Object> for Type {
     fn from(value: &Object) -> Self {
         match value {
-            Object::Function(_) => Type::Function,
+            Object::Function(_) | Object::NativeFunction(_) => Type::Function,
             Object::Cons(_) => Type::Cons,
             Object::String(_) => Type::String,
             Object::Symbol(_) => Type::Symbol,
@@ -662,13 +684,13 @@ impl TryFrom<&Object> for Value {
     type Error = ();
     fn try_from(object: &Object) -> Result<Self, Self::Error> {
         Ok(match object {
-            Object::Function(_) => return Err(()),
             Object::Cons(cons) => Value::Cons(Box::new(value::Cons::try_from(cons)?)),
             Object::String(string) => Value::String(string.clone()),
             Object::Symbol(symbol) => Value::Symbol(symbol.clone()),
             Object::Int(i) => Value::Int(*i),
             Object::True => Value::True,
             Object::Nil => Value::Nil,
+            _ => return Err(()),
         })
     }
 }
@@ -693,5 +715,16 @@ impl PartialOrd for Object {
             (Object::Nil, Object::Nil) => Ordering::Equal,
             _ => return None,
         })
+    }
+}
+
+fn make_list(objects: &[Rc<RefCell<Object>>]) -> Rc<RefCell<Object>> {
+    if !objects.is_empty() {
+        Rc::new(RefCell::new(Object::Cons(Cons(
+            Rc::clone(&objects[0]),
+            make_list(&objects[1..]),
+        ))))
+    } else {
+        Rc::new(RefCell::new(Object::Nil))
     }
 }
