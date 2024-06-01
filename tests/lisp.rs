@@ -258,3 +258,12 @@ fn test_let() {
         vm::Object::Int(3)
     ));
 }
+
+#[test]
+fn test_eq_list() {
+    let input = "(= (list 1 2 3) (list 1 2 3))";
+    assert!(matches!(
+        eval(input).unwrap().borrow().deref(),
+        vm::Object::True
+    ));
+}
