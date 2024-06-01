@@ -144,7 +144,7 @@ fn test_get_upvalue() {
 (x 1)
 ";
     assert!(matches!(
-        dbg!(eval(input).unwrap().borrow().deref()),
+        eval(input).unwrap().borrow().deref(),
         vm::Object::Int(1)
     ));
 }
@@ -176,7 +176,7 @@ fn test_multiexpr_lambda() {
 fn test_cons() {
     let input = "(car (cons 1 2))";
     assert!(matches!(
-        dbg!(eval(input).unwrap().borrow().deref()),
+        eval(input).unwrap().borrow().deref(),
         vm::Object::Int(1)
     ));
 }
@@ -191,7 +191,7 @@ fn test_assert() {
 fn test_lt() {
     let input = "(< 1 2)";
     assert!(matches!(
-        dbg!(eval(input).unwrap().borrow().deref()),
+        eval(input).unwrap().borrow().deref(),
         vm::Object::True
     ));
 }
@@ -200,7 +200,7 @@ fn test_lt() {
 fn test_gt() {
     let input = "(> 2 1)";
     assert!(matches!(
-        dbg!(eval(input).unwrap().borrow().deref()),
+        eval(input).unwrap().borrow().deref(),
         vm::Object::True
     ));
 }
@@ -209,7 +209,7 @@ fn test_gt() {
 fn test_eq() {
     let input = "(= 1 1)";
     assert!(matches!(
-        dbg!(eval(input).unwrap().borrow().deref()),
+        eval(input).unwrap().borrow().deref(),
         vm::Object::True
     ));
 }
@@ -218,7 +218,7 @@ fn test_eq() {
 fn test_not_lt() {
     let input = "(< 1 0)";
     assert!(matches!(
-        dbg!(eval(input).unwrap().borrow().deref()),
+        eval(input).unwrap().borrow().deref(),
         vm::Object::Nil
     ));
 }
@@ -227,7 +227,7 @@ fn test_not_lt() {
 fn test_not_gt() {
     let input = "(> 1 2)";
     assert!(matches!(
-        dbg!(eval(input).unwrap().borrow().deref()),
+        eval(input).unwrap().borrow().deref(),
         vm::Object::Nil
     ));
 }
@@ -236,25 +236,25 @@ fn test_not_gt() {
 fn test_not_eq() {
     let input = "(= 1 2)";
     assert!(matches!(
-        dbg!(eval(input).unwrap().borrow().deref()),
+        eval(input).unwrap().borrow().deref(),
         vm::Object::Nil
     ));
 }
 
 #[test]
 fn test_fact() {
-    let fact = include_str!("lisp/fact.lisp");
+    let input = include_str!("lisp/fact.lisp");
     assert!(matches!(
-        dbg!(eval(fact).unwrap().borrow().deref()),
+        eval(input).unwrap().borrow().deref(),
         vm::Object::Int(3628800)
     ));
 }
 
 #[test]
 fn test_let() {
-    let fact = include_str!("lisp/let.lisp");
+    let input = include_str!("lisp/let.lisp");
     assert!(matches!(
-        dbg!(eval(fact).unwrap().borrow().deref()),
+        eval(input).unwrap().borrow().deref(),
         vm::Object::Int(3)
     ));
 }
