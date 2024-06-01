@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 use core::fmt;
+use std::cmp::{Ordering, PartialOrd};
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
@@ -229,9 +230,9 @@ impl Vm {
                 }
                 OpCode::IsType(ty) => self.is_type(ty)?,
                 OpCode::Assert => self.assert()?,
+                OpCode::Eq => self.eq()?,
                 OpCode::Lt => self.lt()?,
                 OpCode::Gt => self.gt()?,
-                OpCode::Eq => self.eq()?,
                 _ => todo!(),
             }
         }
@@ -561,22 +562,33 @@ impl Vm {
         }
     }
 
+    pub fn eq(&mut self) -> Result<(), Error> {
+        let rhs = self.stack.pop().unwrap();
+        let lhs = self.stack.pop().unwrap();
+
+        self.stack.push(if lhs == rhs {
+            Rc::new(RefCell::new(Object::True))
+        } else {
+            Rc::new(RefCell::new(Object::Nil))
+        });
+
+        Ok(())
+    }
+
     pub fn lt(&mut self) -> Result<(), Error> {
         let rhs = self.stack.pop().unwrap();
         let lhs = self.stack.pop().unwrap();
 
-        self.stack.push(
-            if match (lhs.borrow().deref(), rhs.borrow().deref()) {
-                (Object::Symbol(a), Object::Symbol(b)) => a < b,
-                (Object::String(a), Object::String(b)) => a < b,
-                (Object::Int(a), Object::Int(b)) => a < b,
-                (a, b) => return Err(Error::Cmp(Type::from(a), Type::from(b))),
-            } {
-                Rc::new(RefCell::new(Object::True))
-            } else {
-                Rc::new(RefCell::new(Object::Nil))
-            },
-        );
+        self.stack.push(match lhs.partial_cmp(&rhs) {
+            Some(Ordering::Less) => Rc::new(RefCell::new(Object::True)),
+            Some(_) => Rc::new(RefCell::new(Object::Nil)),
+            None => {
+                return Err(Error::Cmp(
+                    Type::from(lhs.borrow().deref()),
+                    Type::from(rhs.borrow().deref()),
+                ))
+            }
+        });
 
         Ok(())
     }
@@ -585,41 +597,16 @@ impl Vm {
         let rhs = self.stack.pop().unwrap();
         let lhs = self.stack.pop().unwrap();
 
-        self.stack.push(
-            if match (lhs.borrow().deref(), rhs.borrow().deref()) {
-                (Object::Symbol(a), Object::Symbol(b)) => a > b,
-                (Object::String(a), Object::String(b)) => a > b,
-                (Object::Int(a), Object::Int(b)) => a > b,
-                (a, b) => return Err(Error::Cmp(Type::from(a), Type::from(b))),
-            } {
-                Rc::new(RefCell::new(Object::True))
-            } else {
-                Rc::new(RefCell::new(Object::Nil))
-            },
-        );
-
-        Ok(())
-    }
-
-    pub fn eq(&mut self) -> Result<(), Error> {
-        let rhs = self.stack.pop().unwrap();
-        let lhs = self.stack.pop().unwrap();
-
-        self.stack.push(
-            if match (lhs.borrow().deref(), rhs.borrow().deref()) {
-                (Object::Function(a), Object::Function(b)) => a == b,
-                (Object::Symbol(a), Object::Symbol(b)) => a == b,
-                (Object::String(a), Object::String(b)) => a == b,
-                (Object::Int(a), Object::Int(b)) => a == b,
-                (Object::True, Object::True) => true,
-                (Object::Nil, Object::Nil) => true,
-                (a, b) => return Err(Error::Cmp(Type::from(a), Type::from(b))),
-            } {
-                Rc::new(RefCell::new(Object::True))
-            } else {
-                Rc::new(RefCell::new(Object::Nil))
-            },
-        );
+        self.stack.push(match lhs.partial_cmp(&rhs) {
+            Some(Ordering::Greater) => Rc::new(RefCell::new(Object::True)),
+            Some(_) => Rc::new(RefCell::new(Object::Nil)),
+            None => {
+                return Err(Error::Cmp(
+                    Type::from(lhs.borrow().deref()),
+                    Type::from(rhs.borrow().deref()),
+                ))
+            }
+        });
 
         Ok(())
     }
@@ -693,5 +680,18 @@ impl TryFrom<&crate::Cons> for value::Cons {
             Value::try_from(&*value.0.borrow())?,
             Value::try_from(&*value.1.borrow())?,
         ))
+    }
+}
+
+impl PartialOrd for Object {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(match (self, other) {
+            (Object::Symbol(a), Object::Symbol(b)) => a.cmp(b),
+            (Object::String(a), Object::String(b)) => a.cmp(b),
+            (Object::Int(a), Object::Int(b)) => a.cmp(b),
+            (Object::True, Object::True) => Ordering::Equal,
+            (Object::Nil, Object::Nil) => Ordering::Equal,
+            _ => return None,
+        })
     }
 }
