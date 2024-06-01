@@ -2,12 +2,7 @@ use std::fs::File;
 use std::io::Read;
 use std::rc::Rc;
 use std::{cell::RefCell, ops::Deref};
-use vm::{Error, Object, Type, Vm};
-
-pub fn load_module(vm: &mut Vm) {
-    vm.load_native_function("print", print);
-    vm.load_native_function("read-file", read_file);
-}
+use vm::{Error, Object, Type};
 
 pub fn print(objects: &[Rc<RefCell<Object>>]) -> Result<Rc<RefCell<Object>>, Error> {
     if objects.len() > 1 {

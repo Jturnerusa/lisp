@@ -8,7 +8,7 @@ use identity_hasher::IdentityHasher;
 use reader::Reader;
 use vm::Vm;
 
-static BOOTSTRAP_SOURCE: &str = include_str!("../lib/bootstrap.lisp");
+static BOOTSTRAP_SOURCE: &str = include_str!("../lib/lisp/bootstrap.lisp");
 
 fn eval(input: &str) -> Result<Rc<RefCell<vm::Object>>, Box<dyn std::error::Error>> {
     let mut compiler = Compiler::new();
