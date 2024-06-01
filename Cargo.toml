@@ -1,5 +1,5 @@
 [workspace]
-members = ["lib/io", "lib/string"]
+members = ["lib/native"]
 
 [package]
 name = "lisp"
@@ -12,4 +12,4 @@ reader = { path = "crates/reader" }
 compiler = { path = "crates/compiler" }
 vm = { path = "crates/vm" }
 identity-hasher = { path = "crates/identity-hasher" }
-io = { path = "lib/io" }
+native-functions = { path = "lib/native" }
