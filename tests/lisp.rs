@@ -267,3 +267,9 @@ fn test_eq_list() {
         vm::Object::True
     ));
 }
+
+#[test]
+fn test_map() {
+    let input = include_str!("lisp/map.lisp");
+    assert!(eval(input).unwrap().borrow().deref().is_true());
+}
