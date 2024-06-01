@@ -166,6 +166,17 @@ impl Vm {
         }
     }
 
+    pub fn load_native_function<F>(&mut self, name: &str, f: F)
+    where
+        F: Fn(&[Rc<RefCell<Object>>]) -> Result<Rc<RefCell<Object>>, Error> + 'static,
+    {
+        let native_function = NativeFunction::new(f);
+        self.globals.insert(
+            name.to_string(),
+            Rc::new(RefCell::new(Object::NativeFunction(native_function))),
+        );
+    }
+
     pub fn eval(&mut self, opcodes: &[OpCode]) -> Result<Option<Rc<RefCell<Object>>>, Error> {
         loop {
             let opcode = if let Some(function) = &self.current_function {
