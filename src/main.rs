@@ -12,6 +12,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut compiler = Compiler::new();
     let mut vm = Vm::new();
 
+    io::load_module(&mut vm);
+
     for arg in env::args().skip(1) {
         let file = File::open(arg)?;
         eval_file(file, &mut vm, &mut compiler)?;
