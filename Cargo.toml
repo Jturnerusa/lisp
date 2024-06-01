@@ -1,5 +1,5 @@
 [workspace]
-members = ["lib/io"]
+members = ["lib/io", "lib/string"]
 
 [package]
 name = "lisp"
