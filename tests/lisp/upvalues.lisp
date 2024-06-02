@@ -1,6 +1,6 @@
 (def upvalues (lambda (test)
                 ((lambda ()
                    ((lambda ()
-                      (print test)))))))
+                      test))))))
 
-(upvalues 1)
+(= (upvalues 1) 1)
