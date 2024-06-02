@@ -1,3 +1,6 @@
+(defmacro progn ()
+  (list (cons 'lambda (cons '() &rest))))
+
 (defmacro let (bindings)
   (cons (cons 'lambda (cons (map car bindings) &rest))
         (map cadr bindings)))
@@ -19,11 +22,31 @@
   (def cadr (lambda (cons)
               (car (cdr cons))))
 
+  (def do (lambda (fn list)
+            (if (nil? list)
+                nil
+                (progn (fn (car list))
+                       (do fn (cdr list))))))
+ 
   (def map (lambda (fn list)
              (if (nil? list)
                  nil
                  (cons (fn (car list))
                        (map fn (cdr list))))))
+
+  (def fold (lambda (fn list)
+              (let ((acc (car list)))
+                (do (lambda (e)
+                      (set acc (fn acc e)))
+                    (cdr list))
+                acc)))
+
+  (def filter (lambda (pred list)
+                (fold (lambda (acc e)
+                        (if (pred e)
+                            (cons acc e)
+                            nil))
+                      list)))
 
   (def and (lambda (a b)
              (if a

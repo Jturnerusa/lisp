@@ -127,7 +127,7 @@ pub struct Lambda {
 pub struct NativeFunction(Rc<dyn Fn(&[Rc<RefCell<Object>>]) -> Result<Rc<RefCell<Object>>, Error>>);
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Cons(Rc<RefCell<Object>>, Rc<RefCell<Object>>);
+pub struct Cons(pub Rc<RefCell<Object>>, pub Rc<RefCell<Object>>);
 
 #[derive(Clone, Debug)]
 struct Frame {
