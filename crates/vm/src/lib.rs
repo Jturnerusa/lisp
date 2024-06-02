@@ -363,19 +363,24 @@ impl Vm {
     }
 
     pub fn create_upvalue(&mut self, upvalue: UpValue) -> Result<(), Error> {
-        let upvalue_index = if upvalue.frame == 0 {
-            self.bp + upvalue.index
-        } else {
-            self.frames[self.frames.len() - upvalue.frame].bp + upvalue.index
+        let function = match self.stack.last().unwrap().borrow().deref() {
+            Object::Function(function) => Rc::clone(function),
+            object => {
+                return Err(Error::Type {
+                    expected: Type::Function,
+                    recieved: Type::from(object),
+                })
+            }
         };
 
-        let val = self.stack[upvalue_index].clone();
+        let val = match upvalue {
+            UpValue::Local(i) => self.stack[self.bp + i].clone(),
+            UpValue::UpValue(i) => {
+                self.current_function.as_ref().unwrap().borrow().upvalues[i].clone()
+            }
+        };
 
-        if let Object::Function(function) = self.stack.last().unwrap().borrow().deref() {
-            function.borrow_mut().upvalues.push(val);
-        } else {
-            panic!();
-        }
+        function.borrow_mut().upvalues.push(val);
 
         Ok(())
     }
