@@ -470,14 +470,10 @@ impl Compiler {
     ) -> Result<(), Error> {
         self.compile(expr, opcodes, constants)?;
 
-        if !self.environment.is_global_scope() {
-            self.environment.insert(symbol);
-        }
-
-        opcodes.push(match self.environment.get(symbol) {
-            Some(Variable::Local(i)) => OpCode::SetLocal(i),
-            Some(Variable::Upvalue(i)) => OpCode::SetUpValue(i),
-            None => {
+        opcodes.push(match self.environment.resolve(symbol) {
+            Variable::Local(i) => OpCode::SetLocal(i),
+            Variable::Upvalue(i) => OpCode::SetUpValue(i),
+            Variable::Global => {
                 let constant = Constant::Symbol(symbol.to_string());
                 let hash = hash_constant(&constant);
                 constants.insert(hash, constant);
@@ -586,13 +582,10 @@ impl Compiler {
         opcodes: &mut Vec<OpCode>,
         constants: &mut ConstantTable,
     ) -> Result<(), Error> {
-        if !self.environment.is_global_scope() {
-            self.environment.insert(symbol);
-        }
-        opcodes.push(match self.environment.get(symbol) {
-            Some(Variable::Local(i)) => OpCode::GetLocal(i),
-            Some(Variable::Upvalue(i)) => OpCode::GetUpValue(i),
-            None => {
+        opcodes.push(match self.environment.resolve(symbol) {
+            Variable::Local(i) => OpCode::GetLocal(i),
+            Variable::Upvalue(i) => OpCode::GetUpValue(i),
+            Variable::Global => {
                 let constant = Constant::Symbol(symbol.to_string());
                 let hash = hash_constant(&constant);
                 constants.insert(hash, constant);

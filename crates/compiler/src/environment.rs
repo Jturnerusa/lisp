@@ -2,10 +2,11 @@ use vm::UpValue;
 
 use unwrap_enum::EnumIs;
 
-#[derive(EnumIs)]
+#[derive(Debug, Clone, Copy, EnumIs)]
 pub(super) enum Variable {
     Local(usize),
     Upvalue(usize),
+    Global,
 }
 
 struct Scope {
@@ -13,41 +14,43 @@ struct Scope {
     upvalues: Vec<(String, UpValue)>,
 }
 
+pub struct Environment {
+    scopes: Vec<Scope>,
+}
+
 impl Scope {
-    fn get_local(&self, var: &str) -> Option<usize> {
-        self.locals
-            .iter()
-            .enumerate()
-            .find_map(|(i, local)| if local.as_str() == var { Some(i) } else { None })
-    }
-
-    fn get_upvalue(&self, var: &str) -> Option<usize> {
-        self.upvalues
-            .iter()
-            .enumerate()
-            .find_map(|(i, (upvalue_name, _))| {
-                if upvalue_name.as_str() == var {
-                    Some(i)
-                } else {
-                    None
-                }
-            })
-    }
-
-    #[allow(clippy::manual_map)]
-    fn get(&self, var: &str) -> Option<Variable> {
-        if let Some(local_index) = self.get_local(var) {
-            Some(Variable::Local(local_index))
-        } else if let Some(upvalue_index) = self.get_upvalue(var) {
-            Some(Variable::Upvalue(upvalue_index))
-        } else {
-            None
+    pub fn new() -> Self {
+        Self {
+            locals: Vec::new(),
+            upvalues: Vec::new(),
         }
     }
 }
 
-pub(super) struct Environment {
-    scopes: Vec<Scope>,
+impl Scope {
+    fn get_local(&self, var: &str) -> Option<usize> {
+        self.locals.iter().enumerate().find_map(
+            |(i, local)| {
+                if local == var {
+                    Some(i)
+                } else {
+                    None
+                }
+            },
+        )
+    }
+
+    fn get_upvalue(&self, var: &str) -> Option<usize> {
+        self.upvalues.iter().enumerate().find_map(
+            |(i, (upvalue, _))| {
+                if upvalue == var {
+                    Some(i)
+                } else {
+                    None
+                }
+            },
+        )
+    }
 }
 
 impl Environment {
@@ -55,35 +58,37 @@ impl Environment {
         Self { scopes: Vec::new() }
     }
 
-    pub fn is_global_scope(&self) -> bool {
-        self.scopes.is_empty()
-    }
-
-    pub fn push_scope(&mut self, locals: impl Iterator<Item = String>) {
-        self.scopes.push(Scope {
-            locals: locals.collect(),
-            upvalues: Vec::new(),
-        })
-    }
-
-    pub fn pop_scope(&mut self) {
-        self.scopes.pop();
-    }
-
-    pub fn insert(&mut self, var: &str) {
-        if self.get(var).is_none() {
-            if let Some(upvalue) = self.get_upvalue(var) {
-                self.scopes
-                    .last_mut()
-                    .unwrap()
-                    .upvalues
-                    .push((var.to_string(), upvalue))
-            }
+    #[allow(clippy::manual_map)]
+    pub fn resolve(&mut self, var: &str) -> Variable {
+        let Some(current_scope) = self.scopes.last() else {
+            return Variable::Global;
+        };
+        if let Some(i) = current_scope.get_local(var) {
+            Variable::Local(i)
+        } else if let Some(i) = current_scope.get_upvalue(var) {
+            Variable::Upvalue(i)
+        } else if let Some(upvalue) = search_for_upvalue(var, self.scopes.iter_mut().rev().skip(1))
+        {
+            self.scopes
+                .last_mut()
+                .unwrap()
+                .upvalues
+                .push((var.to_string(), upvalue));
+            let i = self.scopes.last().unwrap().get_upvalue(var).unwrap();
+            Variable::Upvalue(i)
+        } else {
+            Variable::Global
         }
     }
 
-    pub fn get(&self, var: &str) -> Option<Variable> {
-        self.scopes.last().and_then(|scope| scope.get(var))
+    pub fn push_scope(&mut self, locals: impl Iterator<Item = String>) {
+        let mut scope = Scope::new();
+        scope.locals = locals.collect();
+        self.scopes.push(scope);
+    }
+
+    pub fn pop_scope(&mut self) {
+        self.scopes.pop().unwrap();
     }
 
     pub fn upvalues(&self) -> impl Iterator<Item = UpValue> + '_ {
@@ -92,23 +97,25 @@ impl Environment {
             .unwrap()
             .upvalues
             .iter()
-            .map(|(_, upvalue)| upvalue)
-            .copied()
+            .map(|(_, upvalue)| *upvalue)
     }
 
-    fn get_upvalue(&self, var: &str) -> Option<UpValue> {
-        for (frame_index, scope) in (0..self.scopes.len() - 1)
-            .rev()
-            .zip(self.scopes.iter().rev().skip(1))
-        {
-            if let Some(local_index) = scope.get_local(var) {
-                return Some(UpValue {
-                    frame: frame_index,
-                    index: local_index,
-                });
-            }
-        }
-        None
+    pub fn is_global_scope(&self) -> bool {
+        self.scopes.is_empty()
+    }
+}
+
+fn search_for_upvalue<'a>(
+    var: &str,
+    mut scopes: impl Iterator<Item = &'a mut Scope>,
+) -> Option<UpValue> {
+    let scope = scopes.next()?;
+    if let Some(i) = scope.get_local(var) {
+        Some(UpValue::Local(i))
+    } else {
+        let upvalue = search_for_upvalue(var, scopes)?;
+        scope.upvalues.push((var.to_string(), upvalue));
+        Some(UpValue::UpValue(scope.upvalues.len() - 1))
     }
 }
 
@@ -127,25 +134,11 @@ mod tests {
     }
 
     #[test]
-    fn test_upvalue() {
+    fn test_upvalues() {
         let mut env = Environment::new();
 
         env.push_scope(["a", "b", "c"].into_iter().map(str::to_string));
         env.push_scope(["d", "e", "f"].into_iter().map(str::to_string));
-        env.push_scope(std::iter::empty());
-        env.insert("a");
-        env.insert("f");
-
-        assert!(matches!(env.get("a"), Some(Variable::Upvalue(0))));
-        assert!(matches!(env.get("f"), Some(Variable::Upvalue(1))));
-
-        assert!(matches!(
-            env.upvalues().next().unwrap(),
-            UpValue { frame: 0, index: 0 }
-        ));
-        assert!(matches!(
-            env.upvalues().nth(1).unwrap(),
-            UpValue { frame: 1, index: 2 }
-        ));
+        env.push_scope(["g", "h", "i"].into_iter().map(str::to_string));
     }
 }
