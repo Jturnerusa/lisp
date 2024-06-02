@@ -110,9 +110,9 @@ pub enum Object {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct UpValue {
-    pub frame: usize,
-    pub index: usize,
+pub enum UpValue {
+    Local(usize),
+    UpValue(usize),
 }
 
 #[derive(Clone, Debug, PartialEq)]
