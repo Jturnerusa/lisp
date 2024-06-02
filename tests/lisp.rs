@@ -277,17 +277,17 @@ fn test_map() {
 #[test]
 fn test_fold() {
     let input = include_str!("lisp/fold.lisp");
-    assert!(dbg!(eval(input).unwrap().borrow().deref()).is_true());
+    assert!(eval(input).unwrap().borrow().deref().is_true());
 }
 
 #[test]
 fn test_filter() {
     let input = include_str!("lisp/filter.lisp");
-    assert!(dbg!(eval(input).unwrap().borrow().deref()).is_true());
+    assert!(eval(input).unwrap().borrow().deref().is_true());
 }
 
 #[test]
 fn test_upvalues() {
     let input = include_str!("lisp/upvalues.lisp");
-    assert!(dbg!(eval(input).unwrap().borrow().deref()).is_true());
+    assert!(eval(input).unwrap().borrow().deref().is_true());
 }
