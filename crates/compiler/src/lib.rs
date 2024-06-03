@@ -19,7 +19,7 @@ use xxhash::Xxh3;
 
 type ConstantTable = HashMap<u64, Constant, IdentityHasher>;
 
-#[derive(Clone, Debug, Error)]
+#[derive(Debug, Error)]
 pub enum Error {
     #[error("compiler error: {0}")]
     Compiler(String),

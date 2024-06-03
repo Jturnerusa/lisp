@@ -1,4 +1,4 @@
-use std::{fs::File, io::Read, rc::Rc};
+use std::{fs::File, io::Read};
 
 use vm::{object::Type, Error, Object, Value};
 
@@ -27,11 +27,11 @@ pub fn read_file(objects: &mut [Value]) -> Result<Object, Error> {
             }),
         })?;
 
-        let mut file = File::open(path).map_err(|e| Error::Other(Rc::new(e)))?;
+        let mut file = File::open(path).map_err(|e| Error::Other(Box::new(e)))?;
         let mut buff = String::new();
 
         file.read_to_string(&mut buff)
-            .map_err(|e| Error::Other(Rc::new(e)))?;
+            .map_err(|e| Error::Other(Box::new(e)))?;
 
         Ok(Object::String(buff))
     }

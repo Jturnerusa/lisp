@@ -24,7 +24,7 @@ pub enum Arity {
     Variadic,
 }
 
-#[derive(Clone, Debug, Error)]
+#[derive(Debug, Error)]
 pub enum Error {
     #[error("type error: expected {expected}: received: {recieved}")]
     Type { expected: Type, recieved: Type },
@@ -37,7 +37,7 @@ pub enum Error {
     #[error("cannot compare this combination of types: {0} {1}")]
     Cmp(Type, Type),
     #[error("other error: {0}")]
-    Other(#[from] Rc<dyn std::error::Error>),
+    Other(#[from] Box<dyn std::error::Error>),
 }
 
 #[derive(Clone, EnumAs, EnumIs, PartialEq, Eq, Hash)]
