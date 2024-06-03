@@ -113,6 +113,7 @@ pub struct Vm {
     bp: usize,
 }
 
+#[allow(clippy::new_without_default)]
 impl Vm {
     pub fn new() -> Self {
         Self {

@@ -2,6 +2,7 @@ use std::hash::{BuildHasher, Hasher};
 
 pub struct IdentityHasher(u64);
 
+#[allow(clippy::new_without_default)]
 impl IdentityHasher {
     pub fn new() -> Self {
         Self(0)

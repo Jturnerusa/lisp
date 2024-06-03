@@ -33,6 +33,7 @@ pub struct Compiler {
     macros: HashMap<String, u64>,
 }
 
+#[allow(clippy::new_without_default)]
 impl Compiler {
     pub fn new() -> Self {
         Self {

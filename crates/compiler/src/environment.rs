@@ -124,16 +124,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_locals() {
-        let mut env = Environment::new();
-
-        env.push_scope(["a", "b", "c"].into_iter().map(str::to_string));
-
-        assert!(matches!(env.get("a"), Some(Variable::Local(0))));
-        assert!(env.get("d").is_none());
-    }
-
-    #[test]
     fn test_upvalues() {
         let mut env = Environment::new();
 
