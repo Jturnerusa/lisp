@@ -1,7 +1,4 @@
-use std::cell::RefCell;
 use std::collections::HashMap;
-use std::ops::Deref;
-use std::rc::Rc;
 
 use compiler::Compiler;
 use identity_hasher::IdentityHasher;
