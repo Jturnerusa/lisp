@@ -4,17 +4,16 @@
 mod environment;
 
 use std::{
-    cell::RefCell,
     collections::HashMap,
     hash::{Hash, Hasher},
     ops::Deref,
-    rc::Rc,
 };
 
 use environment::{Environment, Variable};
 use identity_hasher::IdentityHasher;
 use thiserror::Error;
 use value::{Cons, Value};
+use vm::object::Type;
 use vm::{Arity, Constant, OpCode, Vm};
 use xxhash::Xxh3;
 
@@ -256,13 +255,13 @@ impl Compiler {
                 {
                     "car" => OpCode::Car,
                     "cdr" => OpCode::Cdr,
-                    "cons?" => OpCode::IsType(vm::Type::Cons),
-                    "lambda?" => OpCode::IsType(vm::Type::Function),
-                    "symbol?" => OpCode::IsType(vm::Type::Symbol),
-                    "string?" => OpCode::IsType(vm::Type::String),
-                    "int?" => OpCode::IsType(vm::Type::Int),
-                    "true?" => OpCode::IsType(vm::Type::True),
-                    "nil?" => OpCode::IsType(vm::Type::Nil),
+                    "cons?" => OpCode::IsType(Type::Cons),
+                    "lambda?" => OpCode::IsType(Type::Function),
+                    "symbol?" => OpCode::IsType(Type::Symbol),
+                    "string?" => OpCode::IsType(Type::String),
+                    "int?" => OpCode::IsType(Type::Int),
+                    "true?" => OpCode::IsType(Type::True),
+                    "nil?" => OpCode::IsType(Type::Nil),
                     "assert" => OpCode::Assert,
                     _ => unreachable!(),
                 },
@@ -407,14 +406,9 @@ impl Compiler {
 
         let arity = self
             .vm
-            .stack()
-            .last()
+            .peek(0)
             .unwrap()
-            .borrow()
-            .as_function()
-            .unwrap()
-            .borrow()
-            .arity();
+            .with(|object| object.as_function().unwrap().arity());
 
         let rest = match (arity, exprs.iter_cars().count()) {
             (Arity::Nary(n), count) if count > n => count - n,
@@ -439,7 +433,7 @@ impl Compiler {
 
         let ret = self.vm.eval([].as_slice())?.unwrap();
 
-        let val = Value::try_from(ret.borrow().deref()).unwrap();
+        let val = Value::try_from(&ret.into_object()).unwrap();
 
         self.compile(&val, opcodes, constants)?;
 
@@ -716,14 +710,10 @@ fn push_list(vm: &mut Vm, list: &Cons) {
 fn push_value(vm: &mut Vm, value: &Value) {
     match value {
         Value::Cons(cons) => push_list(vm, cons),
-        Value::Symbol(symbol) => vm.push(Rc::new(RefCell::new(vm::Object::Symbol(
-            symbol.to_string(),
-        )))),
-        Value::String(string) => vm.push(Rc::new(RefCell::new(vm::Object::String(
-            string.to_string(),
-        )))),
-        Value::Int(i) => vm.push(Rc::new(RefCell::new(vm::Object::Int(*i)))),
-        Value::True => vm.push(Rc::new(RefCell::new(vm::Object::True))),
-        Value::Nil => vm.push(Rc::new(RefCell::new(vm::Object::Nil))),
+        Value::Symbol(symbol) => vm.push(vm::Object::Symbol(symbol.to_string())),
+        Value::String(string) => vm.push(vm::Object::String(string.to_string())),
+        Value::Int(i) => vm.push(vm::Object::Int(*i)),
+        Value::True => vm.push(vm::Object::True),
+        Value::Nil => vm.push(vm::Object::Nil),
     }
 }

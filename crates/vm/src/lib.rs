@@ -1,15 +1,16 @@
 #![allow(dead_code)]
 
-mod object;
+pub mod object;
 
 use crate::object::{Cons, Lambda, NativeFunction, Type};
 use identity_hasher::IdentityHasher;
+use std::cell::RefCell;
 use std::cmp::{Ordering, PartialOrd};
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
+use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
-use std::{cell::RefCell, ops::Deref};
 use thiserror::Error;
 use unwrap_enum::{EnumAs, EnumIs};
 use xxhash::Xxh3;
@@ -91,17 +92,23 @@ pub enum UpValue {
 
 #[derive(Clone, Debug)]
 struct Frame {
-    function: Option<Rc<RefCell<Lambda>>>,
+    function: Option<Lambda>,
     pc: usize,
     bp: usize,
 }
 
+#[derive(Clone, Debug, EnumAs, EnumIs)]
+pub enum Value {
+    Value(Object),
+    UpValue(Rc<RefCell<Object>>),
+}
+
 pub struct Vm {
-    globals: HashMap<String, Rc<RefCell<Object>>>,
+    globals: HashMap<String, Object>,
     constants: HashMap<u64, Constant, IdentityHasher>,
-    stack: Vec<Rc<RefCell<Object>>>,
+    stack: Vec<Value>,
     frames: Vec<Frame>,
-    current_function: Option<Rc<RefCell<Lambda>>>,
+    current_function: Option<Lambda>,
     pc: usize,
     bp: usize,
 }
@@ -130,19 +137,17 @@ impl Vm {
 
     pub fn load_native_function<F>(&mut self, name: &str, f: F)
     where
-        F: Fn(&[Rc<RefCell<Object>>]) -> Result<Rc<RefCell<Object>>, Error> + 'static,
+        F: Fn(&mut [Value]) -> Result<Object, Error> + 'static,
     {
         let native_function = NativeFunction::new(f);
-        self.globals.insert(
-            name.to_string(),
-            Rc::new(RefCell::new(Object::NativeFunction(native_function))),
-        );
+        self.globals
+            .insert(name.to_string(), Object::NativeFunction(native_function));
     }
 
-    pub fn eval(&mut self, opcodes: &[OpCode]) -> Result<Option<Rc<RefCell<Object>>>, Error> {
+    pub fn eval(&mut self, opcodes: &[OpCode]) -> Result<Option<Value>, Error> {
         loop {
             let opcode = if let Some(function) = &self.current_function {
-                function.borrow().opcodes[self.pc]
+                function.opcodes[self.pc]
             } else if self.pc < opcodes.len() {
                 opcodes[self.pc]
             } else {
@@ -176,7 +181,7 @@ impl Vm {
                         .cloned()
                         .unwrap();
                     self.stack
-                        .push(Rc::new(RefCell::new(Object::Symbol(symbol_value))));
+                        .push(Value::Value(Object::Symbol(symbol_value.clone())));
                 }
                 OpCode::PushString(string) => {
                     let string_value = self
@@ -187,11 +192,11 @@ impl Vm {
                         .cloned()
                         .unwrap();
                     self.stack
-                        .push(Rc::new(RefCell::new(Object::String(string_value))));
+                        .push(Value::Value(Object::String(string_value.clone())));
                 }
-                OpCode::PushInt(i) => self.stack.push(Rc::new(RefCell::new(Object::Int(i)))),
-                OpCode::PushTrue => self.stack.push(Rc::new(RefCell::new(Object::True))),
-                OpCode::PushNil => self.stack.push(Rc::new(RefCell::new(Object::Nil))),
+                OpCode::PushInt(i) => self.stack.push(Value::Value(Object::Int(i))),
+                OpCode::PushTrue => self.stack.push(Value::Value(Object::True)),
+                OpCode::PushNil => self.stack.push(Value::Value(Object::Nil)),
                 OpCode::Pop => {
                     self.stack.pop().unwrap();
                 }
@@ -217,16 +222,16 @@ impl Vm {
         }
     }
 
-    pub fn push(&mut self, object: Rc<RefCell<Object>>) {
-        self.stack.push(object);
+    pub fn peek(&self, i: usize) -> Option<&Value> {
+        self.stack.get(self.stack.len() - i - 1)
     }
 
-    pub fn pop(&mut self) -> Option<Rc<RefCell<Object>>> {
+    pub fn push(&mut self, object: Object) {
+        self.stack.push(Value::Value(object));
+    }
+
+    pub fn pop(&mut self) -> Option<Value> {
         self.stack.pop()
-    }
-
-    pub fn stack(&self) -> &[Rc<RefCell<Object>>] {
-        self.stack.as_slice()
     }
 
     pub fn def_global(&mut self, constant: u64) -> Result<(), Error> {
@@ -238,9 +243,9 @@ impl Vm {
                 .as_symbol()
                 .cloned()
                 .unwrap(),
-            val,
+            val.into_object(),
         );
-        self.stack.push(Rc::new(RefCell::new(Object::Nil)));
+        self.stack.push(Value::Value(Object::Nil));
         Ok(())
     }
 
@@ -251,7 +256,7 @@ impl Vm {
             .globals
             .get_mut(self.constants.get(&constant).unwrap().as_symbol().unwrap())
         {
-            *var = Rc::clone(&val);
+            *var = val.clone().into_object();
             self.stack.push(val);
             Ok(())
         } else {
@@ -271,7 +276,7 @@ impl Vm {
             .globals
             .get(self.constants.get(&constant).unwrap().as_symbol().unwrap())
         {
-            self.stack.push(Rc::clone(var))
+            self.stack.push(Value::Value(var.clone()))
         } else {
             return Err(Error::NotFound(
                 self.constants
@@ -288,7 +293,12 @@ impl Vm {
     pub fn set_local(&mut self, local: usize) -> Result<(), Error> {
         let val = self.stack.pop().unwrap();
         let i = self.bp + local;
-        *self.stack[i].borrow_mut() = (*val).clone().into_inner();
+        match &mut self.stack[i] {
+            Value::Value(_) => self.stack[i] = val.clone(),
+            Value::UpValue(inner) => {
+                *inner.borrow_mut() = val.clone().into_object();
+            }
+        }
         self.stack.push(val);
         Ok(())
     }
@@ -303,44 +313,41 @@ impl Vm {
     pub fn set_upvalue(&mut self, upvalue: usize) -> Result<(), Error> {
         let val = self.stack.pop().unwrap();
 
-        *self
-            .current_function
-            .as_mut()
-            .unwrap()
-            .borrow_mut()
-            .upvalues[upvalue]
-            .borrow_mut() = val.borrow().deref().clone();
+        *self.current_function.as_mut().unwrap().upvalues[upvalue].borrow_mut() = val.into_object();
 
         Ok(())
     }
 
     pub fn get_upvalue(&mut self, upvalue: usize) -> Result<(), Error> {
-        let val = Rc::clone(&self.current_function.as_ref().unwrap().borrow().upvalues[upvalue]);
+        let val = self.current_function.as_ref().unwrap().upvalues[upvalue].clone();
 
-        self.stack.push(val);
+        self.stack.push(Value::UpValue(val));
 
         Ok(())
     }
 
     pub fn create_upvalue(&mut self, upvalue: UpValue) -> Result<(), Error> {
-        let function = match self.stack.last().unwrap().borrow().deref() {
-            Object::Function(function) => Rc::clone(function),
-            object => {
+        let val = match upvalue {
+            UpValue::Local(i) => {
+                let val = self.stack[self.bp + i].clone().into_object();
+                let rc = Rc::new(RefCell::new(val));
+                self.stack[self.bp + i] = Value::UpValue(rc.clone());
+                rc
+            }
+            UpValue::UpValue(i) => self.current_function.as_ref().unwrap().upvalues[i].clone(),
+        };
+
+        let function = match self.stack.last_mut().unwrap() {
+            Value::Value(Object::Function(function)) => function,
+            value => {
                 return Err(Error::Type {
                     expected: Type::Function,
-                    recieved: Type::from(object),
+                    recieved: Type::from(&value.clone().into_object()),
                 })
             }
         };
 
-        let val = match upvalue {
-            UpValue::Local(i) => self.stack[self.bp + i].clone(),
-            UpValue::UpValue(i) => {
-                self.current_function.as_ref().unwrap().borrow().upvalues[i].clone()
-            }
-        };
-
-        function.borrow_mut().upvalues.push(val);
+        function.upvalues.push(val);
 
         Ok(())
     }
@@ -348,11 +355,10 @@ impl Vm {
     pub fn call(&mut self, args: usize) -> Result<(), Error> {
         match self.stack[self.stack.len() - args - 1]
             .clone()
-            .borrow()
-            .deref()
+            .into_object()
         {
             Object::Function(function) => {
-                match &function.borrow().arity {
+                match &function.arity {
                     Arity::Nullary if args != 0 => todo!(),
                     Arity::Nary(_) if args == 0 => todo!(),
                     _ => (),
@@ -364,21 +370,22 @@ impl Vm {
                     pc: self.pc,
                 });
 
-                self.current_function = Some(Rc::clone(function));
+                self.current_function = Some(function);
                 self.bp = self.stack.len() - args;
                 self.pc = 0;
 
                 Ok(())
             }
             Object::NativeFunction(function) => {
-                let parameters = &self.stack[self.stack.len() - args..];
+                let len = self.stack.len();
+                let parameters = &mut self.stack[len - args..];
                 let ret = function.0(parameters);
 
                 self.stack.truncate(self.stack.len() - args - 1);
 
                 match ret {
                     Ok(val) => {
-                        self.stack.push(val);
+                        self.stack.push(Value::Value(val));
                         Ok(())
                     }
                     Err(e) => Err(e),
@@ -386,7 +393,7 @@ impl Vm {
             }
             object => Err(Error::Type {
                 expected: Type::Function,
-                recieved: Type::from(object),
+                recieved: Type::from(&object),
             }),
         }
     }
@@ -407,7 +414,7 @@ impl Vm {
     }
 
     pub fn lambda(&mut self, arity: Arity, opcodes: u64) -> Result<(), Error> {
-        let function = Rc::new(RefCell::new(Lambda {
+        let function = Lambda {
             arity,
             opcodes: self
                 .constants
@@ -417,11 +424,11 @@ impl Vm {
                 .cloned()
                 .unwrap(),
             upvalues: Vec::new(),
-        }));
+        };
 
-        let object = Rc::new(RefCell::new(Object::Function(function)));
+        let object = Object::Function(function);
 
-        self.stack.push(object);
+        self.stack.push(Value::Value(object));
 
         Ok(())
     }
@@ -430,29 +437,29 @@ impl Vm {
         let rhs = self.stack.pop().unwrap();
         let lhs = self.stack.pop().unwrap();
 
-        let a = match lhs.borrow().deref() {
-            Object::Int(i) => *i,
+        let a = match lhs.into_object() {
+            Object::Int(i) => i,
             object => {
                 return Err(Error::Type {
                     expected: Type::Int,
-                    recieved: Type::from(object),
+                    recieved: Type::from(&object),
                 })
             }
         };
 
-        let b = match rhs.borrow().deref() {
-            Object::Int(i) => *i,
+        let b = match rhs.into_object() {
+            Object::Int(i) => i,
             object => {
                 return Err(Error::Type {
                     expected: Type::Int,
-                    recieved: Type::from(object),
+                    recieved: Type::from(&object),
                 })
             }
         };
 
-        let result = Rc::new(RefCell::new(Object::Int(f(a, b))));
+        let result = Object::Int(f(a, b));
 
-        self.stack.push(result);
+        self.stack.push(Value::Value(result));
 
         Ok(())
     }
@@ -474,33 +481,33 @@ impl Vm {
     }
 
     pub fn car(&mut self) -> Result<(), Error> {
-        let car = match self.stack.pop().unwrap().borrow().deref() {
-            Object::Cons(Cons(car, _)) => Rc::clone(car),
+        let car = match self.stack.pop().unwrap().into_object() {
+            Object::Cons(cons) => cons.0,
             object => {
                 return Err(Error::Type {
                     expected: Type::Cons,
-                    recieved: Type::from(object),
+                    recieved: Type::from(&object),
                 })
             }
         };
 
-        self.stack.push(car);
+        self.stack.push(Value::Value(car));
 
         Ok(())
     }
 
     pub fn cdr(&mut self) -> Result<(), Error> {
-        let car = match self.stack.pop().unwrap().borrow().deref() {
-            Object::Cons(Cons(_, cdr)) => Rc::clone(cdr),
+        let cdr = match self.stack.pop().unwrap().into_object() {
+            Object::Cons(cons) => cons.1,
             object => {
                 return Err(Error::Type {
                     expected: Type::Cons,
-                    recieved: Type::from(object),
+                    recieved: Type::from(&object),
                 })
             }
         };
 
-        self.stack.push(car);
+        self.stack.push(Value::Value(cdr));
 
         Ok(())
     }
@@ -509,11 +516,9 @@ impl Vm {
         let rhs = self.stack.pop().unwrap();
         let lhs = self.stack.pop().unwrap();
 
-        let cons = Object::Cons(Cons(lhs, rhs));
+        let cons = Object::Cons(Box::new(Cons(lhs.into_object(), rhs.into_object())));
 
-        let object = Rc::new(RefCell::new(cons));
-
-        self.stack.push(object);
+        self.stack.push(Value::Value(cons));
 
         Ok(())
     }
@@ -528,7 +533,7 @@ impl Vm {
     pub fn branch(&mut self, i: usize) -> Result<(), Error> {
         let p = self.stack.pop().unwrap();
 
-        match p.borrow().deref() {
+        match p.into_object() {
             Object::True => (),
             Object::Nil => {
                 self.pc += i;
@@ -536,7 +541,7 @@ impl Vm {
             object => {
                 return Err(Error::Type {
                     expected: Type::Predicate,
-                    recieved: Type::from(object),
+                    recieved: Type::from(&object),
                 });
             }
         }
@@ -546,17 +551,17 @@ impl Vm {
 
     pub fn is_type(&mut self, ty: Type) -> Result<(), Error> {
         self.stack.push(
-            if Type::from(self.stack.last().unwrap().borrow().deref()) == ty {
-                Rc::new(RefCell::new(Object::True))
+            if Type::from(&self.stack.last().unwrap().clone().into_object()) == ty {
+                Value::Value(Object::True)
             } else {
-                Rc::new(RefCell::new(Object::Nil))
+                Value::Value(Object::Nil)
             },
         );
         Ok(())
     }
 
     pub fn assert(&mut self) -> Result<(), Error> {
-        match self.stack.pop().unwrap().borrow().deref() {
+        match self.stack.pop().unwrap().into_object() {
             Object::True => Ok(()),
             _ => Err(Error::Assert("assertion failed".to_string())),
         }
@@ -566,10 +571,10 @@ impl Vm {
         let rhs = self.stack.pop().unwrap();
         let lhs = self.stack.pop().unwrap();
 
-        self.stack.push(if lhs == rhs {
-            Rc::new(RefCell::new(Object::True))
+        self.stack.push(if lhs.into_object() == rhs.into_object() {
+            Value::Value(Object::True)
         } else {
-            Rc::new(RefCell::new(Object::Nil))
+            Value::Value(Object::Nil)
         });
 
         Ok(())
@@ -579,16 +584,22 @@ impl Vm {
         let rhs = self.stack.pop().unwrap();
         let lhs = self.stack.pop().unwrap();
 
-        self.stack.push(match lhs.partial_cmp(&rhs) {
-            Some(Ordering::Less) => Rc::new(RefCell::new(Object::True)),
-            Some(_) => Rc::new(RefCell::new(Object::Nil)),
-            None => {
-                return Err(Error::Cmp(
-                    Type::from(lhs.borrow().deref()),
-                    Type::from(rhs.borrow().deref()),
-                ))
-            }
-        });
+        self.stack.push(
+            match lhs
+                .clone()
+                .into_object()
+                .partial_cmp(&rhs.clone().into_object())
+            {
+                Some(Ordering::Less) => Value::Value(Object::True),
+                Some(_) => Value::Value(Object::Nil),
+                None => {
+                    return Err(Error::Cmp(
+                        Type::from(&lhs.into_object()),
+                        Type::from(&rhs.into_object()),
+                    ))
+                }
+            },
+        );
 
         Ok(())
     }
@@ -597,28 +608,69 @@ impl Vm {
         let rhs = self.stack.pop().unwrap();
         let lhs = self.stack.pop().unwrap();
 
-        self.stack.push(match lhs.partial_cmp(&rhs) {
-            Some(Ordering::Greater) => Rc::new(RefCell::new(Object::True)),
-            Some(_) => Rc::new(RefCell::new(Object::Nil)),
-            None => {
-                return Err(Error::Cmp(
-                    Type::from(lhs.borrow().deref()),
-                    Type::from(rhs.borrow().deref()),
-                ))
-            }
-        });
+        self.stack.push(
+            match lhs
+                .clone()
+                .into_object()
+                .partial_cmp(&rhs.clone().into_object())
+            {
+                Some(Ordering::Greater) => Value::Value(Object::True),
+                Some(_) => Value::Value(Object::Nil),
+                None => {
+                    return Err(Error::Cmp(
+                        Type::from(&lhs.into_object()),
+                        Type::from(&rhs.into_object()),
+                    ))
+                }
+            },
+        );
 
         Ok(())
     }
 }
 
-fn make_list(objects: &[Rc<RefCell<Object>>]) -> Rc<RefCell<Object>> {
+fn make_list(objects: &[Value]) -> Value {
     if !objects.is_empty() {
-        Rc::new(RefCell::new(Object::Cons(Cons(
-            Rc::clone(&objects[0]),
-            make_list(&objects[1..]),
+        Value::Value(Object::Cons(Box::new(Cons(
+            objects[0].clone().into_object(),
+            make_list(&objects[1..]).into_object(),
         ))))
     } else {
-        Rc::new(RefCell::new(Object::Nil))
+        Value::Value(Object::Nil)
+    }
+}
+
+impl Value {
+    pub fn into_object(self) -> Object {
+        match self {
+            Self::Value(object) => object,
+            Self::UpValue(object) => object.borrow().clone(),
+        }
+    }
+
+    pub fn with<T, F>(&self, f: F) -> T
+    where
+        F: Fn(&Object) -> T,
+    {
+        match self {
+            Self::Value(object) => f(object),
+            Self::UpValue(object) => {
+                let borrow_guard = object.borrow();
+                f(borrow_guard.deref())
+            }
+        }
+    }
+
+    pub fn with_mut<T, F>(&mut self, mut f: F) -> T
+    where
+        F: FnMut(&mut Object) -> T,
+    {
+        match self {
+            Self::Value(object) => f(object),
+            Self::UpValue(object) => {
+                let mut borrow_guard = object.borrow_mut();
+                f(borrow_guard.deref_mut())
+            }
+        }
     }
 }

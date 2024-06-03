@@ -2,6 +2,7 @@ use crate::{Arity, Error, OpCode};
 use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::fmt::{self, Debug, Display};
+use std::ops::Deref;
 use std::rc::Rc;
 use unwrap_enum::{EnumAs, EnumIs};
 use value::Value;
@@ -21,8 +22,8 @@ pub enum Type {
 #[derive(Clone, Debug, EnumAs, EnumIs, PartialEq)]
 pub enum Object {
     NativeFunction(NativeFunction),
-    Function(Rc<RefCell<Lambda>>),
-    Cons(Cons),
+    Function(Lambda),
+    Cons(Box<Cons>),
     String(String),
     Symbol(String),
     Int(i64),
@@ -39,12 +40,10 @@ pub struct Lambda {
 
 #[allow(clippy::type_complexity)]
 #[derive(Clone)]
-pub struct NativeFunction(
-    pub(crate) Rc<dyn Fn(&[Rc<RefCell<Object>>]) -> Result<Rc<RefCell<Object>>, Error>>,
-);
+pub struct NativeFunction(pub(crate) Rc<dyn Fn(&mut [crate::Value]) -> Result<Object, Error>>);
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Cons(pub Rc<RefCell<Object>>, pub Rc<RefCell<Object>>);
+pub struct Cons(pub Object, pub Object);
 
 impl Lambda {
     pub fn arity(&self) -> Arity {
@@ -55,7 +54,7 @@ impl Lambda {
 impl NativeFunction {
     pub fn new<F>(f: F) -> Self
     where
-        F: Fn(&[Rc<RefCell<Object>>]) -> Result<Rc<RefCell<Object>>, Error> + 'static,
+        F: Fn(&mut [crate::Value]) -> Result<Object, Error> + 'static,
     {
         Self(Rc::new(f))
     }
@@ -112,7 +111,7 @@ impl TryFrom<&Object> for Value {
     type Error = ();
     fn try_from(object: &Object) -> Result<Self, Self::Error> {
         Ok(match object {
-            Object::Cons(cons) => Value::Cons(Box::new(value::Cons::try_from(cons)?)),
+            Object::Cons(cons) => Value::Cons(Box::new(value::Cons::try_from(cons.deref())?)),
             Object::String(string) => Value::String(string.clone()),
             Object::Symbol(symbol) => Value::Symbol(symbol.clone()),
             Object::Int(i) => Value::Int(*i),
@@ -127,8 +126,8 @@ impl TryFrom<&Cons> for value::Cons {
     type Error = ();
     fn try_from(value: &Cons) -> Result<Self, Self::Error> {
         Ok(value::Cons(
-            Value::try_from(&*value.0.borrow())?,
-            Value::try_from(&*value.1.borrow())?,
+            Value::try_from(&value.0)?,
+            Value::try_from(&value.1)?,
         ))
     }
 }
@@ -164,7 +163,7 @@ impl Display for NativeFunction {
 
 impl Display for Cons {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "({} {})", self.0.borrow(), self.1.borrow())
+        write!(f, "({} {})", self.0, self.1)
     }
 }
 
@@ -172,7 +171,7 @@ impl Display for Object {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::NativeFunction(native_function) => write!(f, "{native_function}",),
-            Self::Function(function) => write!(f, "{}", function.borrow()),
+            Self::Function(function) => write!(f, "{}", function),
             Self::Cons(cons) => write!(f, "{cons}"),
             Self::Symbol(symbol) => write!(f, "'{symbol}"),
             Self::String(string) => write!(f, r#""{string}""#),
