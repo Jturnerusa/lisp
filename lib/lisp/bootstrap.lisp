@@ -42,11 +42,11 @@
                 acc)))
 
   (def filter (lambda (pred list)
-                (fold (lambda (acc e)
-                        (if (pred e)
-                            (cons acc e)
-                            nil))
-                      list)))
+                (if (nil? list)
+                    nil
+                    (if (pred (car list))
+                        (cons (car list) (filter pred (cdr list)))
+                        (filter pred (cdr list))))))
 
   (def and (lambda (a b)
              (if a
