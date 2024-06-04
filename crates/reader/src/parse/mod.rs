@@ -25,14 +25,26 @@ pub struct Parser<'a> {
     data: &'a str,
 }
 
-fn parse_node(input: &str) -> Result<&str, Node> {
-    sequence::preceded(
-        combinator::opt(multi::fold_many1(comment, || (), |_, _| ())),
-        sequence::delimited(
-            combinator::opt(whitespace),
-            branch::alt((left_paren, right_paren, quote, string, symbol, int)),
-            combinator::opt(whitespace),
-        ),
+fn parse_node(input: &str) -> Result<&str, Option<Node>> {
+    sequence::delimited(
+        combinator::opt(multi::fold_many1(
+            branch::alt((whitespace, comment)),
+            || (),
+            |_, _| (),
+        )),
+        combinator::opt(branch::alt((
+            left_paren,
+            right_paren,
+            quote,
+            string,
+            symbol,
+            int,
+        ))),
+        combinator::opt(multi::fold_many1(
+            branch::alt((whitespace, comment)),
+            || (),
+            |_, _| (),
+        )),
     )(input)
 }
 
@@ -108,10 +120,11 @@ impl<'a> Iterator for Parser<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         if !self.data.is_empty() {
             match parse_node(self.data) {
-                Ok((rest, node)) => {
+                Ok((rest, Some(node))) => {
                     self.data = rest;
                     Some(Ok(node))
                 }
+                Ok((_, None)) => None,
                 Err(nom::Err::Error(e) | nom::Err::Failure(e)) => Some(Err(e.input)),
                 _ => unreachable!(),
             }
@@ -158,5 +171,12 @@ mod test {
                      (hello world)";
         let mut parser = Parser::new(input);
         assert!(matches!(parser.next().unwrap().unwrap(), Node::LeftParen));
+    }
+
+    #[test]
+    fn test_comment_at_end() {
+        let input = ";comment";
+        let mut parser = Parser::new(input);
+        assert!(parser.next().is_none());
     }
 }
