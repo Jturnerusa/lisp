@@ -4,7 +4,7 @@ use thiserror::Error;
 
 use parse::Parser;
 
-use value::Value;
+use value::{Cons, Value};
 
 #[derive(Clone, Debug, Error)]
 pub enum Error {
@@ -16,104 +16,69 @@ pub enum Error {
 
 pub struct Reader<'a> {
     parser: Parser<'a>,
-    depth: u64,
-    quoting: bool,
 }
 
 impl<'a> Reader<'a> {
     pub fn new(input: &'a str) -> Self {
         Self {
             parser: Parser::new(input),
-            depth: 0,
-            quoting: false,
         }
     }
 
     fn read(&mut self) -> Option<Result<Value, Error>> {
-        use parse::Node;
-        if self.depth == 0 || self.quoting {
-            self.quoting = false;
-            Some(Ok(match self.parser.next()? {
-                Ok(Node::LeftParen) => {
-                    self.depth += 1;
-                    match self.read() {
-                        Some(Ok(v)) => v,
-                        Some(Err(e)) => return Some(Err(Error::ParseError(e.to_string()))),
-                        None => return Some(Err(Error::UnbalancedParens)),
-                    }
-                }
-                Ok(Node::String(string)) => Value::String(string.to_string()),
-                Ok(Node::Symbol("t")) => Value::True,
-                Ok(Node::Symbol("nil")) => Value::Nil,
-                Ok(Node::Symbol(symbol)) => Value::Symbol(symbol.to_string()),
-                Ok(Node::Int(i)) => Value::Int(i.parse().unwrap()),
-                Err(e) => return Some(Err(Error::ParseError(e.to_string()))),
-                _ => unreachable!(),
-            }))
-        } else {
-            Some(Ok(match self.parser.next() {
-                Some(Ok(Node::LeftParen)) => {
-                    self.depth += 1;
-                    Value::Cons(Box::new(value::Cons(
-                        match self.read() {
-                            Some(Ok(v)) => v,
-                            Some(Err(e)) => return Some(Err(Error::ParseError(e.to_string()))),
-                            None => return Some(Err(Error::UnbalancedParens)),
-                        },
-                        match self.read() {
-                            Some(Ok(v)) => v,
-                            Some(Err(e)) => return Some(Err(Error::ParseError(e.to_string()))),
-                            None => return Some(Err(Error::UnbalancedParens)),
-                        },
-                    )))
-                }
-                Some(Ok(Node::RightParen)) => {
-                    self.depth -= 1;
-                    self.quoting = false;
-                    Value::Nil
-                }
-                Some(Ok(Node::Quote)) => {
-                    self.quoting = true;
-                    let quoted = self.read().unwrap().unwrap();
-                    let inner = Value::Cons(Box::new(value::Cons(
-                        Value::Symbol("quote".to_string()),
-                        Value::Cons(Box::new(value::Cons(quoted, Value::Nil))),
-                    )));
-                    Value::Cons(Box::new(value::Cons(inner, self.read().unwrap().unwrap())))
-                }
-                Some(Ok(Node::Symbol(symbol))) => Value::Cons(Box::new(value::Cons(
-                    match symbol {
-                        "t" => Value::True,
-                        "nil" => Value::Nil,
-                        _ => Value::Symbol(symbol.to_string()),
-                    },
-                    match self.read() {
-                        Some(Ok(v)) => v,
-                        Some(Err(e)) => return Some(Err(Error::ParseError(e.to_string()))),
-                        None => return Some(Err(Error::UnbalancedParens)),
-                    },
-                ))),
-                Some(Ok(Node::String(string))) => Value::Cons(Box::new(value::Cons(
-                    Value::String(string.to_string()),
-                    match self.read() {
-                        Some(Ok(v)) => v,
-                        Some(Err(e)) => return Some(Err(Error::ParseError(e.to_string()))),
-                        None => return Some(Err(Error::UnbalancedParens)),
-                    },
-                ))),
-                Some(Ok(Node::Int(i))) => Value::Cons(Box::new(value::Cons(
-                    Value::Int(i.parse().unwrap()),
-                    match self.read() {
-                        Some(Ok(v)) => v,
-                        Some(Err(e)) => return Some(Err(Error::ParseError(e.to_string()))),
-                        None => return Some(Err(Error::UnbalancedParens)),
-                    },
-                ))),
+        self.read_atom()
+    }
 
-                Some(Err(e)) => return Some(Err(Error::ParseError(e.to_string()))),
-                None => return Some(Err(Error::UnbalancedParens)),
-            }))
-        }
+    fn read_atom(&mut self) -> Option<Result<Value, Error>> {
+        Some(Ok(match self.parser.next()? {
+            Ok(parse::Node::LeftParen) => match self.read_cons() {
+                Ok(cons) => cons,
+                Err(e) => return Some(Err(Error::ParseError(e.to_string()))),
+            },
+            Ok(parse::Node::RightParen) => return Some(Err(Error::UnbalancedParens)),
+            Ok(parse::Node::Quote) => match self.quote() {
+                Ok(value) => value,
+                Err(e) => return Some(Err(Error::ParseError(e.to_string()))),
+            },
+            Ok(parse::Node::Symbol("nil")) => Value::Nil,
+            Ok(parse::Node::Symbol("t")) => Value::True,
+            Ok(parse::Node::Symbol(symbol)) => Value::Symbol(symbol.to_string()),
+            Ok(parse::Node::String(string)) => Value::String(string.to_string()),
+            Ok(parse::Node::Int(i)) => Value::Int(i.parse().unwrap()),
+            Err(e) => return Some(Err(Error::ParseError(e.to_string()))),
+        }))
+    }
+
+    fn read_cons(&mut self) -> Result<Value, Error> {
+        Ok(Value::Cons(Box::new(Cons(
+            match self.parser.next() {
+                Some(Ok(parse::Node::LeftParen)) => self.read_cons()?,
+                Some(Ok(parse::Node::RightParen)) => return Ok(Value::Nil),
+                Some(Ok(parse::Node::Quote)) => self.quote()?,
+                Some(Ok(parse::Node::Symbol("nil"))) => Value::Nil,
+                Some(Ok(parse::Node::Symbol("t"))) => Value::True,
+                Some(Ok(parse::Node::Symbol(symbol))) => Value::Symbol(symbol.to_string()),
+                Some(Ok(parse::Node::String(string))) => Value::String(string.to_string()),
+                Some(Ok(parse::Node::Int(i))) => Value::Int(i.parse().unwrap()),
+                Some(Err(e)) => return Err(Error::ParseError(e.to_string())),
+                None => return Err(Error::UnbalancedParens),
+            },
+            self.read_cons()?,
+        ))))
+    }
+
+    fn quote(&mut self) -> Result<Value, Error> {
+        Ok(Value::Cons(Box::new(Cons(
+            Value::Symbol("quote".to_string()),
+            Value::Cons(Box::new(Cons(
+                match self.read_atom() {
+                    Some(Ok(value)) => value,
+                    Some(Err(e)) => return Err(Error::ParseError(e.to_string())),
+                    None => return Err(Error::UnbalancedParens),
+                },
+                Value::Nil,
+            ))),
+        ))))
     }
 }
 
