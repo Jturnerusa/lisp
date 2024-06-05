@@ -48,6 +48,13 @@
                         (cons (car list) (filter pred (cdr list)))
                         (filter pred (cdr list))))))
 
+  (def nth (lambda (list n)
+             (if (nil? list)
+                 nil
+                 (if (= n 0)
+                     (car list)
+                     (nth (cdr list) (- n 1))))))
+
   (def length (lambda (list)
                 (let ((loop (lambda (list counter loop)
                               (if (nil? list)
