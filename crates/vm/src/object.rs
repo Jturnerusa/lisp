@@ -14,6 +14,7 @@ pub enum Type {
     String,
     Symbol,
     Int,
+    Char,
     True,
     Nil,
     Predicate,
@@ -27,6 +28,7 @@ pub enum Object {
     String(String),
     Symbol(String),
     Int(i64),
+    Char(char),
     True,
     Nil,
 }
@@ -86,6 +88,7 @@ impl From<&Object> for Type {
             Object::String(_) => Type::String,
             Object::Symbol(_) => Type::Symbol,
             Object::Int(_) => Type::Int,
+            Object::Char(_) => Type::Char,
             Object::True => Type::True,
             Object::Nil => Type::Nil,
         }
@@ -100,6 +103,7 @@ impl fmt::Display for Type {
             Self::Symbol => write!(f, "symbol"),
             Self::String => write!(f, "string"),
             Self::Int => write!(f, "int"),
+            Self::Char => write!(f, "char"),
             Self::True => write!(f, "true"),
             Self::Nil => write!(f, "nil"),
             Self::Predicate => write!(f, "predicate"),
@@ -176,6 +180,7 @@ impl Display for Object {
             Self::Symbol(symbol) => write!(f, "'{symbol}"),
             Self::String(string) => write!(f, r#""{string}""#),
             Self::Int(i) => write!(f, "{i}"),
+            Self::Char(c) => write!(f, r#"'{c}'"#),
             Self::True => write!(f, "true"),
             Self::Nil => write!(f, "nil"),
         }
