@@ -5,7 +5,17 @@
   (cons (cons 'lambda (cons (map car bindings) &rest))
         (map cadr bindings)))
 
+(defmacro let* (bindings)
+  (list (expand-let* bindings &rest)))
+
 (eval-when-compile
+
+  (def expand-let* (lambda (bindings body)
+                     (if (nil? bindings)
+                         (cons 'lambda (cons '() body))
+                         (cons (list 'lambda (list (car (car bindings)))
+                                     (expand-let* (cdr bindings) body))
+                               (cdr (car bindings))))))
   
   ;; Some primitive operations like car, cdr, cons, etc are implemented
   ;; as special operations in the compiler and aren't bound to a symbol

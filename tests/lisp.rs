@@ -248,3 +248,9 @@ fn test_last() {
     let input = include_str!("lisp/last.lisp");
     assert!(dbg!(eval(input).is_ok()));
 }
+
+#[test]
+fn test_parallel_let() {
+    let input = include_str!("lisp/parallel-let.lisp");
+    assert!(eval(input).is_ok());
+}
