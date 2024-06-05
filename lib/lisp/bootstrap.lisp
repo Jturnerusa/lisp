@@ -72,4 +72,11 @@
             (if a
                 t
                 (if b
-                    t nil)))))
+                    t nil))))
+
+  (def last (lambda (list)
+              (if (nil? list)
+                  nil
+                  (if (nil? (cdr list))
+                      (car list)
+                      (last (cdr list)))))))

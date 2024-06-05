@@ -242,3 +242,9 @@ fn test_nth() {
     let input = include_str!("lisp/nth.lisp");
     assert!(dbg!(eval(input).is_ok()));
 }
+
+#[test]
+fn test_last() {
+    let input = include_str!("lisp/last.lisp");
+    assert!(dbg!(eval(input).is_ok()));
+}
