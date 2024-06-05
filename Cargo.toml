@@ -2,7 +2,7 @@
 members = ["lib/native"]
 
 [workspace.dependencies]
-unwrap-enum = "=0.0.2"
+unwrap-enum = { path = "../unwrap-enum" }
 
 [package]
 name = "lisp"
