@@ -48,6 +48,13 @@
                         (cons (car list) (filter pred (cdr list)))
                         (filter pred (cdr list))))))
 
+  (def length (lambda (list)
+                (let ((loop (lambda (list counter loop)
+                              (if (nil? list)
+                                  counter
+                                  (loop (cdr list) (+ counter 1) loop)))))
+                  (loop list 0 loop))))
+
   (def and (lambda (a b)
              (if a
                  (if b
