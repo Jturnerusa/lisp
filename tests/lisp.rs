@@ -12,33 +12,21 @@ fn eval(input: &str) -> Result<Option<vm::Object>, Box<dyn std::error::Error>> {
     let mut vm = Vm::new();
     let mut opcodes = Vec::new();
     let mut constants = HashMap::with_hasher(IdentityHasher::new());
-    let mut ret = None;
 
     native_functions::load_module(&mut vm);
 
     for read in Reader::new(BOOTSTRAP_SOURCE) {
         let value = read?;
-
-        opcodes.clear();
-        constants.clear();
-
         compiler.compile(&value, &mut opcodes, &mut constants)?;
-
-        vm.load_constants(constants.values().cloned());
-        ret = vm.eval(opcodes.as_slice())?;
     }
 
     for read in Reader::new(input) {
         let value = read?;
-
-        opcodes.clear();
-        constants.clear();
-
         compiler.compile(&value, &mut opcodes, &mut constants)?;
-
-        vm.load_constants(constants.values().cloned());
-        ret = vm.eval(opcodes.as_slice())?;
     }
+
+    vm.load_constants(constants.values().cloned());
+    let ret = vm.eval(opcodes.as_slice())?;
 
     Ok(ret.map(|value| value.into_object()))
 }
