@@ -63,6 +63,7 @@ pub enum OpCode {
     CreateUpValue(UpValue),
     PushSymbol(u64),
     PushInt(i64),
+    PushChar(char),
     PushString(u64),
     PushTrue,
     PushNil,
@@ -196,6 +197,7 @@ impl Vm {
                         .push(Value::Value(Object::String(string_value.clone())));
                 }
                 OpCode::PushInt(i) => self.stack.push(Value::Value(Object::Int(i))),
+                OpCode::PushChar(c) => self.stack.push(Value::Value(Object::Char(c))),
                 OpCode::PushTrue => self.stack.push(Value::Value(Object::True)),
                 OpCode::PushNil => self.stack.push(Value::Value(Object::Nil)),
                 OpCode::Pop => {
