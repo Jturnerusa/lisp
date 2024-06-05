@@ -20,7 +20,7 @@ pub fn to_list(objects: &mut [Value]) -> Result<Object, Error> {
 
     let string = check_type!(objects[0], String);
 
-    Ok(make_list_of_string(string.chars().map(|c| c.to_string())))
+    Ok(make_list_of_char(string.chars()))
 }
 
 pub fn lines(objects: &mut [Value]) -> Result<Object, Error> {
@@ -34,9 +34,9 @@ pub fn lines(objects: &mut [Value]) -> Result<Object, Error> {
 pub fn is_digit(objects: &mut [Value]) -> Result<Object, Error> {
     check_arity!("is-digit?", 1, objects);
 
-    let string = check_type!(objects[0], String);
+    let c = check_type!(objects[0], Char);
 
-    if string.chars().all(|c| c.is_ascii_digit()) {
+    if c.is_ascii_digit() {
         Ok(Object::True)
     } else {
         Ok(Object::Nil)
@@ -49,6 +49,13 @@ fn make_list_of_string(mut strings: impl Iterator<Item = String>) -> Object {
             Object::String(string),
             make_list_of_string(strings),
         ))),
+        None => Object::Nil,
+    }
+}
+
+fn make_list_of_char(mut chars: impl Iterator<Item = char>) -> Object {
+    match chars.next() {
+        Some(c) => Object::Cons(Box::new(Cons(Object::Char(c), make_list_of_char(chars)))),
         None => Object::Nil,
     }
 }

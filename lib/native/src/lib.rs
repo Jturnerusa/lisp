@@ -43,6 +43,15 @@ macro_rules! check_type {
             }),
         })?
     };
+    ($object:expr, Char) => {
+        $object.with(|object| match object {
+            Object::Char(c) => Ok(*c),
+            object => Err(::vm::Error::Type {
+                expected: Type::Char,
+                recieved: Type::from(object),
+            }),
+        })?
+    };
 }
 
 pub fn load_module(vm: &mut Vm) {
