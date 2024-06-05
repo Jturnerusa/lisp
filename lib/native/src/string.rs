@@ -46,7 +46,7 @@ pub fn is_digit(objects: &mut [Value]) -> Result<Object, Error> {
 fn make_list_of_string(mut strings: impl Iterator<Item = String>) -> Object {
     match strings.next() {
         Some(string) => Object::Cons(Box::new(Cons(
-            Object::String(string.clone()),
+            Object::String(string),
             make_list_of_string(strings),
         ))),
         None => Object::Nil,
