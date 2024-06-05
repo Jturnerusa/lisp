@@ -40,7 +40,7 @@ pub enum Error {
     Other(#[from] Box<dyn std::error::Error>),
 }
 
-#[derive(Clone, EnumAs, EnumIs, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, EnumAs, EnumIs, PartialEq, Eq, Hash)]
 pub enum Constant {
     String(String),
     Symbol(String),
