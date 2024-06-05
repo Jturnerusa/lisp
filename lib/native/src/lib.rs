@@ -50,4 +50,6 @@ pub fn load_module(vm: &mut Vm) {
     vm.load_native_function("read-file", io::read_file);
     vm.load_native_function("string-split", string::split);
     vm.load_native_function("string->list", string::to_list);
+    vm.load_native_function("string-lines", string::lines);
+    vm.load_native_function("is-digit?", string::is_digit);
 }

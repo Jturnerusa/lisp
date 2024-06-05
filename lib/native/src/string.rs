@@ -23,6 +23,26 @@ pub fn to_list(objects: &mut [Value]) -> Result<Object, Error> {
     Ok(make_list_of_string(string.chars().map(|c| c.to_string())))
 }
 
+pub fn lines(objects: &mut [Value]) -> Result<Object, Error> {
+    check_arity!("string-lines", 1, objects);
+
+    let string = check_type!(objects[0], String);
+
+    Ok(make_list_of_string(string.lines().map(|s| s.to_string())))
+}
+
+pub fn is_digit(objects: &mut [Value]) -> Result<Object, Error> {
+    check_arity!("is-digit?", 1, objects);
+
+    let string = check_type!(objects[0], String);
+
+    if string.chars().all(|c| c.is_ascii_digit()) {
+        Ok(Object::True)
+    } else {
+        Ok(Object::Nil)
+    }
+}
+
 fn make_list_of_string(mut strings: impl Iterator<Item = String>) -> Object {
     match strings.next() {
         Some(string) => Object::Cons(Box::new(Cons(
