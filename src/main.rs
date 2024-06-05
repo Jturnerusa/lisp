@@ -6,7 +6,7 @@ use std::env;
 use std::error::Error;
 use std::fs::File;
 use std::io::Read;
-use vm::{Constant, OpCode, Vm};
+use vm::{Arity, Constant, OpCode, Vm};
 
 fn main() -> Result<(), Box<dyn Error>> {
     let mut compiler = Compiler::new();
@@ -16,13 +16,17 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     native_functions::load_module(&mut vm);
 
-    for arg in env::args().skip(1) {
+    for arg in env::args().skip(1).filter(|arg| !arg.starts_with("--")) {
         let file = File::open(arg)?;
         compile_file(file, &mut compiler, &mut opcodes, &mut constants)?;
     }
 
-    vm.load_constants(constants.into_values());
-    vm.eval(opcodes.as_slice())?;
+    if env::args().any(|arg| arg == "--disasm") {
+        disasm(&opcodes, &constants, 0);
+    } else {
+        vm.load_constants(constants.into_values());
+        vm.eval(opcodes.as_slice())?;
+    }
 
     Ok(())
 }
@@ -44,4 +48,81 @@ fn compile_file(
     }
 
     Ok(())
+}
+
+fn indent(depth: usize) -> String {
+    std::iter::repeat(" ").take(depth * 2).collect()
+}
+
+fn disasm(opcodes: &[OpCode], constants: &HashMap<u64, Constant, IdentityHasher>, depth: usize) {
+    for (i, opcode) in opcodes.iter().enumerate() {
+        match opcode {
+            OpCode::DefGlobal(global) => println!(
+                "{}{i}: defglobal({})",
+                indent(depth),
+                constants.get(global).unwrap().as_symbol().unwrap()
+            ),
+            OpCode::GetGlobal(global) => println! {
+                "{}{i}: getglobal({})",
+                indent(depth),
+                constants.get(global).unwrap().as_symbol().unwrap()
+            },
+            OpCode::GetLocal(local) => println! {
+                "{}{i}: getlocal({local})",
+                indent(depth)
+            },
+            OpCode::SetLocal(local) => println! {
+                "{}{i}: setlocal({local})",
+                indent(depth)
+            },
+            OpCode::GetUpValue(u) => println!("{}{i}: getupvalue({u})", indent(depth)),
+            OpCode::SetUpValue(u) => println!("{}{i}: setupvalue({u})", indent(depth)),
+            OpCode::CreateUpValue(u) => println!("{}{i}: createupvalue({u:?})", indent(depth)),
+            OpCode::Add => println!("{}{i}: add", indent(depth)),
+            OpCode::Sub => println!("{}{i}: sub", indent(depth)),
+            OpCode::Mul => println!("{}{i}: mul", indent(depth)),
+            OpCode::Div => println!("{}{i}: div", indent(depth)),
+            OpCode::Car => println!("{}{i}: car", indent(depth)),
+            OpCode::Cdr => println!("{}{i}: cdr", indent(depth)),
+            OpCode::Cons => println!("{}{i}: cons", indent(depth)),
+            OpCode::PushSymbol(symbol) => println!(
+                "{}{i}: pushsymbol({})",
+                indent(depth),
+                constants.get(symbol).unwrap().as_symbol().unwrap()
+            ),
+            OpCode::PushString(string) => println!(
+                "{}{i}: pushstring({})",
+                indent(depth),
+                constants.get(string).unwrap().as_string().unwrap()
+            ),
+            OpCode::PushInt(int) => println!("{}{i}: pushint({int})", indent(depth)),
+            OpCode::PushChar(c) => println!("{}{i}: pushchar({c})", indent(depth)),
+            OpCode::PushTrue => println!("{}{i}: pushtrue", indent(depth)),
+            OpCode::PushNil => println!("{}{i}: pushnil", indent(depth)),
+            OpCode::Call(args) => println!("{}{i}: call({args})", indent(depth)),
+            OpCode::Return => println!("{}{i}: ret", indent(depth)),
+            OpCode::Eq => println!("{}{i}: eq", indent(depth)),
+            OpCode::Lt => println!("{}{i}: lt", indent(depth)),
+            OpCode::Gt => println!("{}{i}: gt", indent(depth)),
+            OpCode::List(args) => println!("{}{i}, list({args})", indent(depth)),
+            OpCode::Branch(offset) => println!("{}{i}: branch({offset})", indent(depth)),
+            OpCode::Jmp(offset) => println!("{}{i}: jmp({offset})", indent(depth)),
+            OpCode::Lambda { arity, body } => {
+                println!(
+                    "{}{i}: lambda(arity: {})",
+                    indent(depth),
+                    match arity {
+                        Arity::Nullary => 0,
+                        Arity::Nary(n) => *n,
+                        _ => todo!(),
+                    }
+                );
+                let lambda_opcodes = constants.get(body).unwrap().as_opcodes().unwrap();
+                disasm(lambda_opcodes, constants, depth + 1);
+            }
+            OpCode::IsType(ty) => println!("{}{i}: is-type({ty})", indent(depth)),
+            OpCode::Assert => println!("{}{i}: assert", indent(depth)),
+            _ => (),
+        }
+    }
 }
