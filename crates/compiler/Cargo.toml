@@ -8,5 +8,5 @@ value = { path = "../value" }
 vm = { path = "../vm" }
 xxhash = { path = "../xxhash" }
 identity-hasher = { path = "../identity-hasher" }
-unwrap-enum = "=0.0.2"
+unwrap-enum = { workspace = true }
 thiserror = "1.0.61"

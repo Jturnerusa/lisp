@@ -1,6 +1,9 @@
 [workspace]
 members = ["lib/native"]
 
+[workspace.dependencies]
+unwrap-enum = "=0.0.2"
+
 [package]
 name = "lisp"
 version = "0.0.1"
