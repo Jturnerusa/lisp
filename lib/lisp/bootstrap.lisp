@@ -29,6 +29,9 @@
   (def car (lambda (cons)
              (car cons)))
 
+  (def + (lambda (a b)
+           (+ a b)))
+
   (def cadr (lambda (cons)
               (car (cdr cons))))
 
