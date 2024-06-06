@@ -1,3 +1,5 @@
+use std::{cell::RefCell, rc::Rc};
+
 use crate::{check_arity, check_type};
 use vm::{
     object::{Cons, Type},
@@ -45,17 +47,20 @@ pub fn is_digit(objects: &mut [Value]) -> Result<Object, Error> {
 
 fn make_list_of_string(mut strings: impl Iterator<Item = String>) -> Object {
     match strings.next() {
-        Some(string) => Object::Cons(Box::new(Cons(
-            Object::String(string),
+        Some(string) => Object::Cons(Rc::new(RefCell::new(Cons(
+            Object::String(Rc::new(string)),
             make_list_of_string(strings),
-        ))),
+        )))),
         None => Object::Nil,
     }
 }
 
 fn make_list_of_char(mut chars: impl Iterator<Item = char>) -> Object {
     match chars.next() {
-        Some(c) => Object::Cons(Box::new(Cons(Object::Char(c), make_list_of_char(chars)))),
+        Some(c) => Object::Cons(Rc::new(RefCell::new(Cons(
+            Object::Char(c),
+            make_list_of_char(chars),
+        )))),
         None => Object::Nil,
     }
 }

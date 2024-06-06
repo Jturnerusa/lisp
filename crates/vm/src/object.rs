@@ -23,10 +23,10 @@ pub enum Type {
 #[derive(Clone, Debug, EnumAs, EnumIs, PartialEq)]
 pub enum Object {
     NativeFunction(NativeFunction),
-    Function(Lambda),
-    Cons(Box<Cons>),
-    String(String),
-    Symbol(String),
+    Function(Rc<RefCell<Lambda>>),
+    Cons(Rc<RefCell<Cons>>),
+    String(Rc<String>),
+    Symbol(Rc<String>),
     Int(i64),
     Char(char),
     True,
@@ -115,9 +115,11 @@ impl TryFrom<&Object> for Value {
     type Error = ();
     fn try_from(object: &Object) -> Result<Self, Self::Error> {
         Ok(match object {
-            Object::Cons(cons) => Value::Cons(Box::new(value::Cons::try_from(cons.deref())?)),
-            Object::String(string) => Value::String(string.clone()),
-            Object::Symbol(symbol) => Value::Symbol(symbol.clone()),
+            Object::Cons(cons) => {
+                Value::Cons(Box::new(value::Cons::try_from(cons.borrow().deref())?))
+            }
+            Object::String(string) => Value::String(string.deref().clone()),
+            Object::Symbol(symbol) => Value::Symbol(symbol.deref().clone()),
             Object::Int(i) => Value::Int(*i),
             Object::True => Value::True,
             Object::Nil => Value::Nil,
@@ -175,8 +177,8 @@ impl Display for Object {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::NativeFunction(native_function) => write!(f, "{native_function}",),
-            Self::Function(function) => write!(f, "{}", function),
-            Self::Cons(cons) => write!(f, "{cons}"),
+            Self::Function(function) => write!(f, "{}", function.borrow()),
+            Self::Cons(cons) => write!(f, "{}", cons.borrow()),
             Self::Symbol(symbol) => write!(f, "'{symbol}"),
             Self::String(string) => write!(f, r#""{string}""#),
             Self::Int(i) => write!(f, "{i}"),

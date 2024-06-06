@@ -1,5 +1,5 @@
 use crate::{check_arity, check_type};
-use std::{fs::File, io::Read};
+use std::{fs::File, io::Read, rc::Rc};
 use vm::{object::Type, Error, Object, Value};
 
 pub fn print(objects: &mut [Value]) -> Result<Object, Error> {
@@ -18,5 +18,5 @@ pub fn read_file(objects: &mut [Value]) -> Result<Object, Error> {
     file.read_to_string(&mut buff)
         .map_err(|e| Error::Other(Box::new(e)))?;
 
-    Ok(Object::String(buff))
+    Ok(Object::String(Rc::new(buff)))
 }

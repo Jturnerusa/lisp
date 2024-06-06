@@ -7,6 +7,7 @@ use std::{
     collections::HashMap,
     hash::{Hash, Hasher},
     ops::Deref,
+    rc::Rc,
 };
 
 use environment::{Environment, Variable};
@@ -374,7 +375,7 @@ impl Compiler {
         defmacro_opcodes.push(OpCode::Return);
         self.environment.pop_scope();
 
-        let defmacro_name_constant = Constant::Symbol(name.to_string());
+        let defmacro_name_constant = Constant::Symbol(Rc::new(name.to_string()));
         let defmacro_name_hash = hash_constant(&defmacro_name_constant);
         let defmacro_opcodes_constant = Constant::Opcodes(defmacro_opcodes.into());
         let defmacro_opcodes_hash = hash_constant(&defmacro_opcodes_constant);
@@ -409,7 +410,7 @@ impl Compiler {
             .vm
             .peek(0)
             .unwrap()
-            .with(|object| object.as_function().unwrap().arity());
+            .with(|object| object.as_function().unwrap().borrow().arity());
 
         let rest = match (arity, exprs.iter_cars().count()) {
             (Arity::Nary(n), count) if count > n => count - n,
@@ -448,7 +449,7 @@ impl Compiler {
         opcodes: &mut Vec<OpCode>,
         constants: &mut ConstantTable,
     ) -> Result<(), Error> {
-        let constant = vm::Constant::Symbol(name.to_string());
+        let constant = vm::Constant::Symbol(Rc::new(name.to_string()));
         let hash = hash_constant(&constant);
         constants.insert(hash, constant);
         self.compile(expr, opcodes, constants)?;
@@ -469,7 +470,7 @@ impl Compiler {
             Variable::Local(i) => OpCode::SetLocal(i),
             Variable::Upvalue(i) => OpCode::SetUpValue(i),
             Variable::Global => {
-                let constant = Constant::Symbol(symbol.to_string());
+                let constant = Constant::Symbol(Rc::new(symbol.to_string()));
                 let hash = hash_constant(&constant);
                 constants.insert(hash, constant);
                 OpCode::SetGlobal(hash)
@@ -581,7 +582,7 @@ impl Compiler {
             Variable::Local(i) => OpCode::GetLocal(i),
             Variable::Upvalue(i) => OpCode::GetUpValue(i),
             Variable::Global => {
-                let constant = Constant::Symbol(symbol.to_string());
+                let constant = Constant::Symbol(Rc::new(symbol.to_string()));
                 let hash = hash_constant(&constant);
                 constants.insert(hash, constant);
                 OpCode::GetGlobal(hash)
@@ -596,7 +597,7 @@ impl Compiler {
         opcodes: &mut Vec<OpCode>,
         constants: &mut ConstantTable,
     ) -> Result<(), Error> {
-        let constant = Constant::String(string.to_string());
+        let constant = Constant::String(Rc::new(string.to_string()));
         let hash = hash_constant(&constant);
         constants.insert(hash, constant);
         opcodes.push(OpCode::PushString(hash));
@@ -668,7 +669,7 @@ impl Compiler {
         opcodes: &mut Vec<OpCode>,
         constants: &mut ConstantTable,
     ) -> Result<(), Error> {
-        let constant = Constant::Symbol(symbol.to_string());
+        let constant = Constant::Symbol(Rc::new(symbol.to_string()));
         let hash = hash_constant(&constant);
 
         constants.insert(hash, constant);
@@ -684,7 +685,7 @@ impl Compiler {
         opcodes: &mut Vec<OpCode>,
         constants: &mut ConstantTable,
     ) -> Result<(), Error> {
-        let constant = Constant::String(string.to_string());
+        let constant = Constant::String(Rc::new(string.to_string()));
         let hash = hash_constant(&constant);
 
         constants.insert(hash, constant);
@@ -711,8 +712,8 @@ fn push_list(vm: &mut Vm, list: &Cons) {
 fn push_value(vm: &mut Vm, value: &Value) {
     match value {
         Value::Cons(cons) => push_list(vm, cons),
-        Value::Symbol(symbol) => vm.push(vm::Object::Symbol(symbol.to_string())),
-        Value::String(string) => vm.push(vm::Object::String(string.to_string())),
+        Value::Symbol(symbol) => vm.push(vm::Object::Symbol(Rc::new(symbol.to_string()))),
+        Value::String(string) => vm.push(vm::Object::String(Rc::new(string.to_string()))),
         Value::Int(i) => vm.push(vm::Object::Int(*i)),
         Value::True => vm.push(vm::Object::True),
         Value::Nil => vm.push(vm::Object::Nil),

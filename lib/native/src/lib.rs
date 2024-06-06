@@ -16,24 +16,26 @@ macro_rules! check_arity {
 
 #[macro_export]
 macro_rules! check_type {
-    ($object:expr, Symbol) => {
+    ($object:expr, Symbol) => {{
+        use std::ops::Deref;
         $object.with(|object| match object {
-            Object::Symbol(symbol) => Ok(symbol.clone()),
+            Object::Symbol(symbol) => Ok(symbol.deref().clone()),
             object => Err(::vm::Error::Type {
                 expected: Type::Symbol,
                 recieved: Type::from(object),
             }),
         })?
-    };
-    ($object:expr, String) => {
+    }};
+    ($object:expr, String) => {{
+        use std::ops::Deref;
         $object.with(|object| match object {
-            Object::String(string) => Ok(string.clone()),
+            Object::String(string) => Ok(string.deref().clone()),
             object => Err(::vm::Error::Type {
                 expected: Type::String,
                 recieved: Type::from(object),
             }),
         })?
-    };
+    }};
     ($object:expr, Int) => {
         $object.with(|object| match object {
             Object::Int(i) => Ok(*i),

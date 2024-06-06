@@ -42,8 +42,8 @@ pub enum Error {
 
 #[derive(Clone, Debug, EnumAs, EnumIs, PartialEq, Eq, Hash)]
 pub enum Constant {
-    String(String),
-    Symbol(String),
+    String(Rc<String>),
+    Symbol(Rc<String>),
     Opcodes(Rc<[OpCode]>),
 }
 
@@ -93,7 +93,7 @@ pub enum UpValue {
 
 #[derive(Clone, Debug)]
 struct Frame {
-    function: Option<Lambda>,
+    function: Option<Rc<RefCell<Lambda>>>,
     pc: usize,
     bp: usize,
 }
@@ -109,7 +109,7 @@ pub struct Vm {
     constants: HashMap<u64, Constant, IdentityHasher>,
     stack: Vec<Value>,
     frames: Vec<Frame>,
-    current_function: Option<Lambda>,
+    current_function: Option<Rc<RefCell<Lambda>>>,
     pc: usize,
     bp: usize,
 }
@@ -149,7 +149,7 @@ impl Vm {
     pub fn eval(&mut self, opcodes: &[OpCode]) -> Result<Option<Value>, Error> {
         loop {
             let opcode = if let Some(function) = &self.current_function {
-                function.opcodes[self.pc]
+                function.borrow().opcodes[self.pc]
             } else if self.pc < opcodes.len() {
                 opcodes[self.pc]
             } else {
@@ -245,7 +245,9 @@ impl Vm {
                 .unwrap()
                 .as_symbol()
                 .cloned()
-                .unwrap(),
+                .unwrap()
+                .deref()
+                .clone(),
             val.into_object(),
         );
         self.stack.push(Value::Value(Object::Nil));
@@ -255,10 +257,14 @@ impl Vm {
     pub fn set_global(&mut self, constant: u64) -> Result<(), Error> {
         let val = self.stack.pop().unwrap();
 
-        if let Some(var) = self
-            .globals
-            .get_mut(self.constants.get(&constant).unwrap().as_symbol().unwrap())
-        {
+        if let Some(var) = self.globals.get_mut(
+            self.constants
+                .get(&constant)
+                .unwrap()
+                .as_symbol()
+                .unwrap()
+                .deref(),
+        ) {
             *var = val.clone().into_object();
             self.stack.push(val);
             Ok(())
@@ -269,16 +275,22 @@ impl Vm {
                     .unwrap()
                     .as_symbol()
                     .cloned()
-                    .unwrap(),
+                    .unwrap()
+                    .deref()
+                    .clone(),
             ))
         }
     }
 
     pub fn get_global(&mut self, constant: u64) -> Result<(), Error> {
-        if let Some(var) = self
-            .globals
-            .get(self.constants.get(&constant).unwrap().as_symbol().unwrap())
-        {
+        if let Some(var) = self.globals.get(
+            self.constants
+                .get(&constant)
+                .unwrap()
+                .as_symbol()
+                .unwrap()
+                .deref(),
+        ) {
             self.stack.push(Value::Value(var.clone()))
         } else {
             return Err(Error::NotFound(
@@ -287,7 +299,9 @@ impl Vm {
                     .unwrap()
                     .as_symbol()
                     .cloned()
-                    .unwrap(),
+                    .unwrap()
+                    .deref()
+                    .clone(),
             ));
         }
         Ok(())
@@ -316,13 +330,25 @@ impl Vm {
     pub fn set_upvalue(&mut self, upvalue: usize) -> Result<(), Error> {
         let val = self.stack.pop().unwrap();
 
-        *self.current_function.as_mut().unwrap().upvalues[upvalue].borrow_mut() = val.into_object();
+        *self
+            .current_function
+            .as_mut()
+            .unwrap()
+            .borrow_mut()
+            .upvalues[upvalue]
+            .borrow_mut() = val.into_object();
 
         Ok(())
     }
 
     pub fn get_upvalue(&mut self, upvalue: usize) -> Result<(), Error> {
-        let val = self.current_function.as_ref().unwrap().upvalues[upvalue].clone();
+        let val = self
+            .current_function
+            .as_ref()
+            .unwrap()
+            .borrow_mut()
+            .upvalues[upvalue]
+            .clone();
 
         self.stack.push(Value::UpValue(val));
 
@@ -337,7 +363,9 @@ impl Vm {
                 self.stack[self.bp + i] = Value::UpValue(rc.clone());
                 rc
             }
-            UpValue::UpValue(i) => self.current_function.as_ref().unwrap().upvalues[i].clone(),
+            UpValue::UpValue(i) => {
+                self.current_function.as_ref().unwrap().borrow().upvalues[i].clone()
+            }
         };
 
         let function = match self.stack.last_mut().unwrap() {
@@ -350,7 +378,7 @@ impl Vm {
             }
         };
 
-        function.upvalues.push(val);
+        function.borrow_mut().upvalues.push(val);
 
         Ok(())
     }
@@ -361,7 +389,7 @@ impl Vm {
             .into_object()
         {
             Object::Function(function) => {
-                match &function.arity {
+                match &function.borrow().arity {
                     Arity::Nullary if args != 0 => todo!(),
                     Arity::Nary(_) if args == 0 => todo!(),
                     _ => (),
@@ -429,7 +457,7 @@ impl Vm {
             upvalues: Vec::new(),
         };
 
-        let object = Object::Function(function);
+        let object = Object::Function(Rc::new(RefCell::new(function)));
 
         self.stack.push(Value::Value(object));
 
@@ -485,7 +513,7 @@ impl Vm {
 
     pub fn car(&mut self) -> Result<(), Error> {
         let car = match self.stack.pop().unwrap().into_object() {
-            Object::Cons(cons) => cons.0,
+            Object::Cons(cons) => Rc::unwrap_or_clone(cons).into_inner().0,
             object => {
                 return Err(Error::Type {
                     expected: Type::Cons,
@@ -501,7 +529,7 @@ impl Vm {
 
     pub fn cdr(&mut self) -> Result<(), Error> {
         let cdr = match self.stack.pop().unwrap().into_object() {
-            Object::Cons(cons) => cons.1,
+            Object::Cons(cons) => Rc::unwrap_or_clone(cons).into_inner().1,
             object => {
                 return Err(Error::Type {
                     expected: Type::Cons,
@@ -519,7 +547,10 @@ impl Vm {
         let rhs = self.stack.pop().unwrap();
         let lhs = self.stack.pop().unwrap();
 
-        let cons = Object::Cons(Box::new(Cons(lhs.into_object(), rhs.into_object())));
+        let cons = Object::Cons(Rc::new(RefCell::new(Cons(
+            lhs.into_object(),
+            rhs.into_object(),
+        ))));
 
         self.stack.push(Value::Value(cons));
 
@@ -634,10 +665,10 @@ impl Vm {
 
 fn make_list(objects: &[Value]) -> Value {
     if !objects.is_empty() {
-        Value::Value(Object::Cons(Box::new(Cons(
+        Value::Value(Object::Cons(Rc::new(RefCell::new(Cons(
             objects[0].clone().into_object(),
             make_list(&objects[1..]).into_object(),
-        ))))
+        )))))
     } else {
         Value::Value(Object::Nil)
     }
