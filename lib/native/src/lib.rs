@@ -16,6 +16,15 @@ macro_rules! check_arity {
 
 #[macro_export]
 macro_rules! check_type {
+    ($object:expr, Cons) => {{
+        $object.with(|object| match object {
+            Object::Cons(cons) => Ok(cons.clone()),
+            object => Err(::vm::Error::Type {
+                expected: Type::Cons,
+                recieved: Type::from(object),
+            }),
+        })?
+    }};
     ($object:expr, Symbol) => {{
         use std::ops::Deref;
         $object.with(|object| match object {
@@ -63,4 +72,6 @@ pub fn load_module(vm: &mut Vm) {
     vm.load_native_function("string->list", string::to_list);
     vm.load_native_function("string-lines", string::lines);
     vm.load_native_function("is-digit?", string::is_digit);
+    vm.load_native_function("list->string", string::from_list);
+    vm.load_native_function("string->int", string::parse);
 }

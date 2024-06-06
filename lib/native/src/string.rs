@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, rc::Rc, str::from_boxed_utf8_unchecked};
 
 use crate::{check_arity, check_type};
 use vm::{
@@ -23,6 +23,36 @@ pub fn to_list(objects: &mut [Value]) -> Result<Object, Error> {
     let string = check_type!(objects[0], String);
 
     Ok(make_list_of_char(string.chars()))
+}
+
+pub fn from_list(objects: &mut [Value]) -> Result<Object, Error> {
+    check_arity!("list->string", 1, objects);
+
+    let list = check_type!(objects[0], Cons);
+
+    let string: String = list
+        .borrow()
+        .iter_cars()
+        .map(|object| match object {
+            Object::Char(c) => Ok(c),
+            object => Err(Error::Type {
+                expected: Type::Char,
+                recieved: Type::from(&object),
+            }),
+        })
+        .collect::<Result<String, _>>()?;
+
+    Ok(Object::String(Rc::new(string)))
+}
+
+pub fn parse(objects: &mut [Value]) -> Result<Object, Error> {
+    check_arity!("string->int", 1, objects);
+
+    let string = check_type!(objects[0], String);
+
+    let i: i64 = string.parse().map_err(|e| Error::Other(Box::new(e)))?;
+
+    Ok(Object::Int(i))
 }
 
 pub fn lines(objects: &mut [Value]) -> Result<Object, Error> {
