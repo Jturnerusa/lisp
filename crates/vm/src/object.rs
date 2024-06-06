@@ -48,7 +48,7 @@ pub struct NativeFunction(pub(crate) Rc<dyn Fn(&mut [crate::Value]) -> Result<Ob
 pub struct Cons(pub Object, pub Object);
 
 #[derive(Clone, Debug)]
-pub struct IterCons(Option<Rc<RefCell<Cons>>>);
+pub struct IterCons(Option<Cons>);
 
 #[derive(Clone, Debug)]
 pub struct IterCars(IterCons);
@@ -196,15 +196,15 @@ impl Display for Object {
 }
 
 impl Iterator for IterCons {
-    type Item = Rc<RefCell<Cons>>;
+    type Item = Cons;
 
     fn next(&mut self) -> Option<Self::Item> {
         let current = self.0.take();
         self.0 = if let Some(current) = current.clone() {
-            match &current.borrow().deref().0 {
-                Object::Cons(cons) => Some(cons.clone()),
-                _ => None,
-            }
+            current
+                .0
+                .as_cons()
+                .map(|cons| cons.deref().borrow().clone())
         } else {
             None
         };
@@ -215,6 +215,6 @@ impl Iterator for IterCons {
 impl Iterator for IterCars {
     type Item = Object;
     fn next(&mut self) -> Option<Self::Item> {
-        self.0.next().map(|cons| cons.borrow().0.clone())
+        self.0.next().map(|cons| cons.0.clone())
     }
 }
