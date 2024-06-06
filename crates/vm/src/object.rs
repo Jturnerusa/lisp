@@ -53,6 +53,16 @@ pub struct IterCons(Option<Cons>);
 #[derive(Clone, Debug)]
 pub struct IterCars(IterCons);
 
+impl Cons {
+    pub fn iter(&self) -> IterCons {
+        IterCons(Some(self.clone()))
+    }
+
+    pub fn iter_cars(&self) -> IterCars {
+        IterCars(self.iter())
+    }
+}
+
 impl Lambda {
     pub fn arity(&self) -> Arity {
         self.arity
