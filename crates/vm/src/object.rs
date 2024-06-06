@@ -185,7 +185,7 @@ impl Display for NativeFunction {
 
 impl Display for Cons {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "({} {})", self.0, self.1)
+        write!(f, "{} {}", self.0, self.1)
     }
 }
 
@@ -194,7 +194,7 @@ impl Display for Object {
         match self {
             Self::NativeFunction(native_function) => write!(f, "{native_function}",),
             Self::Function(function) => write!(f, "{}", function.borrow()),
-            Self::Cons(cons) => write!(f, "{}", cons.borrow()),
+            Self::Cons(cons) => write!(f, "({})", cons.borrow()),
             Self::Symbol(symbol) => write!(f, "'{symbol}"),
             Self::String(string) => write!(f, r#""{string}""#),
             Self::Int(i) => write!(f, "{i}"),
