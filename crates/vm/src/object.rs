@@ -212,7 +212,7 @@ impl Iterator for IterCons {
         let current = self.0.take();
         self.0 = if let Some(current) = current.clone() {
             current
-                .0
+                .1
                 .as_cons()
                 .map(|cons| cons.deref().borrow().clone())
         } else {
