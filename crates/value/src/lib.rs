@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+use std::fmt::{self, Display};
 use unwrap_enum::{EnumAs, EnumIs};
 
 // A unified lisp value representation.
@@ -57,5 +58,24 @@ impl<'a> IntoIterator for &'a Cons {
     type IntoIter = Iter<'a>;
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
+    }
+}
+
+impl Display for Value {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Cons(cons) => write!(f, "{cons}"),
+            Self::Symbol(symbol) => write!(f, "'{symbol}"),
+            Self::String(string) => write!(f, r#""{string}""#),
+            Self::Int(i) => write!(f, "{i}"),
+            Self::True => write!(f, "true"),
+            Self::Nil => write!(f, "nil"),
+        }
+    }
+}
+
+impl Display for Cons {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "({} {})", self.0, self.1)
     }
 }
