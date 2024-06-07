@@ -23,6 +23,7 @@ pub enum Node<'a> {
 #[derive(Clone, Copy, Debug)]
 pub struct Parser<'a> {
     data: &'a str,
+    lines_read: usize,
 }
 
 fn parse_node(input: &str) -> Result<&str, Option<Node>> {
@@ -111,7 +112,14 @@ fn comment(input: &str) -> Result {
 
 impl<'a> Parser<'a> {
     pub fn new(input: &'a str) -> Self {
-        Self { data: input }
+        Self {
+            data: input,
+            lines_read: 0,
+        }
+    }
+
+    pub fn lines_read(&self) -> usize {
+        self.lines_read
     }
 }
 
@@ -121,6 +129,11 @@ impl<'a> Iterator for Parser<'a> {
         if !self.data.is_empty() {
             match parse_node(self.data) {
                 Ok((rest, Some(node))) => {
+                    let amt_read = self.data.as_bytes().len() - rest.as_bytes().len();
+                    self.lines_read += self.data.as_bytes()[..amt_read]
+                        .iter()
+                        .filter(|b| **b == b'\n')
+                        .count();
                     self.data = rest;
                     Some(Ok(node))
                 }
@@ -178,5 +191,16 @@ mod test {
         let input = ";comment";
         let mut parser = Parser::new(input);
         assert!(parser.next().is_none());
+    }
+
+    #[test]
+    fn test_line_count() {
+        let input = "; comment
+                     ; another comment
+                     1
+                     2";
+        let mut parser = Parser::new(input);
+        parser.next().unwrap().unwrap();
+        assert_eq!(parser.lines_read(), 3);
     }
 }
