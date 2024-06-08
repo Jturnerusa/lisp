@@ -4,7 +4,7 @@ use std::fmt::{self, Display};
 use unwrap_enum::{EnumAs, EnumIs};
 
 // A unified lisp value representation.
-#[derive(Clone, PartialEq, Eq, Debug, EnumAs, EnumIs)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug, EnumAs, EnumIs)]
 pub enum Value {
     Cons(Box<Cons>),
     Symbol(String),
@@ -14,7 +14,7 @@ pub enum Value {
     Nil,
 }
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Cons(pub Value, pub Value);
 
 pub struct Iter<'a>(Option<&'a Cons>);
