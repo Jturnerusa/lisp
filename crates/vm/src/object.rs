@@ -42,7 +42,7 @@ pub struct Lambda {
 
 #[allow(clippy::type_complexity)]
 #[derive(Clone)]
-pub struct NativeFunction(pub(crate) Rc<dyn Fn(&mut [crate::Value]) -> Result<Object, Error>>);
+pub struct NativeFunction(pub(crate) Rc<dyn Fn(&mut [crate::Local]) -> Result<Object, Error>>);
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Cons(pub Object, pub Object);
@@ -72,7 +72,7 @@ impl Lambda {
 impl NativeFunction {
     pub fn new<F>(f: F) -> Self
     where
-        F: Fn(&mut [crate::Value]) -> Result<Object, Error> + 'static,
+        F: Fn(&mut [crate::Local]) -> Result<Object, Error> + 'static,
     {
         Self(Rc::new(f))
     }

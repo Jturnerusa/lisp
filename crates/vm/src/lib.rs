@@ -99,7 +99,7 @@ struct Frame {
 }
 
 #[derive(Clone, Debug, EnumAs, EnumIs)]
-pub enum Value {
+pub enum Local {
     Value(Object),
     UpValue(Rc<RefCell<Object>>),
 }
@@ -107,7 +107,7 @@ pub enum Value {
 pub struct Vm {
     globals: HashMap<String, Object>,
     constants: HashMap<u64, Constant, IdentityHasher>,
-    stack: Vec<Value>,
+    stack: Vec<Local>,
     frames: Vec<Frame>,
     current_function: Option<Rc<RefCell<Lambda>>>,
     pc: usize,
@@ -139,14 +139,14 @@ impl Vm {
 
     pub fn load_native_function<F>(&mut self, name: &str, f: F)
     where
-        F: Fn(&mut [Value]) -> Result<Object, Error> + 'static,
+        F: Fn(&mut [Local]) -> Result<Object, Error> + 'static,
     {
         let native_function = NativeFunction::new(f);
         self.globals
             .insert(name.to_string(), Object::NativeFunction(native_function));
     }
 
-    pub fn eval(&mut self, opcodes: &[OpCode]) -> Result<Option<Value>, Error> {
+    pub fn eval(&mut self, opcodes: &[OpCode]) -> Result<Option<Local>, Error> {
         loop {
             let opcode = if let Some(function) = &self.current_function {
                 function.borrow().opcodes[self.pc]
@@ -183,7 +183,7 @@ impl Vm {
                         .cloned()
                         .unwrap();
                     self.stack
-                        .push(Value::Value(Object::Symbol(symbol_value.clone())));
+                        .push(Local::Value(Object::Symbol(symbol_value.clone())));
                 }
                 OpCode::PushString(string) => {
                     let string_value = self
@@ -194,12 +194,12 @@ impl Vm {
                         .cloned()
                         .unwrap();
                     self.stack
-                        .push(Value::Value(Object::String(string_value.clone())));
+                        .push(Local::Value(Object::String(string_value.clone())));
                 }
-                OpCode::PushInt(i) => self.stack.push(Value::Value(Object::Int(i))),
-                OpCode::PushChar(c) => self.stack.push(Value::Value(Object::Char(c))),
-                OpCode::PushTrue => self.stack.push(Value::Value(Object::True)),
-                OpCode::PushNil => self.stack.push(Value::Value(Object::Nil)),
+                OpCode::PushInt(i) => self.stack.push(Local::Value(Object::Int(i))),
+                OpCode::PushChar(c) => self.stack.push(Local::Value(Object::Char(c))),
+                OpCode::PushTrue => self.stack.push(Local::Value(Object::True)),
+                OpCode::PushNil => self.stack.push(Local::Value(Object::Nil)),
                 OpCode::Pop => {
                     self.stack.pop().unwrap();
                 }
@@ -225,15 +225,15 @@ impl Vm {
         }
     }
 
-    pub fn peek(&self, i: usize) -> Option<&Value> {
+    pub fn peek(&self, i: usize) -> Option<&Local> {
         self.stack.get(self.stack.len() - i - 1)
     }
 
     pub fn push(&mut self, object: Object) {
-        self.stack.push(Value::Value(object));
+        self.stack.push(Local::Value(object));
     }
 
-    pub fn pop(&mut self) -> Option<Value> {
+    pub fn pop(&mut self) -> Option<Local> {
         self.stack.pop()
     }
 
@@ -250,7 +250,7 @@ impl Vm {
                 .clone(),
             val.into_object(),
         );
-        self.stack.push(Value::Value(Object::Nil));
+        self.stack.push(Local::Value(Object::Nil));
         Ok(())
     }
 
@@ -291,7 +291,7 @@ impl Vm {
                 .unwrap()
                 .deref(),
         ) {
-            self.stack.push(Value::Value(var.clone()))
+            self.stack.push(Local::Value(var.clone()))
         } else {
             return Err(Error::NotFound(
                 self.constants
@@ -311,8 +311,8 @@ impl Vm {
         let val = self.stack.pop().unwrap();
         let i = self.bp + local;
         match &mut self.stack[i] {
-            Value::Value(_) => self.stack[i] = val.clone(),
-            Value::UpValue(inner) => {
+            Local::Value(_) => self.stack[i] = val.clone(),
+            Local::UpValue(inner) => {
                 *inner.borrow_mut() = val.clone().into_object();
             }
         }
@@ -350,7 +350,7 @@ impl Vm {
             .upvalues[upvalue]
             .clone();
 
-        self.stack.push(Value::UpValue(val));
+        self.stack.push(Local::UpValue(val));
 
         Ok(())
     }
@@ -360,7 +360,7 @@ impl Vm {
             UpValue::Local(i) => {
                 let val = self.stack[self.bp + i].clone().into_object();
                 let rc = Rc::new(RefCell::new(val));
-                self.stack[self.bp + i] = Value::UpValue(rc.clone());
+                self.stack[self.bp + i] = Local::UpValue(rc.clone());
                 rc
             }
             UpValue::UpValue(i) => {
@@ -369,7 +369,7 @@ impl Vm {
         };
 
         let function = match self.stack.last_mut().unwrap() {
-            Value::Value(Object::Function(function)) => function,
+            Local::Value(Object::Function(function)) => function,
             value => {
                 return Err(Error::Type {
                     expected: Type::Function,
@@ -416,7 +416,7 @@ impl Vm {
 
                 match ret {
                     Ok(val) => {
-                        self.stack.push(Value::Value(val));
+                        self.stack.push(Local::Value(val));
                         Ok(())
                     }
                     Err(e) => Err(e),
@@ -459,7 +459,7 @@ impl Vm {
 
         let object = Object::Function(Rc::new(RefCell::new(function)));
 
-        self.stack.push(Value::Value(object));
+        self.stack.push(Local::Value(object));
 
         Ok(())
     }
@@ -490,7 +490,7 @@ impl Vm {
 
         let result = Object::Int(f(a, b));
 
-        self.stack.push(Value::Value(result));
+        self.stack.push(Local::Value(result));
 
         Ok(())
     }
@@ -522,7 +522,7 @@ impl Vm {
             }
         };
 
-        self.stack.push(Value::Value(car));
+        self.stack.push(Local::Value(car));
 
         Ok(())
     }
@@ -538,7 +538,7 @@ impl Vm {
             }
         };
 
-        self.stack.push(Value::Value(cdr));
+        self.stack.push(Local::Value(cdr));
 
         Ok(())
     }
@@ -552,7 +552,7 @@ impl Vm {
             rhs.into_object(),
         ))));
 
-        self.stack.push(Value::Value(cons));
+        self.stack.push(Local::Value(cons));
 
         Ok(())
     }
@@ -586,9 +586,9 @@ impl Vm {
     pub fn is_type(&mut self, ty: Type) -> Result<(), Error> {
         self.stack.push(
             if Type::from(&self.stack.last().unwrap().clone().into_object()) == ty {
-                Value::Value(Object::True)
+                Local::Value(Object::True)
             } else {
-                Value::Value(Object::Nil)
+                Local::Value(Object::Nil)
             },
         );
         Ok(())
@@ -606,9 +606,9 @@ impl Vm {
         let lhs = self.stack.pop().unwrap();
 
         self.stack.push(if lhs.into_object() == rhs.into_object() {
-            Value::Value(Object::True)
+            Local::Value(Object::True)
         } else {
-            Value::Value(Object::Nil)
+            Local::Value(Object::Nil)
         });
 
         Ok(())
@@ -624,8 +624,8 @@ impl Vm {
                 .into_object()
                 .partial_cmp(&rhs.clone().into_object())
             {
-                Some(Ordering::Less) => Value::Value(Object::True),
-                Some(_) => Value::Value(Object::Nil),
+                Some(Ordering::Less) => Local::Value(Object::True),
+                Some(_) => Local::Value(Object::Nil),
                 None => {
                     return Err(Error::Cmp(
                         Type::from(&lhs.into_object()),
@@ -648,8 +648,8 @@ impl Vm {
                 .into_object()
                 .partial_cmp(&rhs.clone().into_object())
             {
-                Some(Ordering::Greater) => Value::Value(Object::True),
-                Some(_) => Value::Value(Object::Nil),
+                Some(Ordering::Greater) => Local::Value(Object::True),
+                Some(_) => Local::Value(Object::Nil),
                 None => {
                     return Err(Error::Cmp(
                         Type::from(&lhs.into_object()),
@@ -663,18 +663,18 @@ impl Vm {
     }
 }
 
-fn make_list(objects: &[Value]) -> Value {
+fn make_list(objects: &[Local]) -> Local {
     if !objects.is_empty() {
-        Value::Value(Object::Cons(Rc::new(RefCell::new(Cons(
+        Local::Value(Object::Cons(Rc::new(RefCell::new(Cons(
             objects[0].clone().into_object(),
             make_list(&objects[1..]).into_object(),
         )))))
     } else {
-        Value::Value(Object::Nil)
+        Local::Value(Object::Nil)
     }
 }
 
-impl Value {
+impl Local {
     pub fn into_object(self) -> Object {
         match self {
             Self::Value(object) => object,
