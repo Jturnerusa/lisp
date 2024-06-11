@@ -19,6 +19,9 @@ pub struct Reader<'a> {
     parser: Parser<'a>,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct ReaderWithLines<'a>(Reader<'a>);
+
 impl<'a> Reader<'a> {
     pub fn new(input: &'a str) -> Self {
         Self {
@@ -87,10 +90,23 @@ impl<'a> Reader<'a> {
     }
 }
 
+impl<'a> ReaderWithLines<'a> {
+    pub fn new(input: &'a str) -> Self {
+        Self(Reader::new(input))
+    }
+}
+
 impl<'a> Iterator for Reader<'a> {
     type Item = Result<Value, Error>;
     fn next(&mut self) -> Option<Self::Item> {
         self.read()
+    }
+}
+
+impl<'a> Iterator for ReaderWithLines<'a> {
+    type Item = (Result<Value, Error>, usize);
+    fn next(&mut self) -> Option<Self::Item> {
+        Some((self.0.read()?, self.0.lines_read()))
     }
 }
 
