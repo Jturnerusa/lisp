@@ -14,6 +14,7 @@ pub enum Error {
     ParseError(String),
 }
 
+#[derive(Clone, Copy, Debug)]
 pub struct Reader<'a> {
     parser: Parser<'a>,
 }
