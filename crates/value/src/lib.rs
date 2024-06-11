@@ -1,10 +1,10 @@
 #![allow(dead_code)]
 
-use std::fmt::{self, Display};
+use std::fmt::{self, Debug, Display};
 use unwrap_enum::{EnumAs, EnumIs};
 
 // A unified lisp value representation.
-#[derive(Clone, PartialEq, Eq, Hash, Debug, EnumAs, EnumIs)]
+#[derive(Clone, PartialEq, Eq, Hash, EnumAs, EnumIs)]
 pub enum Value {
     Cons(Box<Cons>),
     Symbol(String),
@@ -14,7 +14,7 @@ pub enum Value {
     Nil,
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Cons(pub Value, pub Value);
 
 pub struct Iter<'a>(Option<&'a Cons>);
@@ -58,6 +58,18 @@ impl<'a> IntoIterator for &'a Cons {
     type IntoIter = Iter<'a>;
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
+    }
+}
+
+impl Debug for Value {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{self}")
+    }
+}
+
+impl Debug for Cons {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{self}")
     }
 }
 
