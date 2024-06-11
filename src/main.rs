@@ -1,11 +1,12 @@
 use compiler::Compiler;
 use identity_hasher::IdentityHasher;
-use reader::Reader;
-use std::collections::HashMap;
+use reader::ReaderWithLines;
 use std::env;
 use std::error::Error;
 use std::fs::File;
 use std::io::Read;
+use std::path::PathBuf;
+use std::{collections::HashMap, path::Path};
 use vm::{Arity, Constant, OpCode, Vm};
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -17,8 +18,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     native_functions::load_module(&mut vm);
 
     for arg in env::args().skip(1).filter(|arg| !arg.starts_with("--")) {
-        let file = File::open(arg)?;
-        compile_file(file, &mut compiler, &mut opcodes, &mut constants)?;
+        eval_file(
+            PathBuf::from(arg).as_path(),
+            &mut compiler,
+            &mut opcodes,
+            &mut constants,
+            &mut vm,
+        )?;
     }
 
     if env::args().any(|arg| arg == "--disasm") {
@@ -31,20 +37,34 @@ fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn compile_file(
-    mut file: File,
+fn eval_file(
+    path: &Path,
     compiler: &mut Compiler,
     opcodes: &mut Vec<OpCode>,
     constants: &mut HashMap<u64, Constant, IdentityHasher>,
+    vm: &mut Vm,
 ) -> Result<(), Box<dyn Error>> {
+    let mut file = File::open(path)?;
+
     let mut buff = String::new();
+
     file.read_to_string(&mut buff)?;
 
-    let reader = Reader::new(buff.as_str());
+    let reader = ReaderWithLines::new(buff.as_str());
 
-    for read in reader {
+    for (read, line) in reader {
         let value = read?;
+        opcodes.clear();
+        constants.clear();
+
         compiler.compile(&value, opcodes, constants)?;
+
+        vm.load_constants(constants.values().cloned());
+
+        match vm.eval(opcodes.as_slice()) {
+            Ok(_) => continue,
+            Err(e) => return Err(format!("{}:{}: {e}", path.to_str().unwrap(), line).into()),
+        }
     }
 
     Ok(())
