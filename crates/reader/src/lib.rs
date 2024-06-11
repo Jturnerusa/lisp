@@ -25,6 +25,10 @@ impl<'a> Reader<'a> {
         }
     }
 
+    pub fn lines_read(&self) -> usize {
+        self.parser.lines_read()
+    }
+
     fn read(&mut self) -> Option<Result<Value, Error>> {
         self.read_atom()
     }
