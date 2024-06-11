@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-#![feature(let_chains)]
+#![feature(let_chains, box_patterns)]
 
 mod environment;
 
@@ -24,8 +24,24 @@ type ConstantTable = HashMap<u64, Constant, IdentityHasher>;
 pub enum Error {
     #[error("compiler error: {0}")]
     Compiler(String),
+    #[error("invalid form: {0}")]
+    Form(String, Form, Value),
     #[error("vm error {0}")]
     Vm(#[from] vm::Error),
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum Form {
+    EvalWhenCompile,
+    DefMacro,
+    Lambda,
+    Quote,
+    If,
+    Def,
+    Set,
+    List,
+    Binary,
+    Unary,
 }
 
 pub struct Compiler {
@@ -50,211 +66,218 @@ impl Compiler {
         opcodes: &mut Vec<OpCode>,
         constants: &mut ConstantTable,
     ) -> Result<(), Error> {
-        // eval-when-compile
-        if let Value::Cons(cons) = value
-            && cons.iter_cars().count() > 1
-            && cons
-                .iter_cars()
-                .nth(0)
-                .unwrap()
-                .as_symbol()
-                .is_some_and(|symbol| symbol == "eval-when-compile")
-        {
-            let exprs = cons.iter().nth(1).unwrap();
-            self.eval_when_compile(exprs, opcodes, constants)
-        }
-        // defmacro
-        else if let Value::Cons(cons) = value
-            && cons.iter_cars().count() == 4
-            && cons
-                .iter_cars()
-                .nth(0)
-                .unwrap()
-                .as_symbol()
-                .is_some_and(|symbol| symbol == "defmacro")
-            && let Value::Symbol(name) = cons.iter_cars().nth(1).unwrap()
-            && let Value::Cons(_) | Value::Nil = cons.iter_cars().nth(2).unwrap()
-        {
-            let parameters = match cons.iter_cars().nth(2).unwrap() {
-                Value::Cons(cons) => cons
-                    .iter_cars()
-                    .map(|car| car.as_symbol().cloned())
-                    .collect::<Option<Vec<String>>>()
-                    .ok_or_else(|| Error::Compiler("".to_string()))?,
-                Value::Nil => Vec::new(),
-                _ => unreachable!(),
-            };
-            let body = cons.iter_cars().nth(3).unwrap();
-            self.compile_defmacro(name.as_str(), parameters.into_iter(), body)
-        }
-        // lambda
-        else if let Value::Cons(cons) = value
-            && cons.iter_cars().count() > 2
-            && cons
-                .iter_cars()
-                .nth(0)
-                .unwrap()
-                .as_symbol()
-                .is_some_and(|s| s == "lambda")
-            && let Value::Cons(_) | Value::Nil = cons.iter_cars().nth(1).unwrap()
-        {
-            let parameters = match cons.iter_cars().nth(1).unwrap() {
-                Value::Cons(cons) => cons
-                    .iter_cars()
-                    .map(|car| car.as_symbol().cloned())
-                    .collect::<Option<Vec<String>>>()
-                    .ok_or_else(|| Error::Compiler("".to_string()))?,
-                Value::Nil => Vec::new(),
-                _ => unreachable!(),
-            };
-            let exprs = cons.iter().nth(2).unwrap();
-            self.compile_lambda(parameters.into_iter(), exprs, opcodes, constants)
-        }
-        // def
-        else if let Value::Cons(cons) = value
-            && cons.iter_cars().count() == 3
-            && cons
-                .iter_cars()
-                .nth(0)
-                .unwrap()
-                .as_symbol()
-                .is_some_and(|symbol| symbol == "def")
-            && let Value::Symbol(name) = cons.iter_cars().nth(1).unwrap()
-        {
-            let expr = cons.iter_cars().nth(2).unwrap();
-            self.compile_def(name.as_str(), expr, opcodes, constants)
-        }
-        //set
-        else if let Value::Cons(cons) = value
-            && cons.iter_cars().count() == 3
-            && cons
-                .iter_cars()
-                .nth(0)
-                .unwrap()
-                .as_symbol()
-                .is_some_and(|symbol| symbol == "set")
-            && let Value::Symbol(name) = cons.iter_cars().nth(1).unwrap()
-        {
-            let expr = cons.iter_cars().nth(2).unwrap();
-            self.compile_set(name, expr, opcodes, constants)
-        }
-        // if
-        else if let Value::Cons(cons) = value
-            && cons.iter_cars().count() == 4
-            && cons
-                .iter_cars()
-                .nth(0)
-                .unwrap()
-                .as_symbol()
-                .is_some_and(|symbol| symbol == "if")
-        {
-            let predicate = cons.iter_cars().nth(1).unwrap();
-            let then = cons.iter_cars().nth(2).unwrap();
-            let els = cons.iter_cars().nth(3).unwrap();
-            self.compile_branch(predicate, then, els, opcodes, constants)
-        }
-        // quote
-        else if let Value::Cons(cons) = value
-            && cons.iter_cars().count() == 2
-            && cons
-                .iter_cars()
-                .nth(0)
-                .unwrap()
-                .as_symbol()
-                .is_some_and(|symbol| symbol == "quote")
-        {
-            self.quote(cons.iter_cars().nth(1).unwrap(), opcodes, constants)
-        }
-        //list
-        else if let Value::Cons(cons) = value
-            && cons.iter_cars().count() > 0
-            && let Value::Cons(exprs) = &cons.deref().1
-            && cons
-                .iter_cars()
-                .nth(0)
-                .unwrap()
-                .as_symbol()
-                .is_some_and(|symbol| symbol == "list")
-        {
-            self.compile_list(exprs, opcodes, constants)
-        }
-        // binary ops
-        else if let Value::Cons(cons) = value
-            && cons.iter_cars().count() == 3
-            && cons
-                .iter_cars()
-                .nth(0)
-                .unwrap()
-                .as_symbol()
-                .is_some_and(|symbol| {
-                    matches!(
-                        symbol.as_str(),
-                        "+" | "-" | "*" | "/" | "cons" | "=" | ">" | "<"
+        match value {
+            Value::Cons(box Cons(Value::Symbol(symbol), _)) if symbol == "eval-when-compile" => {
+                if value.as_cons().unwrap().iter_cars().count() < 2 {
+                    Err(Error::Form(
+                        "invalid number of expressions".to_string(),
+                        Form::EvalWhenCompile,
+                        value.clone(),
+                    ))
+                } else {
+                    self.eval_when_compile(
+                        value.as_cons().unwrap().iter().nth(1).unwrap(),
+                        opcodes,
+                        constants,
                     )
-                })
-        {
-            let lhs = cons.iter_cars().nth(1).unwrap();
-            let rhs = cons.iter_cars().nth(2).unwrap();
-            self.compile_binary_op(
-                lhs,
-                rhs,
-                match cons
+                }
+            }
+            Value::Cons(box Cons(Value::Symbol(symbol), _)) if symbol == "defmacro" => {
+                if value.as_cons().unwrap().iter_cars().count() < 4 {
+                    return Err(Error::Form(
+                        "invalid number of expressions".to_string(),
+                        Form::DefMacro,
+                        value.clone(),
+                    ));
+                };
+                let defmacro_name = value
+                    .as_cons()
+                    .unwrap()
                     .iter_cars()
-                    .nth(0)
+                    .nth(1)
                     .unwrap()
                     .as_symbol()
+                    .ok_or(Error::Form(
+                        "non-symbol expression in defmacro name position".to_string(),
+                        Form::DefMacro,
+                        value.clone(),
+                    ))?;
+                let parameters = match value.as_cons().unwrap().iter_cars().nth(2).unwrap() {
+                    Value::Cons(parameters) => parameters
+                        .iter_cars()
+                        .map(|car| car.as_symbol().cloned())
+                        .collect::<Option<Vec<_>>>()
+                        .ok_or(Error::Form(
+                            "non-symbol expression in parameter list".to_string(),
+                            Form::DefMacro,
+                            value.clone(),
+                        ))?,
+                    Value::Nil => Vec::new(),
+                    _ => todo!(),
+                };
+                let body = value.as_cons().unwrap().iter_cars().nth(3).unwrap();
+                self.compile_defmacro(defmacro_name, parameters.into_iter(), body)
+            }
+            Value::Cons(box Cons(Value::Symbol(symbol), _)) if symbol == "lambda" => {
+                if value.as_cons().unwrap().iter_cars().count() < 3 {
+                    return Err(Error::Form(
+                        "invalid number of expressions".to_string(),
+                        Form::Lambda,
+                        value.clone(),
+                    ));
+                }
+                let parameters = match value.as_cons().unwrap().iter_cars().nth(1).unwrap() {
+                    Value::Cons(parameters) => parameters
+                        .iter_cars()
+                        .map(|car| car.as_symbol().cloned())
+                        .collect::<Option<Vec<_>>>()
+                        .ok_or(Error::Form(
+                            "non-symbol expression in parameter list".to_string(),
+                            Form::Lambda,
+                            value.clone(),
+                        ))?,
+                    Value::Nil => Vec::new(),
+                    _ => todo!(),
+                };
+                let exprs = value.as_cons().unwrap().iter().nth(2).unwrap();
+                self.compile_lambda(parameters.into_iter(), exprs, opcodes, constants)
+            }
+            Value::Cons(box Cons(Value::Symbol(symbol), _)) if symbol == "def" => {
+                if value.as_cons().unwrap().iter_cars().count() != 3 {
+                    return Err(Error::Form(
+                        "invalid number of expressions".to_string(),
+                        Form::Def,
+                        value.clone(),
+                    ));
+                }
+                let name = value
+                    .as_cons()
                     .unwrap()
-                    .as_str()
-                {
+                    .iter_cars()
+                    .nth(1)
+                    .unwrap()
+                    .as_symbol()
+                    .ok_or(Error::Form(
+                        "non-symbol expression as def name".to_string(),
+                        Form::Def,
+                        value.clone(),
+                    ))?;
+                let expr = value.as_cons().unwrap().iter_cars().nth(2).unwrap();
+                self.compile_def(name, expr, opcodes, constants)
+            }
+            Value::Cons(box Cons(Value::Symbol(symbol), _)) if symbol == "set" => {
+                if value.as_cons().unwrap().iter_cars().count() != 3 {
+                    return Err(Error::Form(
+                        "invalid number of expressions".to_string(),
+                        Form::Set,
+                        value.clone(),
+                    ));
+                }
+                let name = value
+                    .as_cons()
+                    .unwrap()
+                    .iter_cars()
+                    .nth(1)
+                    .unwrap()
+                    .as_symbol()
+                    .ok_or(Error::Form(
+                        "non-symbol expression as def name".to_string(),
+                        Form::Set,
+                        value.clone(),
+                    ))?;
+                let expr = value.as_cons().unwrap().iter_cars().nth(2).unwrap();
+                self.compile_set(name, expr, opcodes, constants)
+            }
+            Value::Cons(box Cons(Value::Symbol(symbol), _)) if symbol == "if" => {
+                if value.as_cons().unwrap().iter_cars().count() != 4 {
+                    return Err(Error::Form(
+                        "invalid number of expressions".to_string(),
+                        Form::If,
+                        value.clone(),
+                    ));
+                }
+                let predicate = value.as_cons().unwrap().iter_cars().nth(1).unwrap();
+                let then = value.as_cons().unwrap().iter_cars().nth(2).unwrap();
+                let r#else = value.as_cons().unwrap().iter_cars().nth(3).unwrap();
+                self.compile_branch(predicate, then, r#else, opcodes, constants)
+            }
+            Value::Cons(box Cons(Value::Symbol(symbol), _)) if symbol == "quote" => {
+                if value.as_cons().unwrap().iter_cars().count() != 2 {
+                    return Err(Error::Form(
+                        "invalid number of expressions".to_string(),
+                        Form::Quote,
+                        value.clone(),
+                    ));
+                }
+                self.quote(
+                    value.as_cons().unwrap().iter_cars().nth(1).unwrap(),
+                    opcodes,
+                    constants,
+                )
+            }
+            Value::Cons(box Cons(Value::Symbol(symbol), _)) if symbol == "list" => {
+                if value.as_cons().unwrap().iter_cars().count() < 2 {
+                    return Err(Error::Form(
+                        "invalid number of expressions".to_string(),
+                        Form::List,
+                        value.clone(),
+                    ));
+                }
+                let exprs = value.as_cons().unwrap().iter().nth(1).unwrap();
+                self.compile_list(exprs, opcodes, constants)
+            }
+            Value::Cons(box Cons(Value::Symbol(symbol), _))
+                if matches!(
+                    symbol.as_str(),
+                    "+" | "-" | "*" | "/" | "cons" | "=" | "<" | ">"
+                ) =>
+            {
+                if value.as_cons().unwrap().iter_cars().count() != 3 {
+                    return Err(Error::Form(
+                        "invalid number of expressions".to_string(),
+                        Form::Binary,
+                        value.clone(),
+                    ));
+                }
+                let lhs = value.as_cons().unwrap().iter_cars().nth(1).unwrap();
+                let rhs = value.as_cons().unwrap().iter_cars().nth(2).unwrap();
+                let op = match symbol.as_str() {
                     "+" => OpCode::Add,
                     "-" => OpCode::Sub,
                     "*" => OpCode::Mul,
                     "/" => OpCode::Div,
                     "cons" => OpCode::Cons,
                     "=" => OpCode::Eq,
-                    ">" => OpCode::Gt,
                     "<" => OpCode::Lt,
+                    ">" => OpCode::Gt,
                     _ => unreachable!(),
-                },
-                opcodes,
-                constants,
-            )
-        }
-        // unary ops
-        else if let Value::Cons(cons) = value
-            && cons.iter_cars().count() == 2
-            && cons
-                .iter_cars()
-                .nth(0)
-                .unwrap()
-                .as_symbol()
-                .is_some_and(|symbol| {
-                    matches!(
-                        symbol.as_str(),
-                        "car"
-                            | "cdr"
-                            | "cons?"
-                            | "lambda?"
-                            | "symbol?"
-                            | "string?"
-                            | "int?"
-                            | "true?"
-                            | "nil?"
-                            | "assert"
-                    )
-                })
-        {
-            let expr = cons.iter_cars().nth(1).unwrap();
-            self.compile_unary_op(
-                expr,
-                match cons
-                    .iter_cars()
-                    .nth(0)
-                    .unwrap()
-                    .as_symbol()
-                    .unwrap()
-                    .as_str()
-                {
+                };
+                self.compile_binary_op(lhs, rhs, op, opcodes, constants)
+            }
+            Value::Cons(box Cons(Value::Symbol(symbol), _))
+                if matches!(
+                    symbol.as_str(),
+                    "car"
+                        | "cdr"
+                        | "cons?"
+                        | "lambda?"
+                        | "symbol?"
+                        | "string?"
+                        | "int?"
+                        | "true?"
+                        | "nil?"
+                        | "assert"
+                ) =>
+            {
+                if value.as_cons().unwrap().iter_cars().count() != 2 {
+                    return Err(Error::Form(
+                        "invalid number of expressions".to_string(),
+                        Form::Unary,
+                        value.clone(),
+                    ));
+                }
+                let expr = value.as_cons().unwrap().iter_cars().nth(1).unwrap();
+                let op = match symbol.as_str() {
                     "car" => OpCode::Car,
                     "cdr" => OpCode::Cdr,
                     "cons?" => OpCode::IsType(Type::Cons),
@@ -266,48 +289,29 @@ impl Compiler {
                     "nil?" => OpCode::IsType(Type::Nil),
                     "assert" => OpCode::Assert,
                     _ => unreachable!(),
-                },
-                opcodes,
-                constants,
-            )
-        }
-        // eval macro
-        else if let Value::Cons(cons) = value
-            && let Value::Cons(exprs) = &cons.deref().1
-            && cons.iter_cars().count() > 0
-            && let Value::Symbol(name) = cons.iter_cars().nth(0).unwrap()
-            && self.macros.contains_key(name)
-        {
-            self.eval_macro(name, exprs, opcodes, constants)
-        }
-        // fncall
-        else if let Value::Cons(cons) = value {
-            self.compile_fncall(cons, opcodes, constants)
-        }
-        // int
-        else if let Value::Int(i) = value {
-            opcodes.push(OpCode::PushInt(*i));
-            Ok(())
-        }
-        // symbol
-        else if let Value::Symbol(symbol) = value {
-            self.compile_symbol(symbol.as_str(), opcodes, constants)
-        }
-        // string
-        else if let Value::String(string) = value {
-            self.compile_string(string.as_str(), opcodes, constants)
-        }
-        // true
-        else if let Value::True = value {
-            opcodes.push(OpCode::PushTrue);
-            Ok(())
-        }
-        // nil
-        else if let Value::Nil = value {
-            opcodes.push(OpCode::PushNil);
-            Ok(())
-        } else {
-            unreachable!()
+                };
+                self.compile_unary_op(expr, op, opcodes, constants)
+            }
+            Value::Cons(box Cons(Value::Symbol(symbol), Value::Cons(exprs)))
+                if self.macros.contains_key(symbol) =>
+            {
+                self.eval_macro(symbol, exprs, opcodes, constants)
+            }
+            Value::Cons(cons) => self.compile_fncall(cons, opcodes, constants),
+            Value::Symbol(symbol) => self.compile_symbol(symbol, opcodes, constants),
+            Value::String(string) => self.compile_string(string, opcodes, constants),
+            Value::Int(i) => {
+                opcodes.push(OpCode::PushInt(*i));
+                Ok(())
+            }
+            Value::True => {
+                opcodes.push(OpCode::PushTrue);
+                Ok(())
+            }
+            Value::Nil => {
+                opcodes.push(OpCode::PushNil);
+                Ok(())
+            }
         }
     }
 
