@@ -216,25 +216,25 @@ fn test_upvalues() {
 #[test]
 fn test_string_split() {
     let input = include_str!("lisp/string-split.lisp");
-    assert!(dbg!(eval(input)).is_ok());
+    assert!(eval(input).is_ok());
 }
 
 #[test]
 fn test_length() {
     let input = include_str!("lisp/length.lisp");
-    assert!(dbg!(eval(input).is_ok()));
+    assert!(eval(input).is_ok());
 }
 
 #[test]
 fn test_nth() {
     let input = include_str!("lisp/nth.lisp");
-    assert!(dbg!(eval(input).is_ok()));
+    assert!(eval(input).is_ok());
 }
 
 #[test]
 fn test_last() {
     let input = include_str!("lisp/last.lisp");
-    assert!(dbg!(eval(input).is_ok()));
+    assert!(eval(input).is_ok());
 }
 
 #[test]
