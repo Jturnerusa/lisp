@@ -242,3 +242,9 @@ fn test_parallel_let() {
     let input = include_str!("lisp/parallel-let.lisp");
     assert!(eval(input).is_ok());
 }
+
+#[test]
+fn test_hashmap() {
+    let input = include_str!("lisp/hashmap.lisp");
+    assert!(eval(input).is_ok());
+}
