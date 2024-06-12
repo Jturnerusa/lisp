@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, ops::DerefMut, rc::Rc};
 
 use crate::{check_arity, check_type};
 use vm::{
@@ -76,21 +76,32 @@ pub fn is_digit(objects: &mut [Local]) -> Result<Object, Error> {
 }
 
 fn make_list_of_string(mut strings: impl Iterator<Item = String>) -> Object {
-    match strings.next() {
-        Some(string) => Object::Cons(Rc::new(RefCell::new(Cons(
-            Object::String(Rc::new(string)),
-            make_list_of_string(strings),
-        )))),
-        None => Object::Nil,
+    let Some(first) = strings.next() else {
+        return Object::Nil;
+    };
+    let mut tail = Rc::new(RefCell::new(Cons(
+        Object::String(Rc::new(first)),
+        Object::Nil,
+    )));
+    let list = Object::Cons(tail.clone());
+    for s in strings {
+        let new_tail = Rc::new(RefCell::new(Cons(Object::String(Rc::new(s)), Object::Nil)));
+        tail.borrow_mut().1 = Object::Cons(new_tail.clone());
+        tail = new_tail;
     }
+    list
 }
 
 fn make_list_of_char(mut chars: impl Iterator<Item = char>) -> Object {
-    match chars.next() {
-        Some(c) => Object::Cons(Rc::new(RefCell::new(Cons(
-            Object::Char(c),
-            make_list_of_char(chars),
-        )))),
-        None => Object::Nil,
+    let Some(first) = chars.next() else {
+        return Object::Nil;
+    };
+    let mut tail = Rc::new(RefCell::new(Cons(Object::Char(first), Object::Nil)));
+    let list = Object::Cons(tail.clone());
+    for c in chars {
+        let new_tail = Rc::new(RefCell::new(Cons(Object::Char(c), Object::Nil)));
+        tail.borrow_mut().1 = Object::Cons(new_tail.clone());
+        tail = new_tail;
     }
+    list
 }
