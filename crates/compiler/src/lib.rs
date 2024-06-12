@@ -6,7 +6,6 @@ mod environment;
 use std::{
     collections::HashMap,
     hash::{Hash, Hasher},
-    ops::Deref,
     rc::Rc,
 };
 
@@ -42,6 +41,7 @@ pub enum Form {
     List,
     Binary,
     Unary,
+    MapInsert,
 }
 
 pub struct Compiler {
@@ -229,7 +229,7 @@ impl Compiler {
             Value::Cons(box Cons(Value::Symbol(symbol), _))
                 if matches!(
                     symbol.as_str(),
-                    "+" | "-" | "*" | "/" | "cons" | "=" | "<" | ">"
+                    "+" | "-" | "*" | "/" | "cons" | "=" | "<" | ">" | "map-retrieve"
                 ) =>
             {
                 if value.as_cons().unwrap().iter_cars().count() != 3 {
@@ -250,6 +250,7 @@ impl Compiler {
                     "=" => OpCode::Eq,
                     "<" => OpCode::Lt,
                     ">" => OpCode::Gt,
+                    "map-retrieve" => OpCode::MapRetrieve,
                     _ => unreachable!(),
                 };
                 self.compile_binary_op(lhs, rhs, op, opcodes, constants)
@@ -296,6 +297,23 @@ impl Compiler {
                 if self.macros.contains_key(symbol) =>
             {
                 self.eval_macro(symbol, exprs, opcodes, constants)
+            }
+            Value::Cons(box Cons(Value::Symbol(symbol), _)) if symbol == "map-create" => {
+                opcodes.push(OpCode::MapCreate);
+                Ok(())
+            }
+            Value::Cons(box Cons(Value::Symbol(symbol), _)) if symbol == "map-insert" => {
+                if value.as_cons().unwrap().iter_cars().count() != 4 {
+                    return Err(Error::Form(
+                        "invalid number of expressions".to_string(),
+                        Form::MapInsert,
+                        value.clone(),
+                    ));
+                }
+                let map = value.as_cons().unwrap().iter_cars().nth(1).unwrap();
+                let key = value.as_cons().unwrap().iter_cars().nth(2).unwrap();
+                let val = value.as_cons().unwrap().iter_cars().nth(3).unwrap();
+                self.compile_map_insert(map, key, val, opcodes, constants)
             }
             Value::Cons(cons) => self.compile_fncall(cons, opcodes, constants),
             Value::Symbol(symbol) => self.compile_symbol(symbol, opcodes, constants),
@@ -696,6 +714,21 @@ impl Compiler {
 
         opcodes.push(OpCode::PushString(hash));
 
+        Ok(())
+    }
+
+    fn compile_map_insert(
+        &mut self,
+        map: &Value,
+        key: &Value,
+        val: &Value,
+        opcodes: &mut Vec<OpCode>,
+        constants: &mut ConstantTable,
+    ) -> Result<(), Error> {
+        self.compile(map, opcodes, constants)?;
+        self.compile(key, opcodes, constants)?;
+        self.compile(val, opcodes, constants)?;
+        opcodes.push(OpCode::MapInsert);
         Ok(())
     }
 }
