@@ -695,9 +695,9 @@ impl Local {
         }
     }
 
-    pub fn with_mut<T, F>(&mut self, mut f: F) -> T
+    pub fn with_mut<T, F>(&mut self, f: F) -> T
     where
-        F: FnMut(&mut Object) -> T,
+        F: FnOnce(&mut Object) -> T,
     {
         match self {
             Self::Value(object) => f(object),
