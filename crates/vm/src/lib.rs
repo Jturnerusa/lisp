@@ -4,6 +4,7 @@ pub mod object;
 
 use crate::object::{Cons, Lambda, NativeFunction, Type};
 use identity_hasher::IdentityHasher;
+use object::HashMapKey;
 use std::cell::RefCell;
 use std::cmp::{Ordering, PartialOrd};
 use std::collections::HashMap;
@@ -36,6 +37,8 @@ pub enum Error {
     Assert(String),
     #[error("cannot compare this combination of types: {0} {1}")]
     Cmp(Type, Type),
+    #[error("cannot make hashmap key from type: {0}")]
+    HashKey(Type),
     #[error("other error: {0}")]
     Other(#[from] Box<dyn std::error::Error>),
 }
@@ -83,6 +86,9 @@ pub enum OpCode {
     Lt,
     Gt,
     Eq,
+    MapCreate,
+    MapInsert,
+    MapRetrieve,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -220,6 +226,9 @@ impl Vm {
                 OpCode::Eq => self.eq()?,
                 OpCode::Lt => self.lt()?,
                 OpCode::Gt => self.gt()?,
+                OpCode::MapCreate => self.map_create()?,
+                OpCode::MapInsert => self.map_insert()?,
+                OpCode::MapRetrieve => self.map_retrieve()?,
                 _ => todo!(),
             }
         }
@@ -658,6 +667,61 @@ impl Vm {
                 }
             },
         );
+
+        Ok(())
+    }
+
+    pub fn map_create(&mut self) -> Result<(), Error> {
+        let map = Object::HashMap(Rc::new(RefCell::new(HashMap::new())));
+        self.stack.push(Local::Value(map));
+        Ok(())
+    }
+
+    pub fn map_insert(&mut self) -> Result<(), Error> {
+        let rhs = self.stack.pop().unwrap();
+        let lhs = self.stack.pop().unwrap();
+        let mut map = self.stack.pop().unwrap();
+
+        let key = match lhs.with(|object| HashMapKey::try_from(object)) {
+            Ok(key) => key,
+            Err(_) => return Err(Error::HashKey(rhs.with(|object| Type::from(object)))),
+        };
+
+        map.with_mut(|object| match object {
+            Object::HashMap(hm) => {
+                hm.borrow_mut().insert(key, rhs.into_object());
+                Ok(())
+            }
+            object => Err(Error::Type {
+                expected: Type::Map,
+                recieved: Type::from(&*object),
+            }),
+        })?;
+
+        Ok(())
+    }
+
+    fn map_retrieve(&mut self) -> Result<(), Error> {
+        let val = self.stack.pop().unwrap();
+        let map = self.stack.pop().unwrap();
+
+        let key = match val.with(|object| HashMapKey::try_from(object)) {
+            Ok(key) => key,
+            Err(_) => return Err(Error::HashKey(val.with(|object| Type::from(object)))),
+        };
+
+        let ret = map.with(|object| match object {
+            Object::HashMap(hm) => Ok(hm.borrow().get(&key).cloned()),
+            object => Err(Error::Type {
+                expected: Type::Map,
+                recieved: Type::from(object),
+            }),
+        })?;
+
+        self.stack.push(Local::Value(match ret {
+            Some(obj) => obj,
+            None => Object::Nil,
+        }));
 
         Ok(())
     }

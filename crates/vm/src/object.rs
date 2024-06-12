@@ -1,6 +1,7 @@
 use crate::{Arity, Error, OpCode};
 use std::cell::RefCell;
 use std::cmp::Ordering;
+use std::collections::HashMap;
 use std::fmt::{self, Debug, Display};
 use std::ops::Deref;
 use std::rc::Rc;
@@ -11,6 +12,7 @@ use value::Value;
 pub enum Type {
     Function,
     Cons,
+    Map,
     String,
     Symbol,
     Int,
@@ -20,11 +22,22 @@ pub enum Type {
     Predicate,
 }
 
-#[derive(Clone, Debug, EnumAs, EnumIs, PartialEq)]
+#[derive(Clone, Debug, EnumAs, EnumIs, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum HashMapKey {
+    String(Rc<String>),
+    Symbol(Rc<String>),
+    Int(i64),
+    Char(char),
+    True,
+    Nil,
+}
+
+#[derive(Clone, Debug, EnumAs, EnumIs)]
 pub enum Object {
     NativeFunction(NativeFunction),
     Function(Rc<RefCell<Lambda>>),
     Cons(Rc<RefCell<Cons>>),
+    HashMap(Rc<RefCell<HashMap<HashMapKey, Object>>>),
     String(Rc<String>),
     Symbol(Rc<String>),
     Int(i64),
@@ -101,6 +114,7 @@ impl From<&Object> for Type {
         match value {
             Object::Function(_) | Object::NativeFunction(_) => Type::Function,
             Object::Cons(_) => Type::Cons,
+            Object::HashMap(_) => Type::Map,
             Object::String(_) => Type::String,
             Object::Symbol(_) => Type::Symbol,
             Object::Int(_) => Type::Int,
@@ -116,6 +130,7 @@ impl fmt::Display for Type {
         match self {
             Self::Function => write!(f, "function"),
             Self::Cons => write!(f, "cons"),
+            Self::Map => write!(f, "map"),
             Self::Symbol => write!(f, "symbol"),
             Self::String => write!(f, "string"),
             Self::Int => write!(f, "int"),
@@ -151,6 +166,20 @@ impl TryFrom<&Cons> for value::Cons {
             Value::try_from(&value.0)?,
             Value::try_from(&value.1)?,
         ))
+    }
+}
+
+impl PartialEq for Object {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Object::Cons(a), Object::Cons(b)) => a == b,
+            (Object::String(a), Object::String(b)) => a == b,
+            (Object::Symbol(a), Object::Symbol(b)) => a == b,
+            (Object::Int(a), Object::Int(b)) => a == b,
+            (Object::True, Object::True) => true,
+            (Object::Nil, Object::Nil) => true,
+            _ => false,
+        }
     }
 }
 
@@ -195,10 +224,29 @@ impl Display for Object {
             Self::NativeFunction(native_function) => write!(f, "{native_function}",),
             Self::Function(function) => write!(f, "{}", function.borrow()),
             Self::Cons(cons) => write!(f, "({})", cons.borrow()),
+            Self::HashMap(map) => {
+                for (key, val) in map.borrow().iter() {
+                    write!(f, "{key} => {val}, ")?;
+                }
+                Ok(())
+            }
             Self::Symbol(symbol) => write!(f, "'{symbol}"),
             Self::String(string) => write!(f, r#""{string}""#),
             Self::Int(i) => write!(f, "{i}"),
             Self::Char(c) => write!(f, r#"'{c}'"#),
+            Self::True => write!(f, "true"),
+            Self::Nil => write!(f, "nil"),
+        }
+    }
+}
+
+impl Display for HashMapKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::String(string) => write!(f, r#""{string}""#),
+            Self::Symbol(symbol) => write!(f, "'{symbol}"),
+            Self::Char(c) => write!(f, "'{c}'"),
+            Self::Int(i) => write!(f, "{i}"),
             Self::True => write!(f, "true"),
             Self::Nil => write!(f, "nil"),
         }
@@ -226,5 +274,20 @@ impl Iterator for IterCars {
     type Item = Object;
     fn next(&mut self) -> Option<Self::Item> {
         self.0.next().map(|cons| cons.0.clone())
+    }
+}
+
+impl TryFrom<&Object> for HashMapKey {
+    type Error = ();
+    fn try_from(value: &Object) -> Result<Self, Self::Error> {
+        Ok(match value {
+            Object::Symbol(symbol) => Self::Symbol(symbol.clone()),
+            Object::String(string) => Self::String(string.clone()),
+            Object::Char(c) => Self::Char(*c),
+            Object::Int(i) => Self::Int(*i),
+            Object::True => Self::True,
+            Object::Nil => Self::Nil,
+            _ => return Err(()),
+        })
     }
 }
