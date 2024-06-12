@@ -27,13 +27,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         )?;
     }
 
-    if env::args().any(|arg| arg == "--disasm") {
-        disasm(&opcodes, &constants, 0);
-    } else {
-        vm.load_constants(constants.into_values());
-        vm.eval(opcodes.as_slice())?;
-    }
-
     Ok(())
 }
 
