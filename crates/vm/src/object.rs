@@ -226,7 +226,7 @@ impl Display for Object {
             Self::Cons(cons) => write!(f, "({})", cons.borrow()),
             Self::HashMap(map) => {
                 for (key, val) in map.borrow().iter() {
-                    write!(f, "{key} => {val}, ")?;
+                    writeln!(f, "{key} => {val},")?;
                 }
                 Ok(())
             }
