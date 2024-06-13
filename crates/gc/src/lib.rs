@@ -38,17 +38,19 @@ pub fn collect() {
         unsafe {
             cursor = current.as_ref().next.get();
             if current.as_ref().refs.get() == 0 {
-                if let Some(prev) = current.as_ref().prev.get() {
-                    prev.as_ref().next.set(current.as_ref().next.get());
-                    if let Some(next) = current.as_ref().next.get() {
-                        next.as_ref().prev.set(Some(prev))
-                    }
-                } else {
-                    HEAD.set(current.as_ref().next.get());
-                    if let Some(next) = current.as_ref().next.get() {
-                        next.as_ref().prev.set(HEAD.get());
-                    }
+                let next = current.as_ref().next.get();
+                let prev = current.as_ref().prev.get();
+
+                if let Some(next) = next {
+                    next.as_ref().prev.set(prev);
                 }
+
+                if let Some(prev) = prev {
+                    prev.as_ref().next.set(next);
+                } else {
+                    HEAD.set(next);
+                }
+
                 std::mem::drop(Box::from_raw(current.as_ptr()));
             }
         }
