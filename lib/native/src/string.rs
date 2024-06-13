@@ -1,6 +1,6 @@
-use std::{cell::RefCell, ops::DerefMut, rc::Rc};
-
 use crate::{check_arity, check_type};
+use gc::Gc;
+use std::{cell::RefCell, ops::DerefMut, rc::Rc};
 use vm::{
     object::{Cons, Type},
     Error, Local, Object,
@@ -42,7 +42,7 @@ pub fn from_list(objects: &mut [Local]) -> Result<Object, Error> {
         })
         .collect::<Result<String, _>>()?;
 
-    Ok(Object::String(Rc::new(string)))
+    Ok(Object::String(Gc::new(string)))
 }
 
 pub fn parse(objects: &mut [Local]) -> Result<Object, Error> {
@@ -79,13 +79,13 @@ fn make_list_of_string(mut strings: impl Iterator<Item = String>) -> Object {
     let Some(first) = strings.next() else {
         return Object::Nil;
     };
-    let mut tail = Rc::new(RefCell::new(Cons(
-        Object::String(Rc::new(first)),
+    let mut tail = Gc::new(RefCell::new(Cons(
+        Object::String(Gc::new(first)),
         Object::Nil,
     )));
     let list = Object::Cons(tail.clone());
     for s in strings {
-        let new_tail = Rc::new(RefCell::new(Cons(Object::String(Rc::new(s)), Object::Nil)));
+        let new_tail = Gc::new(RefCell::new(Cons(Object::String(Gc::new(s)), Object::Nil)));
         tail.borrow_mut().1 = Object::Cons(new_tail.clone());
         tail = new_tail;
     }
@@ -96,10 +96,10 @@ fn make_list_of_char(mut chars: impl Iterator<Item = char>) -> Object {
     let Some(first) = chars.next() else {
         return Object::Nil;
     };
-    let mut tail = Rc::new(RefCell::new(Cons(Object::Char(first), Object::Nil)));
+    let mut tail = Gc::new(RefCell::new(Cons(Object::Char(first), Object::Nil)));
     let list = Object::Cons(tail.clone());
     for c in chars {
-        let new_tail = Rc::new(RefCell::new(Cons(Object::Char(c), Object::Nil)));
+        let new_tail = Gc::new(RefCell::new(Cons(Object::Char(c), Object::Nil)));
         tail.borrow_mut().1 = Object::Cons(new_tail.clone());
         tail = new_tail;
     }

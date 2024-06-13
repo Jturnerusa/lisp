@@ -3,6 +3,7 @@
 pub mod object;
 
 use crate::object::{Cons, Lambda, NativeFunction, Type};
+use gc::Gc;
 use identity_hasher::IdentityHasher;
 use object::HashMapKey;
 use std::cell::RefCell;
@@ -11,7 +12,6 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 use std::ops::{Deref, DerefMut};
-use std::rc::Rc;
 use thiserror::Error;
 use unwrap_enum::{EnumAs, EnumIs};
 use xxhash::Xxh3;
@@ -45,9 +45,9 @@ pub enum Error {
 
 #[derive(Clone, Debug, EnumAs, EnumIs, PartialEq, Eq, Hash)]
 pub enum Constant {
-    String(Rc<String>),
-    Symbol(Rc<String>),
-    Opcodes(Rc<[OpCode]>),
+    String(Gc<String>),
+    Symbol(Gc<String>),
+    Opcodes(Gc<[OpCode]>),
 }
 
 #[derive(Clone, Copy, Debug, EnumAs, EnumIs, PartialEq, Eq, Hash)]
@@ -99,7 +99,7 @@ pub enum UpValue {
 
 #[derive(Clone, Debug)]
 struct Frame {
-    function: Option<Rc<RefCell<Lambda>>>,
+    function: Option<Gc<RefCell<Lambda>>>,
     pc: usize,
     bp: usize,
 }
@@ -107,7 +107,7 @@ struct Frame {
 #[derive(Clone, Debug, EnumAs, EnumIs)]
 pub enum Local {
     Value(Object),
-    UpValue(Rc<RefCell<Object>>),
+    UpValue(Gc<RefCell<Object>>),
 }
 
 pub struct Vm {
@@ -115,7 +115,7 @@ pub struct Vm {
     constants: HashMap<u64, Constant, IdentityHasher>,
     stack: Vec<Local>,
     frames: Vec<Frame>,
-    current_function: Option<Rc<RefCell<Lambda>>>,
+    current_function: Option<Gc<RefCell<Lambda>>>,
     pc: usize,
     bp: usize,
 }
@@ -368,9 +368,9 @@ impl Vm {
         let val = match upvalue {
             UpValue::Local(i) => {
                 let val = self.stack[self.bp + i].clone().into_object();
-                let rc = Rc::new(RefCell::new(val));
-                self.stack[self.bp + i] = Local::UpValue(rc.clone());
-                rc
+                let gc = Gc::new(RefCell::new(val));
+                self.stack[self.bp + i] = Local::UpValue(gc.clone());
+                gc
             }
             UpValue::UpValue(i) => {
                 self.current_function.as_ref().unwrap().borrow().upvalues[i].clone()
@@ -466,7 +466,7 @@ impl Vm {
             upvalues: Vec::new(),
         };
 
-        let object = Object::Function(Rc::new(RefCell::new(function)));
+        let object = Object::Function(Gc::new(RefCell::new(function)));
 
         self.stack.push(Local::Value(object));
 
@@ -522,7 +522,7 @@ impl Vm {
 
     pub fn car(&mut self) -> Result<(), Error> {
         let car = match self.stack.pop().unwrap().into_object() {
-            Object::Cons(cons) => Rc::unwrap_or_clone(cons).into_inner().0,
+            Object::Cons(cons) => cons.borrow().0.clone(),
             object => {
                 return Err(Error::Type {
                     expected: Type::Cons,
@@ -538,7 +538,7 @@ impl Vm {
 
     pub fn cdr(&mut self) -> Result<(), Error> {
         let cdr = match self.stack.pop().unwrap().into_object() {
-            Object::Cons(cons) => Rc::unwrap_or_clone(cons).into_inner().1,
+            Object::Cons(cons) => cons.borrow().1.clone(),
             object => {
                 return Err(Error::Type {
                     expected: Type::Cons,
@@ -556,7 +556,7 @@ impl Vm {
         let rhs = self.stack.pop().unwrap();
         let lhs = self.stack.pop().unwrap();
 
-        let cons = Object::Cons(Rc::new(RefCell::new(Cons(
+        let cons = Object::Cons(Gc::new(RefCell::new(Cons(
             lhs.into_object(),
             rhs.into_object(),
         ))));
@@ -672,7 +672,7 @@ impl Vm {
     }
 
     pub fn map_create(&mut self) -> Result<(), Error> {
-        let map = Object::HashMap(Rc::new(RefCell::new(HashMap::new())));
+        let map = Object::HashMap(Gc::new(RefCell::new(HashMap::new())));
         self.stack.push(Local::Value(map));
         Ok(())
     }
@@ -729,7 +729,7 @@ impl Vm {
 
 fn make_list(objects: &[Local]) -> Local {
     if !objects.is_empty() {
-        Local::Value(Object::Cons(Rc::new(RefCell::new(Cons(
+        Local::Value(Object::Cons(Gc::new(RefCell::new(Cons(
             objects[0].clone().into_object(),
             make_list(&objects[1..]).into_object(),
         )))))

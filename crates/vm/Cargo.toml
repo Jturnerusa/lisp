@@ -7,5 +7,6 @@ edition = "2021"
 value = { path = "../value" }
 xxhash = { path = "../xxhash" }
 identity-hasher = { path = "../identity-hasher" }
+gc = { path = "../gc" }
 unwrap-enum = { workspace = true }
 thiserror = "1.0.61"

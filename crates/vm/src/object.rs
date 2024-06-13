@@ -1,9 +1,11 @@
 use crate::{Arity, Error, OpCode};
+use gc::{Gc, Trace};
 use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fmt::{self, Debug, Display};
 use std::ops::Deref;
+use std::ptr::NonNull;
 use std::rc::Rc;
 use unwrap_enum::{EnumAs, EnumIs};
 use value::Value;
@@ -24,8 +26,8 @@ pub enum Type {
 
 #[derive(Clone, Debug, EnumAs, EnumIs, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum HashMapKey {
-    String(Rc<String>),
-    Symbol(Rc<String>),
+    String(Gc<String>),
+    Symbol(Gc<String>),
     Int(i64),
     Char(char),
     True,
@@ -35,11 +37,11 @@ pub enum HashMapKey {
 #[derive(Clone, Debug, EnumAs, EnumIs)]
 pub enum Object {
     NativeFunction(NativeFunction),
-    Function(Rc<RefCell<Lambda>>),
-    Cons(Rc<RefCell<Cons>>),
-    HashMap(Rc<RefCell<HashMap<HashMapKey, Object>>>),
-    String(Rc<String>),
-    Symbol(Rc<String>),
+    Function(Gc<RefCell<Lambda>>),
+    Cons(Gc<RefCell<Cons>>),
+    HashMap(Gc<RefCell<HashMap<HashMapKey, Object>>>),
+    String(Gc<String>),
+    Symbol(Gc<String>),
     Int(i64),
     Char(char),
     True,
@@ -49,8 +51,8 @@ pub enum Object {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Lambda {
     pub(crate) arity: Arity,
-    pub(crate) opcodes: Rc<[OpCode]>,
-    pub(crate) upvalues: Vec<Rc<RefCell<Object>>>,
+    pub(crate) opcodes: Gc<[OpCode]>,
+    pub(crate) upvalues: Vec<Gc<RefCell<Object>>>,
 }
 
 #[allow(clippy::type_complexity)]
@@ -146,9 +148,9 @@ impl TryFrom<&Object> for Value {
     type Error = ();
     fn try_from(object: &Object) -> Result<Self, Self::Error> {
         Ok(match object {
-            Object::Cons(cons) => {
-                Value::Cons(Box::new(value::Cons::try_from(cons.borrow().deref())?))
-            }
+            Object::Cons(cons) => Value::Cons(Box::new(value::Cons::try_from(
+                cons.deref().borrow().deref(),
+            )?)),
             Object::String(string) => Value::String(string.deref().clone()),
             Object::Symbol(symbol) => Value::Symbol(symbol.deref().clone()),
             Object::Int(i) => Value::Int(*i),
@@ -222,10 +224,10 @@ impl Display for Object {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::NativeFunction(native_function) => write!(f, "{native_function}",),
-            Self::Function(function) => write!(f, "{}", function.borrow()),
-            Self::Cons(cons) => write!(f, "({})", cons.borrow()),
+            Self::Function(function) => write!(f, "{}", function.deref().borrow()),
+            Self::Cons(cons) => write!(f, "({})", cons.deref().borrow()),
             Self::HashMap(map) => {
-                for (key, val) in map.borrow().iter() {
+                for (key, val) in map.deref().borrow().iter() {
                     writeln!(f, "{key} => {val},")?;
                 }
                 Ok(())
@@ -289,5 +291,44 @@ impl TryFrom<&Object> for HashMapKey {
             Object::Nil => Self::Nil,
             _ => return Err(()),
         })
+    }
+}
+
+unsafe impl Trace for OpCode {
+    unsafe fn trace(&self, _: &mut dyn FnMut(NonNull<gc::Inner<dyn Trace>>)) {}
+}
+
+unsafe impl Trace for HashMapKey {
+    unsafe fn trace(&self, tracer: &mut dyn FnMut(NonNull<gc::Inner<dyn Trace>>)) {
+        match self {
+            Self::Symbol(symbol) => symbol.trace(tracer),
+            Self::String(string) => string.trace(tracer),
+            _ => (),
+        }
+    }
+}
+
+unsafe impl Trace for Lambda {
+    unsafe fn trace(&self, tracer: &mut dyn FnMut(NonNull<gc::Inner<dyn Trace>>)) {
+        self.upvalues.trace(tracer);
+    }
+}
+
+unsafe impl Trace for Cons {
+    unsafe fn trace(&self, tracer: &mut dyn FnMut(NonNull<gc::Inner<dyn Trace>>)) {
+        self.0.trace(tracer);
+        self.1.trace(tracer);
+    }
+}
+
+unsafe impl Trace for Object {
+    unsafe fn trace(&self, tracer: &mut dyn FnMut(NonNull<gc::Inner<dyn Trace>>)) {
+        match self {
+            Object::Function(function) => function.trace(tracer),
+            Object::Cons(cons) => cons.trace(tracer),
+            Object::Symbol(symbol) => symbol.trace(tracer),
+            Object::String(string) => string.trace(tracer),
+            _ => (),
+        }
     }
 }
