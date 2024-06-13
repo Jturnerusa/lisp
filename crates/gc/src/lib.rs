@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::hash::Hash;
 use std::marker::PhantomData;
 use std::ops::Deref;
-use std::ptr::{self, NonNull};
+use std::ptr::{self, addr_of_mut, NonNull};
 
 thread_local! {
     pub static HEAD: Cell<Option<NonNull<Inner<dyn Trace>>>> = Cell::new(None);
@@ -161,31 +161,6 @@ impl<T: Trace + Hash + ?Sized> Hash for Gc<T> {
 impl<T: Trace + fmt::Display> fmt::Display for Gc<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         unsafe { write!(f, "{}", self.inner.as_ref().data) }
-    }
-}
-
-impl<T: Trace> From<Vec<T>> for Gc<[T]> {
-    fn from(value: Vec<T>) -> Self {
-        unsafe {
-            let layout = Layout::new::<Inner<T>>()
-                .extend(Layout::array::<T>(value.len()).unwrap())
-                .unwrap();
-            let inner_ptr = std::alloc::alloc(layout.0);
-            let inner = ptr::slice_from_raw_parts(inner_ptr, value.len()) as *mut Inner<[T]>;
-
-            let (vec_ptr, len, cap) = value.into_raw_parts();
-
-            ptr::copy_nonoverlapping(vec_ptr, ptr::addr_of_mut!((*inner).data).cast(), len);
-
-            std::mem::drop(Vec::from_raw_parts(vec_ptr, 0, cap));
-
-            let nonnull = NonNull::new(inner).unwrap();
-
-            Self {
-                inner: nonnull,
-                phantom: PhantomData,
-            }
-        }
     }
 }
 
