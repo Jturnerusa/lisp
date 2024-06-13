@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::hash::Hash;
 use std::marker::PhantomData;
 use std::ops::Deref;
-use std::ptr::{self, addr_of, NonNull};
+use std::ptr::{self, NonNull};
 
 thread_local! {
     pub static HEAD: Cell<Option<NonNull<Inner<dyn Trace>>>> = Cell::new(None);
