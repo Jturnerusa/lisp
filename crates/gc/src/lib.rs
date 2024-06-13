@@ -36,7 +36,6 @@ pub fn collect() {
     let mut cursor = HEAD.get();
     while let Some(current) = cursor {
         unsafe {
-            cursor = current.as_ref().next.get();
             if current.as_ref().refs.get() == 0 {
                 let next = current.as_ref().next.get();
                 let prev = current.as_ref().prev.get();
@@ -52,6 +51,10 @@ pub fn collect() {
                 }
 
                 std::mem::drop(Box::from_raw(current.as_ptr()));
+
+                cursor = HEAD.get();
+            } else {
+                cursor = current.as_ref().next.get();
             }
         }
     }
