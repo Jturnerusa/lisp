@@ -736,6 +736,7 @@ impl Compiler {
 
 fn hash_constant(constant: &Constant) -> u64 {
     let mut hasher = Xxh3Hash64::with_seed(0);
+    constant.hash(&mut hasher);
     hasher.finish()
 }
 
