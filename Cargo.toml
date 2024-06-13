@@ -1,5 +1,5 @@
 [workspace]
-members = ["lib/native"]
+members = [ "crates/gc","lib/native"]
 
 [workspace.dependencies]
 unwrap-enum = { path = "../unwrap-enum" }
