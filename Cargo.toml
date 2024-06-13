@@ -17,3 +17,4 @@ compiler = { path = "crates/compiler" }
 vm = { path = "crates/vm" }
 identity-hasher = { path = "crates/identity-hasher" }
 native-functions = { path = "lib/native" }
+gc = { path = "crates/gc" }

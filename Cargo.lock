@@ -66,6 +66,7 @@ name = "lisp"
 version = "0.0.1"
 dependencies = [
  "compiler",
+ "gc",
  "identity-hasher",
  "native-functions",
  "reader",
