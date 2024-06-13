@@ -12,6 +12,7 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 use std::ops::{Deref, DerefMut};
+use std::rc::Rc;
 use thiserror::Error;
 use twox_hash::Xxh3Hash64;
 use unwrap_enum::{EnumAs, EnumIs};
@@ -47,7 +48,7 @@ pub enum Error {
 pub enum Constant {
     String(Gc<String>),
     Symbol(Gc<String>),
-    Opcodes(Gc<[OpCode]>),
+    Opcodes(Rc<[OpCode]>),
 }
 
 #[derive(Clone, Copy, Debug, EnumAs, EnumIs, PartialEq, Eq, Hash)]
