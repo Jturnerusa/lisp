@@ -13,10 +13,10 @@ use gc::Gc;
 use environment::{Environment, Variable};
 use identity_hasher::IdentityHasher;
 use thiserror::Error;
+use twox_hash::Xxh3Hash64;
 use value::{Cons, Value};
 use vm::object::Type;
 use vm::{Arity, Constant, OpCode, Vm};
-use xxhash::Xxh3;
 
 type ConstantTable = HashMap<u64, Constant, IdentityHasher>;
 
@@ -735,8 +735,7 @@ impl Compiler {
 }
 
 fn hash_constant(constant: &Constant) -> u64 {
-    let mut hasher = Xxh3::new(0).unwrap();
-    constant.hash(&mut hasher);
+    let mut hasher = Xxh3Hash64::with_seed(0);
     hasher.finish()
 }
 

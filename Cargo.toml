@@ -3,6 +3,7 @@ members = [ "crates/gc","lib/native"]
 
 [workspace.dependencies]
 unwrap-enum = { path = "../unwrap-enum" }
+twox-hash = "=1.6.3"
 
 [package]
 name = "lisp"

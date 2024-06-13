@@ -6,8 +6,8 @@ edition = "2021"
 [dependencies]
 value = { path = "../value" }
 vm = { path = "../vm" }
-xxhash = { path = "../xxhash" }
 identity-hasher = { path = "../identity-hasher" }
 gc = { path = "../gc" }
 unwrap-enum = { workspace = true }
+twox-hash = { workspace = true }
 thiserror = "1.0.61"

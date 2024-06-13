@@ -13,8 +13,8 @@ use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 use std::ops::{Deref, DerefMut};
 use thiserror::Error;
+use twox_hash::Xxh3Hash64;
 use unwrap_enum::{EnumAs, EnumIs};
-use xxhash::Xxh3;
 
 pub use crate::object::Object;
 
@@ -136,7 +136,7 @@ impl Vm {
 
     pub fn load_constants(&mut self, constants: impl Iterator<Item = Constant>) {
         for constant in constants {
-            let mut hasher = Xxh3::new(0).unwrap();
+            let mut hasher = Xxh3Hash64::with_seed(0);
             constant.hash(&mut hasher);
             let hash = hasher.finish();
             self.constants.insert(hash, constant);
