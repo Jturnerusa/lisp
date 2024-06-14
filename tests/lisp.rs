@@ -296,3 +296,10 @@ fn test_nthcdr() {
     assert!(eval(input).is_ok());
     gc::collect();
 }
+
+#[test]
+fn test_find() {
+    let input = include_str!("lisp/find.lisp");
+    assert!(eval(input).is_ok());
+    gc::collect();
+}

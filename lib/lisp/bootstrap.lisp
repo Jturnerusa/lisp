@@ -97,4 +97,13 @@
   (def nth-cdr (lambda (list n)
                  (if (= n 0)
                      list
-                     (nth-cdr (cdr list) (- n 1))))))
+                     (nth-cdr (cdr list) (- n 1)))))
+
+  (def find (lambda (list pred)
+              (let ((loop (lambda (list pred counter loop)
+                            (if (nil? list)
+                                nil
+                                (if (pred (car list))
+                                    counter
+                                    (loop (cdr list) pred (+ counter 1) loop))))))
+                (loop list pred 0 loop)))))
