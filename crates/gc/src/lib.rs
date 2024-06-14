@@ -1,8 +1,9 @@
 use core::fmt;
-use std::cell::{Cell, RefCell};
+use std::cell::{Cell, RefCell, UnsafeCell};
 use std::collections::HashMap;
 use std::hash::{BuildHasher, Hash};
 use std::marker::PhantomData;
+use std::mem::ManuallyDrop;
 use std::ops::Deref;
 use std::ptr::NonNull;
 
@@ -20,7 +21,8 @@ pub struct Inner<T: Trace + ?Sized> {
     next: Cell<Option<NonNull<Inner<dyn Trace>>>>,
     prev: Cell<Option<NonNull<Inner<dyn Trace>>>>,
     refs: Cell<usize>,
-    data: T,
+    dropped: Cell<bool>,
+    data: UnsafeCell<ManuallyDrop<T>>,
 }
 
 #[derive(Debug)]
@@ -63,7 +65,8 @@ impl<T: Trace> Inner<T> {
             next: Cell::new(None),
             prev: Cell::new(None),
             refs: Cell::new(1),
-            data,
+            dropped: Cell::new(false),
+            data: UnsafeCell::new(ManuallyDrop::new(data)),
         }
     }
 }
@@ -116,15 +119,15 @@ impl<T: Trace + ?Sized> Drop for Gc<T> {
 impl<T: Trace + ?Sized> Deref for Gc<T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
-        unsafe { &self.inner.as_ref().data }
+        unsafe { &self.inner.as_ref().data.get().as_ref().unwrap() }
     }
 }
 
 impl<T: Trace + PartialEq + ?Sized> PartialEq for Gc<T> {
     fn eq(&self, other: &Self) -> bool {
         unsafe {
-            let a = &self.inner.as_ref().data;
-            let b = &other.inner.as_ref().data;
+            let a = &self.inner.as_ref().data.get().as_ref().unwrap();
+            let b = &other.inner.as_ref().data.get().as_ref().unwrap();
             a == b
         }
     }
@@ -135,8 +138,8 @@ impl<T: Trace + Eq + ?Sized> Eq for Gc<T> {}
 impl<T: Trace + PartialOrd + ?Sized> PartialOrd for Gc<T> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         unsafe {
-            let a = &self.inner.as_ref().data;
-            let b = &other.inner.as_ref().data;
+            let a = &self.inner.as_ref().data.get().as_ref().unwrap();
+            let b = &other.inner.as_ref().data.get().as_ref().unwrap();
             a.partial_cmp(b)
         }
     }
@@ -145,8 +148,8 @@ impl<T: Trace + PartialOrd + ?Sized> PartialOrd for Gc<T> {
 impl<T: Trace + Ord + ?Sized> Ord for Gc<T> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         unsafe {
-            let a = &self.inner.as_ref().data;
-            let b = &other.inner.as_ref().data;
+            let a = &self.inner.as_ref().data.get().as_ref().unwrap();
+            let b = &other.inner.as_ref().data.get().as_ref().unwrap();
             a.cmp(b)
         }
     }
@@ -155,14 +158,14 @@ impl<T: Trace + Ord + ?Sized> Ord for Gc<T> {
 impl<T: Trace + Hash + ?Sized> Hash for Gc<T> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         unsafe {
-            self.inner.as_ref().data.hash(state);
+            self.inner.as_ref().data.get().as_ref().unwrap().hash(state);
         }
     }
 }
 
 impl<T: Trace + fmt::Display> fmt::Display for Gc<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        unsafe { write!(f, "{}", self.inner.as_ref().data) }
+        unsafe { self.inner.as_ref().data.get().as_ref().unwrap().fmt(f) }
     }
 }
 
