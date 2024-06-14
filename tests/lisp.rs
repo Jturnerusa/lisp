@@ -282,3 +282,10 @@ fn test_hashmap() {
     assert!(eval(input).is_ok());
     gc::collect();
 }
+
+#[test]
+fn test_setcdr() {
+    let input = include_str!("lisp/setcdr.lisp");
+    assert!(eval(input).is_ok());
+    gc::collect();
+}
