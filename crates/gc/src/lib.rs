@@ -35,6 +35,7 @@ pub fn collect() {
     let mut cursor = HEAD.get();
     while let Some(current) = cursor {
         unsafe {
+            cursor = current.as_ref().next.get();
             if current.as_ref().refs.get() == 0 {
                 let next = current.as_ref().next.get();
                 let prev = current.as_ref().prev.get();
@@ -50,10 +51,6 @@ pub fn collect() {
                 }
 
                 std::mem::drop(Box::from_raw(current.as_ptr()));
-
-                cursor = HEAD.get();
-            } else {
-                cursor = current.as_ref().next.get();
             }
         }
     }
@@ -112,6 +109,11 @@ impl<T: Trace + ?Sized> Drop for Gc<T> {
         unsafe {
             let refs = self.inner.as_ref().refs.get();
             self.inner.as_ref().refs.set(refs.checked_sub(1).unwrap());
+            if self.inner.as_ref().refs.get() == 0 {
+                assert!(!self.inner.as_ref().dropped.get());
+                self.inner.as_ref().dropped.set(true);
+                ManuallyDrop::drop(self.inner.as_mut().data.get_mut());
+            }
         }
     }
 }
