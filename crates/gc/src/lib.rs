@@ -119,7 +119,7 @@ impl<T: Trace + ?Sized> Drop for Gc<T> {
 impl<T: Trace + ?Sized> Deref for Gc<T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
-        unsafe { &self.inner.as_ref().data.get().as_ref().unwrap() }
+        unsafe { self.inner.as_ref().data.get().as_ref().unwrap() }
     }
 }
 
