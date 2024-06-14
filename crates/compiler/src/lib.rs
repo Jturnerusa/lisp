@@ -230,7 +230,7 @@ impl Compiler {
             Value::Cons(box Cons(Value::Symbol(symbol), _))
                 if matches!(
                     symbol.as_str(),
-                    "+" | "-" | "*" | "/" | "cons" | "=" | "<" | ">" | "map-retrieve"
+                    "+" | "-" | "*" | "/" | "cons" | "=" | "<" | ">" | "map-retrieve" | "setcdr"
                 ) =>
             {
                 if value.as_cons().unwrap().iter_cars().count() != 3 {
@@ -252,6 +252,7 @@ impl Compiler {
                     "<" => OpCode::Lt,
                     ">" => OpCode::Gt,
                     "map-retrieve" => OpCode::MapRetrieve,
+                    "setcdr" => OpCode::SetCdr,
                     _ => unreachable!(),
                 };
                 self.compile_binary_op(lhs, rhs, op, opcodes, constants)
