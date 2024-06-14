@@ -1,6 +1,6 @@
 use crate::{check_arity, check_type};
 use gc::Gc;
-use std::{fs::File, io::Read, rc::Rc};
+use std::{fs::File, io::Read};
 use vm::{object::Type, Error, Local, Object};
 
 pub fn print(objects: &mut [Local]) -> Result<Object, Error> {

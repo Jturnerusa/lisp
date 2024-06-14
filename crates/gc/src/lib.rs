@@ -1,13 +1,12 @@
 #![feature(vec_into_raw_parts)]
 
 use core::fmt;
-use std::alloc::Layout;
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::marker::PhantomData;
 use std::ops::Deref;
-use std::ptr::{self, addr_of_mut, NonNull};
+use std::ptr::NonNull;
 
 thread_local! {
     pub static HEAD: Cell<Option<NonNull<Inner<dyn Trace>>>> = Cell::new(None);

@@ -1,6 +1,6 @@
 use crate::{check_arity, check_type};
 use gc::Gc;
-use std::{cell::RefCell, ops::DerefMut, rc::Rc};
+use std::cell::RefCell;
 use vm::{
     object::{Cons, Type},
     Error, Local, Object,

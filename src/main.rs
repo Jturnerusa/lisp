@@ -63,10 +63,12 @@ fn eval_file(
     Ok(())
 }
 
+#[allow(dead_code)]
 fn indent(depth: usize) -> String {
-    std::iter::repeat(" ").take(depth * 2).collect()
+    " ".repeat(depth * 2)
 }
 
+#[allow(dead_code)]
 fn disasm(opcodes: &[OpCode], constants: &HashMap<u64, Constant, IdentityHasher>, depth: usize) {
     for (i, opcode) in opcodes.iter().enumerate() {
         match opcode {
