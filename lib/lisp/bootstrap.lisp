@@ -92,4 +92,9 @@
                   nil
                   (if (nil? (cdr list))
                       (car list)
-                      (last (cdr list)))))))
+                      (last (cdr list))))))
+
+  (def nth-cdr (lambda (list n)
+                 (if (= n 0)
+                     list
+                     (nth-cdr (cdr list) (- n 1))))))

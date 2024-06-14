@@ -289,3 +289,10 @@ fn test_setcdr() {
     assert!(eval(input).is_ok());
     gc::collect();
 }
+
+#[test]
+fn test_nthcdr() {
+    let input = include_str!("lisp/nth-cdr.lisp");
+    assert!(eval(input).is_ok());
+    gc::collect();
+}
