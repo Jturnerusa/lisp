@@ -2,3 +2,7 @@
 name = "gc"
 version = "0.1.0"
 edition = "2021"
+
+[lints.clippy]
+pedantic = "deny"
+missing-panics-doc = "allow"

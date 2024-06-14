@@ -3,7 +3,7 @@
 use core::fmt;
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
-use std::hash::Hash;
+use std::hash::{BuildHasher, Hash};
 use std::marker::PhantomData;
 use std::ops::Deref;
 use std::ptr::NonNull;
@@ -110,7 +110,7 @@ impl<T: Trace + ?Sized> Drop for Gc<T> {
     fn drop(&mut self) {
         unsafe {
             let refs = self.inner.as_ref().refs.get();
-            self.inner.as_ref().refs.set(refs.checked_sub(1).unwrap())
+            self.inner.as_ref().refs.set(refs.checked_sub(1).unwrap());
         }
     }
 }
@@ -170,13 +170,13 @@ impl<T: Trace + fmt::Display> fmt::Display for Gc<T> {
 
 unsafe impl<T: Trace + 'static> Trace for Gc<T> {
     unsafe fn trace(&self, tracer: &mut dyn FnMut(NonNull<Inner<dyn Trace>>)) {
-        tracer(self.inner)
+        tracer(self.inner);
     }
 }
 
 unsafe impl<T: Trace> Trace for RefCell<T> {
     unsafe fn trace(&self, tracer: &mut dyn FnMut(NonNull<Inner<dyn Trace>>)) {
-        self.borrow().deref().trace(tracer)
+        self.borrow().deref().trace(tracer);
     }
 }
 
@@ -187,7 +187,7 @@ unsafe impl Trace for String {
 unsafe impl<T: Trace> Trace for [T] {
     unsafe fn trace(&self, tracer: &mut dyn FnMut(NonNull<Inner<dyn Trace>>)) {
         for element in self {
-            element.trace(tracer)
+            element.trace(tracer);
         }
     }
 }
@@ -195,12 +195,12 @@ unsafe impl<T: Trace> Trace for [T] {
 unsafe impl<T: Trace> Trace for Vec<T> {
     unsafe fn trace(&self, tracer: &mut dyn FnMut(NonNull<Inner<dyn Trace>>)) {
         for element in self {
-            element.trace(tracer)
+            element.trace(tracer);
         }
     }
 }
 
-unsafe impl<K: Trace, V: Trace> Trace for HashMap<K, V> {
+unsafe impl<K: Trace, V: Trace, H: BuildHasher> Trace for HashMap<K, V, H> {
     unsafe fn trace(&self, tracer: &mut dyn FnMut(NonNull<Inner<dyn Trace>>)) {
         for (key, val) in self {
             key.trace(tracer);
