@@ -1,5 +1,3 @@
-#![feature(vec_into_raw_parts)]
-
 use core::fmt;
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
