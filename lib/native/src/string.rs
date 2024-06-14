@@ -17,6 +17,16 @@ pub fn split(objects: &mut [Local]) -> Result<Object, Error> {
     ))
 }
 
+pub fn split_ascii_whitespace(objects: &mut [Local]) -> Result<Object, Error> {
+    check_arity!("string-split-whitespace", 1, objects);
+
+    let string = check_type!(objects[0], String);
+
+    Ok(make_list_of_string(
+        string.split_ascii_whitespace().map(str::to_string),
+    ))
+}
+
 pub fn to_list(objects: &mut [Local]) -> Result<Object, Error> {
     check_arity!("string->list", 1, objects);
 

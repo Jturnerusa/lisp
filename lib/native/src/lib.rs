@@ -74,4 +74,5 @@ pub fn load_module(vm: &mut Vm) {
     vm.load_native_function("is-digit?", string::is_digit);
     vm.load_native_function("list->string", string::from_list);
     vm.load_native_function("string->int", string::parse);
+    vm.load_native_function("string-split-whitespace", string::split_ascii_whitespace);
 }
