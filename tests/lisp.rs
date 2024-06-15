@@ -316,3 +316,5 @@ fn test_find() {
 }
 
 deftest!(test_setcar, "lisp/setcar.lisp");
+
+deftest!(test_quasiquote, "lisp/quasiquote.lisp");
