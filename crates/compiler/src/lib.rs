@@ -202,19 +202,13 @@ impl Compiler {
                 let r#else = value.as_cons().unwrap().iter_cars().nth(3).unwrap();
                 self.compile_branch(predicate, then, r#else, opcodes, constants)
             }
-            Value::Cons(box Cons(Value::Symbol(symbol), _)) if symbol == "quote" => {
-                if value.as_cons().unwrap().iter_cars().count() != 2 {
-                    return Err(Error::Form(
-                        "invalid number of expressions".to_string(),
-                        Form::Quote,
-                        value.clone(),
-                    ));
-                }
-                self.quote(
-                    value.as_cons().unwrap().iter_cars().nth(1).unwrap(),
-                    opcodes,
-                    constants,
-                )
+            Value::Cons(box Cons(Value::Symbol(symbol), Value::Cons(list)))
+                if symbol == "quote" =>
+            {
+                self.quote_list(list, opcodes, constants)
+            }
+            Value::Cons(box Cons(Value::Symbol(symbol), atom)) if symbol == "quote" => {
+                self.quote(atom, opcodes, constants)
             }
             Value::Cons(box Cons(Value::Symbol(symbol), _)) if symbol == "list" => {
                 if value.as_cons().unwrap().iter_cars().count() < 2 {
