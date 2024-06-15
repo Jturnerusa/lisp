@@ -79,6 +79,7 @@ pub enum OpCode {
     Car,
     Cdr,
     Cons,
+    SetCar,
     SetCdr,
     List(usize),
     Jmp(isize),
@@ -218,6 +219,7 @@ impl Vm {
                 OpCode::Cons => self.cons()?,
                 OpCode::Car => self.car()?,
                 OpCode::Cdr => self.cdr()?,
+                OpCode::SetCar => self.set_car()?,
                 OpCode::SetCdr => self.set_cdr()?,
                 OpCode::List(args) => self.list(args)?,
                 OpCode::Branch(offset) => self.branch(offset)?,
@@ -573,6 +575,26 @@ impl Vm {
         ))));
 
         self.stack.push(Local::Value(cons));
+
+        Ok(())
+    }
+
+    pub fn set_car(&mut self) -> Result<(), Error> {
+        let val = self.stack.pop().unwrap();
+        let mut cons = self.stack.pop().unwrap();
+
+        cons.with_mut(|object| match object {
+            Object::Cons(cons) => {
+                cons.borrow_mut().0 = val.into_object();
+                Ok(())
+            }
+            object => Err(Error::Type {
+                expected: Type::Cons,
+                recieved: Type::from(&*object),
+            }),
+        })?;
+
+        self.stack.push(cons);
 
         Ok(())
     }

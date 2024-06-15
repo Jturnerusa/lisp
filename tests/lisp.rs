@@ -5,6 +5,17 @@ use identity_hasher::IdentityHasher;
 use reader::Reader;
 use vm::Vm;
 
+macro_rules! deftest {
+    ($name:tt, $input:literal) => {
+        #[test]
+        fn $name() {
+            let input = include_str!($input);
+            assert!(eval(input).is_ok());
+            gc::collect();
+        }
+    };
+}
+
 static BOOTSTRAP_SOURCE: &str = include_str!("../lib/lisp/bootstrap.lisp");
 
 fn eval(input: &str) -> Result<Option<vm::Object>, Box<dyn std::error::Error>> {
@@ -303,3 +314,5 @@ fn test_find() {
     assert!(eval(input).is_ok());
     gc::collect();
 }
+
+deftest!(test_setcar, "lisp/setcar.lisp");

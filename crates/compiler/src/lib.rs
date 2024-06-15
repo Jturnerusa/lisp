@@ -230,7 +230,16 @@ impl Compiler {
             Value::Cons(box Cons(Value::Symbol(symbol), _))
                 if matches!(
                     symbol.as_str(),
-                    "+" | "-" | "*" | "/" | "cons" | "=" | "<" | ">" | "map-retrieve" | "setcdr"
+                    "+" | "-"
+                        | "*"
+                        | "/"
+                        | "cons"
+                        | "="
+                        | "<"
+                        | ">"
+                        | "map-retrieve"
+                        | "setcar"
+                        | "setcdr"
                 ) =>
             {
                 if value.as_cons().unwrap().iter_cars().count() != 3 {
@@ -252,6 +261,7 @@ impl Compiler {
                     "<" => OpCode::Lt,
                     ">" => OpCode::Gt,
                     "map-retrieve" => OpCode::MapRetrieve,
+                    "setcar" => OpCode::SetCar,
                     "setcdr" => OpCode::SetCdr,
                     _ => unreachable!(),
                 };
