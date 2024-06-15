@@ -108,11 +108,11 @@
                                     (loop (cdr list) pred (+ counter 1) loop))))))
                 (loop list pred 0 loop))))
 
-  (def insert (lambda (list e n)
-                (let ((loop (lambda (list c loop)
-                              (if (nil? list)
-                                  nil
-                                  (if (= c n)
-                                      (setcdr list (cons e (cdr list)))
-                                      (loop (cdr list) (+ c 1) loop))))))
-                  (loop list 1 loop)))))
+  (def insert! (lambda (list e n)
+                 (let ((loop (lambda (list c loop)
+                               (if (nil? list)
+                                   nil
+                                   (if (= c n)
+                                       (setcdr list (cons e (cdr list)))
+                                       (loop (cdr list) (+ c 1) loop))))))
+                   (loop list 1 loop)))))
