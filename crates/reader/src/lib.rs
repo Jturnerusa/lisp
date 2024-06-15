@@ -48,6 +48,14 @@ impl<'a> Reader<'a> {
                 Ok(value) => value,
                 Err(e) => return Some(Err(Error::ParseError(e.to_string()))),
             },
+            Ok(parse::Node::QuasiQuote) => match self.quasiquote() {
+                Ok(value) => value,
+                Err(e) => return Some(Err(Error::ParseError(e.to_string()))),
+            },
+            Ok(parse::Node::UnQuote) => match self.unquote() {
+                Ok(value) => value,
+                Err(e) => return Some(Err(Error::ParseError(e.to_string()))),
+            },
             Ok(parse::Node::Symbol("nil")) => Value::Nil,
             Ok(parse::Node::Symbol("t")) => Value::True,
             Ok(parse::Node::Symbol(symbol)) => Value::Symbol(symbol.to_string()),
@@ -63,6 +71,8 @@ impl<'a> Reader<'a> {
                 Some(Ok(parse::Node::LeftParen)) => self.read_cons()?,
                 Some(Ok(parse::Node::RightParen)) => return Ok(Value::Nil),
                 Some(Ok(parse::Node::Quote)) => self.quote()?,
+                Some(Ok(parse::Node::QuasiQuote)) => self.quasiquote()?,
+                Some(Ok(parse::Node::UnQuote)) => self.unquote()?,
                 Some(Ok(parse::Node::Symbol("nil"))) => Value::Nil,
                 Some(Ok(parse::Node::Symbol("t"))) => Value::True,
                 Some(Ok(parse::Node::Symbol(symbol))) => Value::Symbol(symbol.to_string()),
@@ -78,6 +88,28 @@ impl<'a> Reader<'a> {
     fn quote(&mut self) -> Result<Value, Error> {
         Ok(Value::Cons(Box::new(Cons(
             Value::Symbol("quote".to_string()),
+            match self.read_atom() {
+                Some(Ok(value)) => value,
+                Some(Err(e)) => return Err(Error::ParseError(e.to_string())),
+                None => return Err(Error::UnbalancedParens),
+            },
+        ))))
+    }
+
+    fn quasiquote(&mut self) -> Result<Value, Error> {
+        Ok(Value::Cons(Box::new(Cons(
+            Value::Symbol("quasiquote".to_string()),
+            match self.read_atom() {
+                Some(Ok(value)) => value,
+                Some(Err(e)) => return Err(Error::ParseError(e.to_string())),
+                None => return Err(Error::UnbalancedParens),
+            },
+        ))))
+    }
+
+    fn unquote(&mut self) -> Result<Value, Error> {
+        Ok(Value::Cons(Box::new(Cons(
+            Value::Symbol("unquote".to_string()),
             match self.read_atom() {
                 Some(Ok(value)) => value,
                 Some(Err(e)) => return Err(Error::ParseError(e.to_string())),
@@ -158,6 +190,21 @@ mod test {
             cons!(atom!(quote), atom!(b), cons!(atom!(c)), atom!(d))
         );
         let mut reader = Reader::new("(a '(b (c) d))");
+        assert_eq!(expected, reader.next().unwrap().unwrap());
+    }
+
+    #[test]
+    fn test_quasiquote() {
+        let expected = cons!(
+            atom!(a),
+            cons!(
+                atom!(quasiquote),
+                atom!(b),
+                cons!(atom!(unquote), atom!(c)),
+                atom!(d)
+            )
+        );
+        let mut reader = Reader::new("(a `(b ,(c) d))");
         assert_eq!(expected, reader.next().unwrap().unwrap());
     }
 }

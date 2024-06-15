@@ -15,6 +15,8 @@ pub enum Node<'a> {
     LeftParen,
     RightParen,
     Quote,
+    QuasiQuote,
+    UnQuote,
     String(&'a str),
     Symbol(&'a str),
     Int(&'a str),
@@ -37,6 +39,8 @@ fn parse_node(input: &str) -> Result<&str, Option<Node>> {
             left_paren,
             right_paren,
             quote,
+            quasiquote,
+            unquote,
             string,
             symbol,
             int,
@@ -59,6 +63,14 @@ fn right_paren(input: &str) -> Result<&str, Node> {
 
 fn quote(input: &str) -> Result<&str, Node> {
     combinator::map(bytes::tag("'"), |_| Node::Quote)(input)
+}
+
+fn quasiquote(input: &str) -> Result<&str, Node> {
+    combinator::map(bytes::tag("`"), |_| Node::QuasiQuote)(input)
+}
+
+fn unquote(input: &str) -> Result<&str, Node> {
+    combinator::map(bytes::tag(","), |_| Node::UnQuote)(input)
 }
 
 fn string(input: &str) -> Result<&str, Node> {
