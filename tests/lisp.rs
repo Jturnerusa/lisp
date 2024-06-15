@@ -65,7 +65,7 @@ fn test_def_global() {
 
 #[test]
 fn test_set_global() {
-    let input = "(def x 1) (set x 2) x";
+    let input = "(def x 1) (set! x 2) x";
     assert!(matches!(eval(input).unwrap().unwrap(), vm::Object::Int(2)));
     gc::collect();
 }
@@ -136,7 +136,7 @@ fn test_is_type() {
 fn test_multiexpr_lambda() {
     let input = "
 ((lambda (x)
-   (set x 1)
+   (set! x 1)
    (+ x 1))
  0)
 ";

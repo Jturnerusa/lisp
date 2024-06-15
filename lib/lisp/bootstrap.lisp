@@ -50,7 +50,7 @@
   (def fold (lambda (fn list)
               (let ((acc (car list)))
                 (do (lambda (e)
-                      (set acc (fn acc e)))
+                      (set! acc (fn acc e)))
                     (cdr list))
                 acc)))
 

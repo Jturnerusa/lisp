@@ -166,7 +166,7 @@ impl Compiler {
                 let expr = value.as_cons().unwrap().iter_cars().nth(2).unwrap();
                 self.compile_def(name, expr, opcodes, constants)
             }
-            Value::Cons(box Cons(Value::Symbol(symbol), _)) if symbol == "set" => {
+            Value::Cons(box Cons(Value::Symbol(symbol), _)) if symbol == "set!" => {
                 if value.as_cons().unwrap().iter_cars().count() != 3 {
                     return Err(Error::Form(
                         "invalid number of expressions".to_string(),
@@ -238,8 +238,8 @@ impl Compiler {
                         | "<"
                         | ">"
                         | "map-retrieve"
-                        | "setcar"
-                        | "setcdr"
+                        | "setcar!"
+                        | "setcdr!"
                 ) =>
             {
                 if value.as_cons().unwrap().iter_cars().count() != 3 {
@@ -261,8 +261,8 @@ impl Compiler {
                     "<" => OpCode::Lt,
                     ">" => OpCode::Gt,
                     "map-retrieve" => OpCode::MapRetrieve,
-                    "setcar" => OpCode::SetCar,
-                    "setcdr" => OpCode::SetCdr,
+                    "setcar!" => OpCode::SetCar,
+                    "setcdr!" => OpCode::SetCdr,
                     _ => unreachable!(),
                 };
                 self.compile_binary_op(lhs, rhs, op, opcodes, constants)
@@ -314,7 +314,7 @@ impl Compiler {
                 opcodes.push(OpCode::MapCreate);
                 Ok(())
             }
-            Value::Cons(box Cons(Value::Symbol(symbol), _)) if symbol == "map-insert" => {
+            Value::Cons(box Cons(Value::Symbol(symbol), _)) if symbol == "map-insert!" => {
                 if value.as_cons().unwrap().iter_cars().count() != 4 {
                     return Err(Error::Form(
                         "invalid number of expressions".to_string(),
