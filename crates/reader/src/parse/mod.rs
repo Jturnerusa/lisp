@@ -17,6 +17,7 @@ pub enum Node<'a> {
     Quote,
     QuasiQuote,
     UnQuote,
+    UnQuoteSplice,
     String(&'a str),
     Symbol(&'a str),
     Int(&'a str),
@@ -40,6 +41,7 @@ fn parse_node(input: &str) -> Result<&str, Option<Node>> {
             right_paren,
             quote,
             quasiquote,
+            unquote_splice,
             unquote,
             string,
             symbol,
@@ -71,6 +73,13 @@ fn quasiquote(input: &str) -> Result<&str, Node> {
 
 fn unquote(input: &str) -> Result<&str, Node> {
     combinator::map(bytes::tag(","), |_| Node::UnQuote)(input)
+}
+
+fn unquote_splice(input: &str) -> Result<&str, Node> {
+    combinator::map(
+        combinator::recognize(sequence::tuple((bytes::tag(","), bytes::tag("@")))),
+        |_| Node::UnQuoteSplice,
+    )(input)
 }
 
 fn string(input: &str) -> Result<&str, Node> {

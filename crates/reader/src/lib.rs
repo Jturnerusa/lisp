@@ -56,6 +56,10 @@ impl<'a> Reader<'a> {
                 Ok(value) => value,
                 Err(e) => return Some(Err(Error::ParseError(e.to_string()))),
             },
+            Ok(parse::Node::UnQuoteSplice) => match self.unquote_splice() {
+                Ok(value) => value,
+                Err(e) => return Some(Err(Error::ParseError(e.to_string()))),
+            },
             Ok(parse::Node::Symbol("nil")) => Value::Nil,
             Ok(parse::Node::Symbol("t")) => Value::True,
             Ok(parse::Node::Symbol(symbol)) => Value::Symbol(symbol.to_string()),
@@ -73,6 +77,7 @@ impl<'a> Reader<'a> {
                 Some(Ok(parse::Node::Quote)) => self.quote()?,
                 Some(Ok(parse::Node::QuasiQuote)) => self.quasiquote()?,
                 Some(Ok(parse::Node::UnQuote)) => self.unquote()?,
+                Some(Ok(parse::Node::UnQuoteSplice)) => self.unquote_splice()?,
                 Some(Ok(parse::Node::Symbol("nil"))) => Value::Nil,
                 Some(Ok(parse::Node::Symbol("t"))) => Value::True,
                 Some(Ok(parse::Node::Symbol(symbol))) => Value::Symbol(symbol.to_string()),
@@ -117,6 +122,17 @@ impl<'a> Reader<'a> {
             },
         ))))
     }
+
+    fn unquote_splice(&mut self) -> Result<Value, Error> {
+        Ok(Value::Cons(Box::new(Cons(
+            Value::Symbol("unquote-splice".to_string()),
+            match self.read_atom() {
+                Some(Ok(value)) => value,
+                Some(Err(e)) => return Err(Error::ParseError(e.to_string())),
+                None => return Err(Error::UnbalancedParens),
+            },
+        ))))
+    }
 }
 
 impl<'a> ReaderWithLines<'a> {
@@ -144,6 +160,9 @@ mod test {
     use super::*;
 
     macro_rules! atom {
+        ($e:literal) => {
+            Value::Symbol($e.to_string())
+        };
         ($e:tt) => {
             Value::Symbol(stringify!($e).to_string())
         };
@@ -205,6 +224,21 @@ mod test {
             )
         );
         let mut reader = Reader::new("(a `(b ,(c) d))");
+        assert_eq!(expected, reader.next().unwrap().unwrap());
+    }
+
+    #[test]
+    fn test_unquote_splice() {
+        let expected = cons!(
+            atom!(a),
+            cons!(
+                atom!(quasiquote),
+                atom!(b),
+                cons!(atom!("unquote-splice"), atom!(c)),
+                atom!(d)
+            )
+        );
+        let mut reader = Reader::new("(a `(b ,@(c) d))");
         assert_eq!(expected, reader.next().unwrap().unwrap());
     }
 }
