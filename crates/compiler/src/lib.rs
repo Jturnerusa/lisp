@@ -205,6 +205,9 @@ impl Compiler {
             Value::Cons(box Cons(Value::Symbol(symbol), value)) if symbol == "quote" => {
                 self.quote(value, opcodes, constants)
             }
+            Value::Cons(box Cons(Value::Symbol(symbol), value)) if symbol == "quasiquote" => {
+                self.quasiquote(value, opcodes, constants)
+            }
             Value::Cons(box Cons(Value::Symbol(symbol), _)) if symbol == "list" => {
                 if value.as_cons().unwrap().iter_cars().count() < 2 {
                     return Err(Error::Form(
@@ -715,6 +718,49 @@ impl Compiler {
         constants.insert(hash, constant);
 
         opcodes.push(OpCode::PushString(hash));
+
+        Ok(())
+    }
+
+    fn quasiquote(
+        &mut self,
+        value: &Value,
+        opcodes: &mut Vec<OpCode>,
+        constants: &mut ConstantTable,
+    ) -> Result<(), Error> {
+        match value {
+            Value::Cons(box Cons(Value::Symbol(symbol), value)) if symbol == "unquote" => {
+                self.compile(value, opcodes, constants)
+            }
+            Value::Cons(list) => self.quasiquote_list(list, opcodes, constants),
+            Value::Symbol(symbol) => self.quote_symbol(symbol, opcodes, constants),
+            Value::String(string) => self.quote_string(string, opcodes, constants),
+            Value::Int(i) => {
+                opcodes.push(OpCode::PushInt(*i));
+                Ok(())
+            }
+            Value::True => {
+                opcodes.push(OpCode::PushTrue);
+                Ok(())
+            }
+            Value::Nil => {
+                opcodes.push(OpCode::PushNil);
+                Ok(())
+            }
+        }
+    }
+
+    fn quasiquote_list(
+        &mut self,
+        list: &Cons,
+        opcodes: &mut Vec<OpCode>,
+        constants: &mut ConstantTable,
+    ) -> Result<(), Error> {
+        for expr in list.iter_cars() {
+            self.quasiquote(expr, opcodes, constants)?;
+        }
+
+        opcodes.push(OpCode::List(list.iter_cars().count()));
 
         Ok(())
     }
