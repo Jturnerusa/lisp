@@ -78,14 +78,11 @@ impl<'a> Reader<'a> {
     fn quote(&mut self) -> Result<Value, Error> {
         Ok(Value::Cons(Box::new(Cons(
             Value::Symbol("quote".to_string()),
-            Value::Cons(Box::new(Cons(
-                match self.read_atom() {
-                    Some(Ok(value)) => value,
-                    Some(Err(e)) => return Err(Error::ParseError(e.to_string())),
-                    None => return Err(Error::UnbalancedParens),
-                },
-                Value::Nil,
-            ))),
+            match self.read_atom() {
+                Some(Ok(value)) => value,
+                Some(Err(e)) => return Err(Error::ParseError(e.to_string())),
+                None => return Err(Error::UnbalancedParens),
+            },
         ))))
     }
 }
@@ -156,18 +153,11 @@ mod test {
 
     #[test]
     fn test_quote_shorthand() {
-        let expected = cons!(atom!(a), cons!(atom!(quote), cons!(atom!(b), atom!(c))));
-        let mut reader = Reader::new("(a '(b c))");
-        assert_eq!(expected, reader.next().unwrap().unwrap());
-    }
-
-    #[test]
-    fn test_quote_shorthand_2() {
         let expected = cons!(
             atom!(a),
-            cons!(atom!(quote), cons!(atom!(b), cons!(atom!(c), atom!(d))))
+            cons!(atom!(quote), atom!(b), cons!(atom!(c)), atom!(d))
         );
-        let mut reader = Reader::new("(a '(b (c d)))");
+        let mut reader = Reader::new("(a '(b (c) d))");
         assert_eq!(expected, reader.next().unwrap().unwrap());
     }
 }
