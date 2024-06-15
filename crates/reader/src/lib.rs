@@ -160,4 +160,14 @@ mod test {
         let mut reader = Reader::new("(a '(b c))");
         assert_eq!(expected, reader.next().unwrap().unwrap());
     }
+
+    #[test]
+    fn test_quote_shorthand_2() {
+        let expected = cons!(
+            atom!(a),
+            cons!(atom!(quote), cons!(atom!(b), cons!(atom!(c), atom!(d))))
+        );
+        let mut reader = Reader::new("(a '(b (c d)))");
+        assert_eq!(expected, reader.next().unwrap().unwrap());
+    }
 }
