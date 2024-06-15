@@ -203,7 +203,7 @@ impl Display for Lambda {
         match self.arity {
             Arity::Nullary => write!(f, "nullary lambda"),
             Arity::Nary(n) => write!(f, "{n}-ary lambda"),
-            Arity::Variadic => write!(f, "variadic lambda"),
+            Arity::Variadic(n) => write!(f, "{n}-ary variadic lambda"),
         }
     }
 }

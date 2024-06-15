@@ -410,7 +410,7 @@ impl Compiler {
         self.vm
             .load_constants(std::iter::once(defmacro_opcodes_constant));
 
-        let arity = Arity::Nary(parameters.count());
+        let arity = Arity::Variadic(parameters.count());
 
         self.vm.lambda(arity, defmacro_opcodes_hash)?;
         self.vm.def_global(defmacro_name_hash)?;
@@ -437,8 +437,9 @@ impl Compiler {
             .with(|object| object.as_function().unwrap().borrow().arity());
 
         let rest = match (arity, exprs.iter_cars().count()) {
-            (Arity::Nary(n), count) if count > n => count - n,
-            (Arity::Nary(n), count) if count == n => 0,
+            (Arity::Variadic(0), count) => count,
+            (Arity::Variadic(n), count) if count > n => count - n,
+            (Arity::Variadic(n), count) if n == count => 0,
             _ => {
                 return Err(Error::Compiler(format!(
                     "invalid number of parameters to macro {name}"
@@ -453,7 +454,7 @@ impl Compiler {
         self.vm.list(rest)?;
 
         self.vm.call(match arity {
-            Arity::Nary(n) => n + 1,
+            Arity::Variadic(n) => n + 1,
             _ => unreachable!(),
         })?;
 
