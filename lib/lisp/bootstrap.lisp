@@ -1,12 +1,12 @@
-(defmacro progn ()
-  (list (cons 'lambda (cons '() &rest))))
+(defmacro progn (&rest body)
+  (list (cons 'lambda (cons '() body))))
 
-(defmacro let (bindings)
-  (cons (cons 'lambda (cons (map car bindings) &rest))
+(defmacro let (bindings &rest body)
+  (cons (cons 'lambda (cons (map car bindings) body))
         (map cadr bindings)))
 
-(defmacro let* (bindings)
-  (list (expand-let* bindings &rest)))
+(defmacro let* (bindings &rest body)
+  (list (expand-let* bindings body)))
 
 (eval-when-compile
 

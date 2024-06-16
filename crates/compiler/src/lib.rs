@@ -30,6 +30,12 @@ pub enum Error {
     Vm(#[from] vm::Error),
 }
 
+#[derive(Clone, Debug)]
+enum Parameters {
+    WithoutRest(Vec<String>),
+    WithRest(Vec<String>, String),
+}
+
 #[derive(Clone, Copy, Debug)]
 pub enum Form {
     EvalWhenCompile,
@@ -103,21 +109,10 @@ impl Compiler {
                         Form::DefMacro,
                         value.clone(),
                     ))?;
-                let parameters = match value.as_cons().unwrap().iter_cars().nth(2).unwrap() {
-                    Value::Cons(parameters) => parameters
-                        .iter_cars()
-                        .map(|car| car.as_symbol().cloned())
-                        .collect::<Option<Vec<_>>>()
-                        .ok_or(Error::Form(
-                            "non-symbol expression in parameter list".to_string(),
-                            Form::DefMacro,
-                            value.clone(),
-                        ))?,
-                    Value::Nil => Vec::new(),
-                    _ => todo!(),
-                };
+                let parameters =
+                    parse_parameters(value.as_cons().unwrap().iter_cars().nth(2).unwrap())?;
                 let body = value.as_cons().unwrap().iter_cars().nth(3).unwrap();
-                self.compile_defmacro(defmacro_name, parameters.into_iter(), body)
+                self.compile_defmacro(defmacro_name, &parameters, body)
             }
             Value::Cons(box Cons(Value::Symbol(symbol), _)) if symbol == "lambda" => {
                 if value.as_cons().unwrap().iter_cars().count() < 3 {
@@ -127,21 +122,10 @@ impl Compiler {
                         value.clone(),
                     ));
                 }
-                let parameters = match value.as_cons().unwrap().iter_cars().nth(1).unwrap() {
-                    Value::Cons(parameters) => parameters
-                        .iter_cars()
-                        .map(|car| car.as_symbol().cloned())
-                        .collect::<Option<Vec<_>>>()
-                        .ok_or(Error::Form(
-                            "non-symbol expression in parameter list".to_string(),
-                            Form::Lambda,
-                            value.clone(),
-                        ))?,
-                    Value::Nil => Vec::new(),
-                    _ => todo!(),
-                };
+                let parameters =
+                    parse_parameters(value.as_cons().unwrap().iter_cars().nth(1).unwrap())?;
                 let exprs = value.as_cons().unwrap().iter().nth(2).unwrap();
-                self.compile_lambda(parameters.into_iter(), exprs, opcodes, constants)
+                self.compile_lambda(&parameters, exprs, opcodes, constants)
             }
             Value::Cons(box Cons(Value::Symbol(symbol), _)) if symbol == "def" => {
                 if value.as_cons().unwrap().iter_cars().count() != 3 {
@@ -382,7 +366,7 @@ impl Compiler {
     fn compile_defmacro(
         &mut self,
         name: &str,
-        parameters: impl Iterator<Item = String> + Clone,
+        parameters: &Parameters,
         body: &Value,
     ) -> Result<(), Error> {
         if !self.environment.is_global_scope() {
@@ -391,11 +375,7 @@ impl Compiler {
             ));
         }
 
-        self.environment.push_scope(
-            parameters
-                .clone()
-                .chain(std::iter::once("&rest".to_string())),
-        );
+        self.environment.push_scope(parameters.clone().into_iter());
 
         let mut defmacro_opcodes = Vec::new();
         let mut defmacro_constants = ConstantTable::with_hasher(IdentityHasher::new());
@@ -414,7 +394,11 @@ impl Compiler {
         self.vm
             .load_constants(std::iter::once(defmacro_opcodes_constant));
 
-        let arity = Arity::Variadic(parameters.count());
+        let arity = match &parameters {
+            Parameters::WithoutRest(params) if params.is_empty() => Arity::Nullary,
+            Parameters::WithoutRest(params) => Arity::Nary(params.len()),
+            Parameters::WithRest(params, _) => Arity::Variadic(params.len()),
+        };
 
         self.vm.lambda(arity, defmacro_opcodes_hash)?;
         self.vm.def_global(defmacro_name_hash)?;
@@ -434,33 +418,11 @@ impl Compiler {
 
         self.vm.get_global(*defmacro_name_hash)?;
 
-        let arity = self
-            .vm
-            .peek(0)
-            .unwrap()
-            .with(|object| object.as_function().unwrap().borrow().arity());
-
-        let rest = match (arity, exprs.iter_cars().count()) {
-            (Arity::Variadic(0), count) => count,
-            (Arity::Variadic(n), count) if count > n => count - n,
-            (Arity::Variadic(n), count) if n == count => 0,
-            _ => {
-                return Err(Error::Compiler(format!(
-                    "invalid number of parameters to macro {name}"
-                )))
-            }
-        };
-
         for expr in exprs.iter_cars() {
             push_value(&mut self.vm, expr);
         }
 
-        self.vm.list(rest)?;
-
-        self.vm.call(match arity {
-            Arity::Variadic(n) => n + 1,
-            _ => unreachable!(),
-        })?;
+        self.vm.call(exprs.iter_cars().count())?;
 
         let ret = self.vm.eval([].as_slice())?.unwrap();
 
@@ -511,12 +473,12 @@ impl Compiler {
 
     fn compile_lambda(
         &mut self,
-        parameters: impl Iterator<Item = String> + Clone,
+        parameters: &Parameters,
         exprs: &Cons,
         opcodes: &mut Vec<OpCode>,
         constants: &mut ConstantTable,
     ) -> Result<(), Error> {
-        self.environment.push_scope(parameters.clone());
+        self.environment.push_scope(parameters.clone().into_iter());
 
         let mut lambda_opcodes = Vec::new();
 
@@ -529,9 +491,10 @@ impl Compiler {
         let opcodes_hash = hash_constant(&opcodes_constant);
         constants.insert(opcodes_hash, opcodes_constant);
 
-        let arity = match parameters.count() {
-            0 => Arity::Nullary,
-            n => Arity::Nary(n),
+        let arity = match parameters {
+            Parameters::WithoutRest(parameters) if parameters.is_empty() => Arity::Nullary,
+            Parameters::WithoutRest(parameters) => Arity::Nary(parameters.len()),
+            Parameters::WithRest(parameters, _) => Arity::Variadic(parameters.len()),
         };
 
         opcodes.push(OpCode::Lambda {
@@ -740,6 +703,19 @@ impl Compiler {
     }
 }
 
+impl IntoIterator for Parameters {
+    type Item = String;
+    type IntoIter = Box<dyn Iterator<Item = String>>;
+    fn into_iter(self) -> Self::IntoIter {
+        match self {
+            Parameters::WithRest(params, rest) => {
+                Box::new(params.into_iter().chain(std::iter::once(rest)))
+            }
+            Parameters::WithoutRest(params) => Box::new(params.into_iter()),
+        }
+    }
+}
+
 fn hash_constant(constant: &Constant) -> u64 {
     let mut hasher = Xxh3Hash64::with_seed(0);
     constant.hash(&mut hasher);
@@ -762,4 +738,47 @@ fn push_value(vm: &mut Vm, value: &Value) {
         Value::True => vm.push(vm::Object::True),
         Value::Nil => vm.push(vm::Object::Nil),
     }
+}
+
+fn parse_parameters(value: &Value) -> Result<Parameters, Error> {
+    let mut list = match value {
+        Value::Cons(parameters) => parameters
+            .iter_cars()
+            .map(|car| car.as_symbol().cloned())
+            .collect::<Option<Vec<_>>>()
+            .ok_or(Error::Form(
+                "non-symbol expression in parameter list".to_string(),
+                Form::Lambda,
+                value.clone(),
+            ))?,
+        Value::Nil => Vec::new(),
+        _ => {
+            return Err(Error::Form(
+                "non-list expression as parameter list".to_string(),
+                Form::Lambda,
+                value.clone(),
+            ))
+        }
+    }
+    .into_iter();
+
+    let parameters: Vec<String> = list.by_ref().take_while(|param| param != "&rest").collect();
+
+    let rest = list.next();
+
+    if !parameters
+        .iter()
+        .all(|param| parameters.iter().filter(|x| param == *x).count() == 1)
+    {
+        return Err(Error::Form(
+            "duplicate parameter in parameter list".to_string(),
+            Form::Lambda,
+            value.clone(),
+        ));
+    }
+
+    Ok(match rest {
+        Some(rest) => Parameters::WithRest(parameters, rest),
+        None => Parameters::WithoutRest(parameters),
+    })
 }

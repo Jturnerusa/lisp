@@ -403,15 +403,20 @@ impl Vm {
             .into_object()
         {
             Object::Function(function) => {
-                match &function.borrow().arity {
+                match function.borrow().arity {
                     Arity::Nullary if args != 0 => {
                         return Err(Error::Parameters(format!(
                             "expected 0 parameters, received {args}"
                         )))
                     }
-                    Arity::Nary(n) if args != *n => {
+                    Arity::Nary(n) if args != n => {
                         return Err(Error::Parameters(format!(
                             "expected {n} parameters, received {args}"
+                        )))
+                    }
+                    Arity::Variadic(n) if args < n => {
+                        return Err(Error::Parameters(format!(
+                            "expected at least {n} parameters, received {args}"
                         )))
                     }
                     _ => (),
@@ -423,9 +428,15 @@ impl Vm {
                     pc: self.pc,
                 });
 
-                self.current_function = Some(function);
-                self.bp = self.stack.len() - args;
+                self.current_function = Some(function.clone());
                 self.pc = 0;
+                self.bp = if let Arity::Variadic(n) = function.borrow().arity() {
+                    let rest = if args > n { args - n } else { 0 };
+                    self.list(rest)?;
+                    self.stack.len() - (n + 1)
+                } else {
+                    self.stack.len() - args
+                };
 
                 Ok(())
             }
