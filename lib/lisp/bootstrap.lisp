@@ -115,4 +115,16 @@
                                    (if (= c n)
                                        (setcdr list (cons e (cdr list)))
                                        (loop (cdr list) (+ c 1) loop))))))
-                   (loop list 1 loop)))))
+                   (loop list 1 loop))))
+
+  (def append (lambda (&rest lists)
+                (if (= (length lists) 0)
+                    nil
+                    (if (= (length lists) 1)
+                        (car lists)
+                        (if (nil? (cdr (car lists)))
+                            (cons (car (car lists))
+                                  (apply append (cdr lists)))
+                            (cons (car (car lists))
+                                  (apply append (cons (cdr (car lists)) (cdr lists))))))))))
+                            
