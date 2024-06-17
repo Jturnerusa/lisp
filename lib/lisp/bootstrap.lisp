@@ -96,6 +96,13 @@
       (list 'if (caar clauses) (cadar clauses)
             (cons 'cond (cdr clauses)))))
 
+(defmacro and (&rest exprs)
+  (cond ((nil? exprs) t)
+        ((nil? (cdr exprs)) (car exprs))
+        (t (list 'if (car exprs)
+                 (cons 'and (cdr exprs))
+                 nil))))
+
 (def fold (lambda (fn list)
             (let ((acc (car list)))
               (do (lambda (e)
