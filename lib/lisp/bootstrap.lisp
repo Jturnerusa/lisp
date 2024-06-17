@@ -44,6 +44,9 @@
   (def caar (lambda (cons)
               (car (car cons))))
 
+  (def cdar (lambda (cons)
+              (cdr (car cons))))
+
   (def cadar (lambda (cons)
                (car (cdr (car cons)))))
 
