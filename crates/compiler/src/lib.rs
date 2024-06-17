@@ -440,8 +440,6 @@ impl Compiler {
 
         let val = Value::try_from(&ret.into_object()).unwrap();
 
-        dbg!(&val);
-
         self.compile(&val, opcodes, constants)?;
 
         Ok(())
