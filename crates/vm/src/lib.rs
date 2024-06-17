@@ -40,6 +40,8 @@ pub enum Error {
     Cmp(Type, Type),
     #[error("cannot make hashmap key from type: {0}")]
     HashKey(Type),
+    #[error("expected a list for apply")]
+    Apply,
     #[error("other error: {0}")]
     Other(#[from] Box<dyn std::error::Error>),
 }
@@ -62,6 +64,7 @@ pub enum OpCode {
     GetUpValue(usize),
     Call(usize),
     Tail(usize),
+    Apply,
     Return,
     Lambda { arity: Arity, body: u64 },
     CreateUpValue(UpValue),
@@ -181,6 +184,7 @@ impl Vm {
                 OpCode::GetUpValue(upvalue) => self.get_upvalue(upvalue)?,
                 OpCode::Call(args) => self.call(args)?,
                 OpCode::Return => self.ret()?,
+                OpCode::Apply => self.apply()?,
                 OpCode::Lambda { arity, body } => self.lambda(arity, body)?,
                 OpCode::CreateUpValue(upvalue) => self.create_upvalue(upvalue)?,
                 OpCode::PushSymbol(symbol) => {
@@ -474,6 +478,21 @@ impl Vm {
         self.pc = frame.pc;
         self.bp = frame.bp;
         self.current_function = frame.function;
+        Ok(())
+    }
+
+    pub fn apply(&mut self) -> Result<(), Error> {
+        let args = match self.stack.pop().unwrap().into_object() {
+            Object::Cons(cons) => cons,
+            _ => return Err(Error::Apply),
+        };
+
+        for arg in args.borrow().iter_cars() {
+            self.stack.push(Local::Value(arg.clone()));
+        }
+
+        self.call(args.borrow().iter_cars().count())?;
+
         Ok(())
     }
 

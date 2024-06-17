@@ -46,6 +46,7 @@ pub enum Form {
     Def,
     Set,
     List,
+    Apply,
     Binary,
     Unary,
     MapInsert,
@@ -204,6 +205,17 @@ impl Compiler {
                 }
                 let exprs = value.as_cons().unwrap().iter().nth(1).unwrap();
                 self.compile_list(exprs, opcodes, constants)
+            }
+            Value::Cons(box Cons(Value::Symbol(symbol), _)) if symbol == "apply" => {
+                if value.as_cons().unwrap().iter_cars().count() != 3 {
+                    return Err(Error::Form(
+                        "invalid number of expressions".to_string(),
+                        Form::Apply,
+                        value.clone(),
+                    ));
+                }
+                let exprs = value.as_cons().unwrap().iter().nth(1).unwrap();
+                self.compile_apply(exprs, opcodes, constants)
             }
             Value::Cons(box Cons(Value::Symbol(symbol), _))
                 if matches!(
@@ -546,6 +558,21 @@ impl Compiler {
         }
 
         opcodes.push(OpCode::Call(exprs.iter_cars().count() - 1));
+
+        Ok(())
+    }
+
+    fn compile_apply(
+        &mut self,
+        exprs: &Cons,
+        opcodes: &mut Vec<OpCode>,
+        constants: &mut ConstantTable,
+    ) -> Result<(), Error> {
+        for expr in exprs.iter_cars() {
+            self.compile(expr, opcodes, constants)?;
+        }
+
+        opcodes.push(OpCode::Apply);
 
         Ok(())
     }
