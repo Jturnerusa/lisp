@@ -15,6 +15,14 @@ pub enum Error {
 }
 
 #[derive(Clone, Copy, Debug)]
+enum Quote {
+    Quote,
+    QuasiQuote,
+    UnQuote,
+    Splice,
+}
+
+#[derive(Clone, Copy, Debug)]
 pub struct Reader<'a> {
     parser: Parser<'a>,
 }
@@ -44,19 +52,19 @@ impl<'a> Reader<'a> {
                 Err(e) => return Some(Err(Error::ParseError(e.to_string()))),
             },
             Ok(parse::Node::RightParen) => return Some(Err(Error::UnbalancedParens)),
-            Ok(parse::Node::Quote) => match self.quote() {
+            Ok(parse::Node::Quote) => match self.quote(Quote::Quote) {
                 Ok(value) => value,
                 Err(e) => return Some(Err(Error::ParseError(e.to_string()))),
             },
-            Ok(parse::Node::QuasiQuote) => match self.quasiquote() {
+            Ok(parse::Node::QuasiQuote) => match self.quote(Quote::QuasiQuote) {
                 Ok(value) => value,
                 Err(e) => return Some(Err(Error::ParseError(e.to_string()))),
             },
-            Ok(parse::Node::UnQuote) => match self.unquote() {
+            Ok(parse::Node::UnQuote) => match self.quote(Quote::UnQuote) {
                 Ok(value) => value,
                 Err(e) => return Some(Err(Error::ParseError(e.to_string()))),
             },
-            Ok(parse::Node::UnQuoteSplice) => match self.unquote_splice() {
+            Ok(parse::Node::UnQuoteSplice) => match self.quote(Quote::Splice) {
                 Ok(value) => value,
                 Err(e) => return Some(Err(Error::ParseError(e.to_string()))),
             },
@@ -74,10 +82,10 @@ impl<'a> Reader<'a> {
             match self.parser.next() {
                 Some(Ok(parse::Node::LeftParen)) => self.read_cons()?,
                 Some(Ok(parse::Node::RightParen)) => return Ok(Value::Nil),
-                Some(Ok(parse::Node::Quote)) => self.quote()?,
-                Some(Ok(parse::Node::QuasiQuote)) => self.quasiquote()?,
-                Some(Ok(parse::Node::UnQuote)) => self.unquote()?,
-                Some(Ok(parse::Node::UnQuoteSplice)) => self.unquote_splice()?,
+                Some(Ok(parse::Node::Quote)) => self.quote(Quote::Quote)?,
+                Some(Ok(parse::Node::QuasiQuote)) => self.quote(Quote::QuasiQuote)?,
+                Some(Ok(parse::Node::UnQuote)) => self.quote(Quote::UnQuote)?,
+                Some(Ok(parse::Node::UnQuoteSplice)) => self.quote(Quote::Splice)?,
                 Some(Ok(parse::Node::Symbol("nil"))) => Value::Nil,
                 Some(Ok(parse::Node::Symbol("t"))) => Value::True,
                 Some(Ok(parse::Node::Symbol(symbol))) => Value::Symbol(symbol.to_string()),
@@ -90,48 +98,24 @@ impl<'a> Reader<'a> {
         ))))
     }
 
-    fn quote(&mut self) -> Result<Value, Error> {
-        Ok(Value::Cons(Box::new(Cons(
-            Value::Symbol("quote".to_string()),
-            match self.read_atom() {
-                Some(Ok(value)) => value,
-                Some(Err(e)) => return Err(Error::ParseError(e.to_string())),
-                None => return Err(Error::UnbalancedParens),
-            },
-        ))))
-    }
-
-    fn quasiquote(&mut self) -> Result<Value, Error> {
-        Ok(Value::Cons(Box::new(Cons(
-            Value::Symbol("quasiquote".to_string()),
-            match self.read_atom() {
-                Some(Ok(value)) => value,
-                Some(Err(e)) => return Err(Error::ParseError(e.to_string())),
-                None => return Err(Error::UnbalancedParens),
-            },
-        ))))
-    }
-
-    fn unquote(&mut self) -> Result<Value, Error> {
-        Ok(Value::Cons(Box::new(Cons(
-            Value::Symbol("unquote".to_string()),
-            match self.read_atom() {
-                Some(Ok(value)) => value,
-                Some(Err(e)) => return Err(Error::ParseError(e.to_string())),
-                None => return Err(Error::UnbalancedParens),
-            },
-        ))))
-    }
-
-    fn unquote_splice(&mut self) -> Result<Value, Error> {
-        Ok(Value::Cons(Box::new(Cons(
-            Value::Symbol("unquote-splice".to_string()),
-            match self.read_atom() {
-                Some(Ok(value)) => value,
-                Some(Err(e)) => return Err(Error::ParseError(e.to_string())),
-                None => return Err(Error::UnbalancedParens),
-            },
-        ))))
+    fn quote(&mut self, quote: Quote) -> Result<Value, Error> {
+        let symbol = Value::Symbol(
+            match quote {
+                Quote::Quote => "quote",
+                Quote::QuasiQuote => "quasiquote",
+                Quote::UnQuote => "unquote",
+                Quote::Splice => "unquote-splice",
+            }
+            .to_string(),
+        );
+        Ok(match self.read_atom() {
+            Some(Ok(value)) => Value::Cons(Box::new(Cons(
+                symbol,
+                Value::Cons(Box::new(Cons(value, Value::Nil))),
+            ))),
+            None => Value::Cons(Box::new(Cons(symbol, Value::Nil))),
+            Some(Err(e)) => return Err(Error::ParseError(e.to_string())),
+        })
     }
 }
 
@@ -206,7 +190,7 @@ mod test {
     fn test_quote_shorthand() {
         let expected = cons!(
             atom!(a),
-            cons!(atom!(quote), atom!(b), cons!(atom!(c)), atom!(d))
+            cons!(atom!(quote), cons!(atom!(b), cons!(atom!(c)), atom!(d)))
         );
         let mut reader = Reader::new("(a '(b (c) d))");
         assert_eq!(expected, reader.next().unwrap().unwrap());
@@ -218,9 +202,7 @@ mod test {
             atom!(a),
             cons!(
                 atom!(quasiquote),
-                atom!(b),
-                cons!(atom!(unquote), atom!(c)),
-                atom!(d)
+                cons!(atom!(b), cons!(atom!(unquote), cons!(atom!(c))), atom!(d))
             )
         );
         let mut reader = Reader::new("(a `(b ,(c) d))");
@@ -233,12 +215,27 @@ mod test {
             atom!(a),
             cons!(
                 atom!(quasiquote),
-                atom!(b),
-                cons!(atom!("unquote-splice"), atom!(c)),
-                atom!(d)
+                cons!(
+                    atom!(b),
+                    cons!(atom!("unquote-splice"), cons!(atom!(c))),
+                    atom!(d)
+                )
             )
         );
         let mut reader = Reader::new("(a `(b ,@(c) d))");
+        assert_eq!(expected, reader.next().unwrap().unwrap());
+    }
+
+    #[test]
+    fn test_quasiquote_on_atom() {
+        let expected = cons!(
+            atom!(a),
+            cons!(
+                atom!(quasiquote),
+                cons!(atom!(b), cons!(atom!(unquote), atom!(c)), atom!(d))
+            )
+        );
+        let mut reader = Reader::new("(a `(b ,c d))");
         assert_eq!(expected, reader.next().unwrap().unwrap());
     }
 }
