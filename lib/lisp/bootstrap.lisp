@@ -8,6 +8,12 @@
 (defmacro let* (bindings &rest body)
   (list (expand-let* bindings body)))
 
+(defmacro cond (&rest clauses)
+  (if (nil? clauses)
+      nil
+      (list 'if (caar clauses) (cadar clauses)
+            (cons 'cond (cdr clauses)))))
+
 (eval-when-compile
   
   (def expand-let* (lambda (bindings body)
@@ -34,6 +40,12 @@
 
   (def cadr (lambda (cons)
               (car (cdr cons))))
+
+  (def caar (lambda (cons)
+              (car (car cons))))
+
+  (def cadar (lambda (cons)
+               (car (cdr (car cons)))))
 
   (def do (lambda (fn list)
             (if (nil? list)

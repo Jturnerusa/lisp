@@ -324,3 +324,5 @@ deftest!(test_apply, "lisp/apply.lisp");
 deftest!(test_and, "lisp/and.lisp");
 
 deftest!(test_or, "lisp/or.lisp");
+
+deftest!(test_cond, "lisp/cond.lisp");
