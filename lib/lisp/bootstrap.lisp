@@ -103,6 +103,13 @@
                  (cons 'and (cdr exprs))
                  nil))))
 
+(defmacro or (&rest exprs)
+  (cond ((nil? exprs) nil)
+        ((nil? (cdr exprs)) (car exprs))
+        (t (list 'if (car exprs)
+                 t
+                 (cons 'or (cdr exprs))))))
+
 (def fold (lambda (fn list)
             (let ((acc (car list)))
               (do (lambda (e)
