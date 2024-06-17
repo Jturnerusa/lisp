@@ -187,13 +187,16 @@ impl Compiler {
                 let r#else = value.as_cons().unwrap().iter_cars().nth(3).unwrap();
                 self.compile_branch(predicate, then, r#else, opcodes, constants)
             }
-            Value::Cons(box Cons(Value::Symbol(symbol), Value::Cons(list)))
-                if symbol == "quote" =>
-            {
-                self.quote_list(list, opcodes, constants)
-            }
-            Value::Cons(box Cons(Value::Symbol(symbol), atom)) if symbol == "quote" => {
-                self.quote(atom, opcodes, constants)
+            Value::Cons(box Cons(Value::Symbol(symbol), _)) if symbol == "quote" => {
+                if value.as_cons().unwrap().iter_cars().count() < 2 {
+                    return Err(Error::Form(
+                        "invalid number of expressions".to_string(),
+                        Form::Quote,
+                        value.clone(),
+                    ));
+                }
+                let exprs = value.as_cons().unwrap().iter().nth(1).unwrap();
+                self.compile_quote(exprs, opcodes, constants)
             }
             Value::Cons(box Cons(Value::Symbol(symbol), _)) if symbol == "list" => {
                 if value.as_cons().unwrap().iter_cars().count() < 2 {
@@ -650,7 +653,19 @@ impl Compiler {
         Ok(())
     }
 
-    fn quote(
+    fn compile_quote(
+        &mut self,
+        exprs: &Cons,
+        opcodes: &mut Vec<OpCode>,
+        constants: &mut ConstantTable,
+    ) -> Result<(), Error> {
+        for expr in exprs.iter_cars() {
+            self.quote_value(expr, opcodes, constants)?;
+        }
+        Ok(())
+    }
+
+    fn quote_value(
         &mut self,
         value: &Value,
         opcodes: &mut Vec<OpCode>,
@@ -674,7 +689,7 @@ impl Compiler {
         constants: &mut ConstantTable,
     ) -> Result<(), Error> {
         for element in list.iter_cars() {
-            self.quote(element, opcodes, constants)?
+            self.quote_value(element, opcodes, constants)?
         }
 
         opcodes.push(OpCode::List(list.iter_cars().count()));
