@@ -1,25 +1,3 @@
-(defmacro progn (&rest body)
-  (list (cons 'lambda (cons '() body))))
-
-(defmacro let (bindings &rest body)
-  (cons (cons 'lambda (cons (map car bindings) body))
-        (map cadr bindings)))
-
-(defmacro let* (bindings &rest body)
-  (if (nil? bindings)
-      (list (cons 'lambda (cons '() body)))
-      (cons (list 'lambda (list (caar bindings))
-                  (apply let* (cons (cdr bindings) body)))
-            (cdar bindings))))
-
-(defmacro cond (&rest clauses)
-  (if (nil? clauses)
-      nil
-      (list 'if (caar clauses) (cadar clauses)
-            (cons 'cond (cdr clauses)))))
-
-(eval-when-compile
-  
   ;; Some primitive operations like car, cdr, cons, etc are implemented
   ;; as special operations in the compiler and aren't bound to a symbol
   ;; as functions. This makes (map car (list (cons 'a 'b))) for example
@@ -28,7 +6,8 @@
 
   ;; These functions also should be available at compile time so they can
   ;; be used in macros;
-  
+
+(eval-when-compile
   (def car (lambda (cons)
              (car cons)))
 
@@ -50,21 +29,15 @@
   (def do (lambda (fn list)
             (if (nil? list)
                 nil
-                (progn (fn (car list))
-                       (do fn (cdr list))))))
- 
+                ((lambda ()
+                   (fn (car list))
+                   (do fn (cdr list)))))))
+  
   (def map (lambda (fn list)
              (if (nil? list)
                  nil
                  (cons (fn (car list))
                        (map fn (cdr list))))))
-
-  (def fold (lambda (fn list)
-              (let ((acc (car list)))
-                (do (lambda (e)
-                      (set! acc (fn acc e)))
-                    (cdr list))
-                acc)))
 
   (def filter (lambda (pred list)
                 (if (nil? list)
@@ -80,13 +53,6 @@
                      (car list)
                      (nth (cdr list) (- n 1))))))
 
-  (def length (lambda (list)
-                (let ((loop (lambda (list counter loop)
-                              (if (nil? list)
-                                  counter
-                                  (loop (cdr list) (+ counter 1) loop)))))
-                  (loop list 0 loop))))
-
   (def last (lambda (list)
               (if (nil? list)
                   nil
@@ -99,24 +65,6 @@
                      list
                      (nth-cdr (cdr list) (- n 1)))))
 
-  (def find (lambda (list pred)
-              (let ((loop (lambda (list pred counter loop)
-                            (if (nil? list)
-                                nil
-                                (if (pred (car list))
-                                    counter
-                                    (loop (cdr list) pred (+ counter 1) loop))))))
-                (loop list pred 0 loop))))
-
-  (def insert! (lambda (list e n)
-                 (let ((loop (lambda (list c loop)
-                               (if (nil? list)
-                                   nil
-                                   (if (= c n)
-                                       (setcdr list (cons e (cdr list)))
-                                       (loop (cdr list) (+ c 1) loop))))))
-                   (loop list 1 loop))))
-
   (def append (lambda (&rest lists)
                 (if (= (length lists) 0)
                     nil
@@ -127,4 +75,55 @@
                                   (apply append (cdr lists)))
                             (cons (car (car lists))
                                   (apply append (cons (cdr (car lists)) (cdr lists))))))))))
-                            
+
+(defmacro progn (&rest body)
+  (list (cons 'lambda (cons '() body))))
+
+(defmacro let (bindings &rest body)
+  (cons (cons 'lambda (cons (map car bindings) body))
+        (map cadr bindings)))
+
+(defmacro let* (bindings &rest body)
+  (if (nil? bindings)
+      (list (cons 'lambda (cons '() body)))
+      (cons (list 'lambda (list (caar bindings))
+                  (apply let* (cons (cdr bindings) body)))
+            (cdar bindings))))
+
+(defmacro cond (&rest clauses)
+  (if (nil? clauses)
+      nil
+      (list 'if (caar clauses) (cadar clauses)
+            (cons 'cond (cdr clauses)))))
+
+(def fold (lambda (fn list)
+            (let ((acc (car list)))
+              (do (lambda (e)
+                    (set! acc (fn acc e)))
+                  (cdr list))
+              acc)))
+
+(def length (lambda (list)
+              (let ((loop (lambda (list counter loop)
+                            (if (nil? list)
+                                counter
+                                (loop (cdr list) (+ counter 1) loop)))))
+                (loop list 0 loop))))
+
+(def find (lambda (list pred)
+            (let ((loop (lambda (list pred counter loop)
+                          (if (nil? list)
+                              nil
+                              (if (pred (car list))
+                                  counter
+                                  (loop (cdr list) pred (+ counter 1) loop))))))
+              (loop list pred 0 loop))))
+
+(def insert! (lambda (list e n)
+               (let ((loop (lambda (list c loop)
+                             (if (nil? list)
+                                 nil
+                                 (if (= c n)
+                                     (setcdr list (cons e (cdr list)))
+                                     (loop (cdr list) (+ c 1) loop))))))
+                 (loop list 1 loop))))
