@@ -1,3 +1,6 @@
+(defmacro and (&rest exprs)
+  (expand-and exprs))
+
 (defmacro progn (&rest body)
   (list (cons 'lambda (cons '() body))))
 
@@ -9,6 +12,11 @@
   (list (expand-let* bindings body)))
 
 (eval-when-compile
+
+  (def expand-and (lambda (exprs)
+                    (if (nil? exprs)
+                        't
+                        (list 'if (car exprs) (expand-and (cdr exprs)) nil))))
 
   (def expand-let* (lambda (bindings body)
                      (if (nil? bindings)
@@ -74,18 +82,6 @@
                                   counter
                                   (loop (cdr list) (+ counter 1) loop)))))
                   (loop list 0 loop))))
-
-  (def and (lambda (a b)
-             (if a
-                 (if b
-                     t nil)
-                 nil)))
-
-  (def or (lambda (a b)
-            (if a
-                t
-                (if b
-                    t nil))))
 
   (def last (lambda (list)
               (if (nil? list)

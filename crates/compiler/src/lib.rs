@@ -440,6 +440,8 @@ impl Compiler {
 
         let val = Value::try_from(&ret.into_object()).unwrap();
 
+        dbg!(&val);
+
         self.compile(&val, opcodes, constants)?;
 
         Ok(())
@@ -679,7 +681,7 @@ impl Compiler {
 
         opcodes.push(OpCode::List(list.iter_cars().count()));
 
-        todo!()
+        Ok(())
     }
 
     fn quote_symbol(
