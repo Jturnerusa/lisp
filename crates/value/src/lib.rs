@@ -88,6 +88,19 @@ impl Display for Value {
 
 impl Display for Cons {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "({} {})", self.0, self.1)
+        pretty_print(self, 0, f)
     }
+}
+
+fn pretty_print(cons: &Cons, depth: usize, f: &mut fmt::Formatter) -> fmt::Result {
+    let indent = " ".repeat(depth);
+    write!(f, "{indent}(")?;
+    for (i, expr) in cons.iter_cars().enumerate() {
+        write!(f, "{indent}{expr}")?;
+        if i < cons.iter_cars().count() - 1 {
+            write!(f, "{indent} ")?;
+        }
+    }
+    write!(f, ")")?;
+    Ok(())
 }
