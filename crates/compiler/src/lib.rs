@@ -440,12 +440,8 @@ impl Compiler {
         self.vm.call(exprs.iter_cars().count())?;
 
         let ret = self.vm.eval([].as_slice())?.unwrap();
-
-        dbg!(&ret);
         
         let val = Value::try_from(&ret.into_object()).unwrap();
-
-        dbg!(&val);
         
         self.compile(&val, opcodes, constants)?;
 
