@@ -124,9 +124,11 @@
 (defmacro quasiquote (exprs)
   (cons 'append
         (map (lambda (expr)
-               (if (and (cons? expr) (= (car expr) 'unquote))
-                   (list 'list (cadr expr))
-                   (list 'list (list 'quote expr))))
+               (cond ((and (cons? expr) (= (car expr) 'unquote))
+                      (list 'list (cadr expr)))
+                     ((and (cons? expr) (= (car expr) 'unquote-splice))
+                      (cadr expr))
+                     (t (list 'list (list 'quote expr)))))
              exprs)))
 
 (def fold (lambda (fn list)
