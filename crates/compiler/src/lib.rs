@@ -441,8 +441,12 @@ impl Compiler {
 
         let ret = self.vm.eval([].as_slice())?.unwrap();
 
+        dbg!(&ret);
+        
         let val = Value::try_from(&ret.into_object()).unwrap();
 
+        dbg!(&val);
+        
         self.compile(&val, opcodes, constants)?;
 
         Ok(())

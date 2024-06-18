@@ -20,6 +20,9 @@
   (def caar (lambda (cons)
               (car (car cons))))
 
+  (def cddr (lambda (cons)
+              (cdr (cdr cons))))
+
   (def cdar (lambda (cons)
               (cdr (car cons))))
 
@@ -64,6 +67,14 @@
                  (if (= n 0)
                      list
                      (nth-cdr (cdr list) (- n 1)))))
+
+  (def length (lambda (list)
+                ((lambda (loop)
+                   (loop list 0 loop))
+                 (lambda (list counter loop)
+                   (if (nil? list)
+                       counter
+                       (loop (cdr list) (+ counter 1) loop))))))
 
   (def append (lambda (&rest lists)
                 (if (= (length lists) 0)
@@ -110,19 +121,20 @@
                  t
                  (cons 'or (cdr exprs))))))
 
+(defmacro quasiquote (exprs)
+  (cons 'append
+        (map (lambda (expr)
+               (if (and (cons? expr) (= (car expr) 'unquote))
+                   (list 'list (cadr expr))
+                   (list 'list (list 'quote expr))))
+             exprs)))
+
 (def fold (lambda (fn list)
             (let ((acc (car list)))
               (do (lambda (e)
                     (set! acc (fn acc e)))
                   (cdr list))
               acc)))
-
-(def length (lambda (list)
-              (let ((loop (lambda (list counter loop)
-                            (if (nil? list)
-                                counter
-                                (loop (cdr list) (+ counter 1) loop)))))
-                (loop list 0 loop))))
 
 (def find (lambda (list pred)
             (let ((loop (lambda (list pred counter loop)
