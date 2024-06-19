@@ -483,15 +483,20 @@ impl Vm {
 
     pub fn apply(&mut self) -> Result<(), Error> {
         let args = match self.stack.pop().unwrap().into_object() {
-            Object::Cons(cons) => cons,
+            Object::Cons(cons) => {
+                for arg in cons.borrow().iter_cars() {
+                    self.stack.push(Local::Value(arg.clone()));
+                }
+                cons.borrow().iter_cars().count()
+            }
+            Object::Nil => {
+                self.stack.push(Local::Value(Object::Nil));
+                1
+            }
             _ => return Err(Error::Apply),
         };
 
-        for arg in args.borrow().iter_cars() {
-            self.stack.push(Local::Value(arg.clone()));
-        }
-
-        self.call(args.borrow().iter_cars().count())?;
+        self.call(args)?;
 
         Ok(())
     }
