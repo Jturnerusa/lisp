@@ -14,6 +14,7 @@ pub enum Error {
     ParseError(String),
 }
 
+#[allow(clippy::enum_variant_names)]
 #[derive(Clone, Copy, Debug)]
 enum Quote {
     Quote,
