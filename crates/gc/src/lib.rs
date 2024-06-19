@@ -1,9 +1,8 @@
 use core::fmt;
-use std::cell::{Cell, RefCell, UnsafeCell};
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::hash::{BuildHasher, Hash};
 use std::marker::PhantomData;
-use std::mem::ManuallyDrop;
 use std::ops::Deref;
 use std::ptr::NonNull;
 
@@ -21,12 +20,12 @@ pub struct Inner<T: Trace + ?Sized> {
     next: Cell<Option<NonNull<Inner<dyn Trace>>>>,
     prev: Cell<Option<NonNull<Inner<dyn Trace>>>>,
     refs: Cell<usize>,
-    dropped: Cell<bool>,
-    data: UnsafeCell<ManuallyDrop<T>>,
+    data: T,
 }
 
 #[derive(Debug)]
 pub struct Gc<T: Trace + ?Sized> {
+    rooted: Cell<bool>,
     inner: NonNull<Inner<T>>,
     phantom: PhantomData<T>,
 }
@@ -62,8 +61,7 @@ impl<T: Trace> Inner<T> {
             next: Cell::new(None),
             prev: Cell::new(None),
             refs: Cell::new(1),
-            dropped: Cell::new(false),
-            data: UnsafeCell::new(ManuallyDrop::new(data)),
+            data,
         }
     }
 }
@@ -85,6 +83,7 @@ impl<T: Trace + 'static> Gc<T> {
         HEAD.set(Some(nonnull));
 
         Self {
+            rooted: Cell::new(true),
             inner: nonnull,
             phantom: PhantomData,
         }
@@ -98,22 +97,9 @@ impl<T: Trace + ?Sized> Clone for Gc<T> {
             self.inner.as_ref().refs.set(refs.checked_add(1).unwrap());
         }
         Self {
+            rooted: Cell::new(true),
             inner: self.inner,
             phantom: PhantomData,
-        }
-    }
-}
-
-impl<T: Trace + ?Sized> Drop for Gc<T> {
-    fn drop(&mut self) {
-        unsafe {
-            let refs = self.inner.as_ref().refs.get();
-            self.inner.as_ref().refs.set(refs.checked_sub(1).unwrap());
-            if self.inner.as_ref().refs.get() == 0 {
-                assert!(!self.inner.as_ref().dropped.get());
-                self.inner.as_ref().dropped.set(true);
-                ManuallyDrop::drop(self.inner.as_mut().data.get_mut());
-            }
         }
     }
 }
@@ -121,15 +107,15 @@ impl<T: Trace + ?Sized> Drop for Gc<T> {
 impl<T: Trace + ?Sized> Deref for Gc<T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
-        unsafe { self.inner.as_ref().data.get().as_ref().unwrap() }
+        unsafe { &self.inner.as_ref().data }
     }
 }
 
 impl<T: Trace + PartialEq + ?Sized> PartialEq for Gc<T> {
     fn eq(&self, other: &Self) -> bool {
         unsafe {
-            let a = &self.inner.as_ref().data.get().as_ref().unwrap();
-            let b = &other.inner.as_ref().data.get().as_ref().unwrap();
+            let a = &self.inner.as_ref().data;
+            let b = &other.inner.as_ref().data;
             a == b
         }
     }
@@ -140,8 +126,8 @@ impl<T: Trace + Eq + ?Sized> Eq for Gc<T> {}
 impl<T: Trace + PartialOrd + ?Sized> PartialOrd for Gc<T> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         unsafe {
-            let a = &self.inner.as_ref().data.get().as_ref().unwrap();
-            let b = &other.inner.as_ref().data.get().as_ref().unwrap();
+            let a = &self.inner.as_ref().data;
+            let b = &other.inner.as_ref().data;
             a.partial_cmp(b)
         }
     }
@@ -150,8 +136,8 @@ impl<T: Trace + PartialOrd + ?Sized> PartialOrd for Gc<T> {
 impl<T: Trace + Ord + ?Sized> Ord for Gc<T> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         unsafe {
-            let a = &self.inner.as_ref().data.get().as_ref().unwrap();
-            let b = &other.inner.as_ref().data.get().as_ref().unwrap();
+            let a = &self.inner.as_ref().data;
+            let b = &other.inner.as_ref().data;
             a.cmp(b)
         }
     }
@@ -160,14 +146,14 @@ impl<T: Trace + Ord + ?Sized> Ord for Gc<T> {
 impl<T: Trace + Hash + ?Sized> Hash for Gc<T> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         unsafe {
-            self.inner.as_ref().data.get().as_ref().unwrap().hash(state);
+            self.inner.as_ref().data.hash(state);
         }
     }
 }
 
 impl<T: Trace + fmt::Display> fmt::Display for Gc<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        unsafe { self.inner.as_ref().data.get().as_ref().unwrap().fmt(f) }
+        unsafe { self.inner.as_ref().data.fmt(f) }
     }
 }
 
