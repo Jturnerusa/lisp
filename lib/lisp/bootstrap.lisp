@@ -121,15 +121,19 @@
                  t
                  (cons 'or (cdr exprs))))))
 
+
 (defmacro quasiquote (exprs)
-  (cons 'append
-        (map (lambda (expr)
-               (cond ((and (cons? expr) (= (car expr) 'unquote))
-                      (list 'list (cadr expr)))
-                     ((and (cons? expr) (= (car expr) 'unquote-splice))
-                      (cadr expr))
-                     (t (list 'list (list 'quote expr)))))
-             exprs)))
+  (cons 'append (map (lambda (expr)
+                       (cond ((and (cons? expr) (= (car expr) 'unquote))
+                              (list 'list (cadr expr)))
+                             ((and (cons? expr) (= (car expr) 'unquote-splice))
+                              (cadr expr))
+                             ((cons? expr)
+                              (list 'list (quasiquote expr)))
+                             (t
+                              (list 'list (list 'quote expr)))))
+                     exprs)))
+
 
 (def fold (lambda (fn list)
             (let ((acc (car list)))
