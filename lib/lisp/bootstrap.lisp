@@ -129,7 +129,7 @@
                              ((and (cons? expr) (= (car expr) 'unquote-splice))
                               (cadr expr))
                              ((cons? expr)
-                              (list 'list (quasiquote expr)))
+                              (list 'list (list 'quasiquote expr)))
                              (t
                               (list 'list (list 'quote expr)))))
                      exprs)))

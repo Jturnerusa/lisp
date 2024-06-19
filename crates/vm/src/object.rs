@@ -216,7 +216,7 @@ impl Display for NativeFunction {
 
 impl Display for Cons {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{} {}", self.0, self.1)
+        pretty_print(self, 0, f)
     }
 }
 
@@ -225,7 +225,7 @@ impl Display for Object {
         match self {
             Self::NativeFunction(native_function) => write!(f, "{native_function}",),
             Self::Function(function) => write!(f, "{}", function.deref().borrow()),
-            Self::Cons(cons) => write!(f, "({})", cons.deref().borrow()),
+            Self::Cons(cons) => write!(f, "{}", cons.deref().borrow()),
             Self::HashMap(map) => {
                 for (key, val) in map.deref().borrow().iter() {
                     writeln!(f, "{key} => {val},")?;
@@ -331,4 +331,17 @@ unsafe impl Trace for Object {
             _ => (),
         }
     }
+}
+
+fn pretty_print(cons: &Cons, depth: usize, f: &mut fmt::Formatter) -> fmt::Result {
+    let indent = " ".repeat(depth);
+    write!(f, "{indent}(")?;
+    for (i, expr) in cons.iter_cars().enumerate() {
+        write!(f, "{indent}{expr}")?;
+        if i < cons.iter_cars().count() - 1 {
+            write!(f, "{indent} ")?;
+        }
+    }
+    write!(f, ")")?;
+    Ok(())
 }
