@@ -30,31 +30,6 @@ pub struct Gc<T: Trace + ?Sized> {
     phantom: PhantomData<T>,
 }
 
-pub fn collect() {
-    let mut cursor = HEAD.get();
-    while let Some(current) = cursor {
-        unsafe {
-            cursor = current.as_ref().next.get();
-            if current.as_ref().refs.get() == 0 {
-                let next = current.as_ref().next.get();
-                let prev = current.as_ref().prev.get();
-
-                if let Some(next) = next {
-                    next.as_ref().prev.set(prev);
-                }
-
-                if let Some(prev) = prev {
-                    prev.as_ref().next.set(next);
-                } else {
-                    HEAD.set(next);
-                }
-
-                std::mem::drop(Box::from_raw(current.as_ptr()));
-            }
-        }
-    }
-}
-
 impl<T: Trace> Inner<T> {
     fn new(data: T) -> Self {
         Self {
