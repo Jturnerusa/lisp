@@ -1,8 +1,11 @@
-use core::fmt;
+#![allow(dead_code)]
+
+mod cell;
+mod gc;
+
+use crate::gc::Inner;
 use std::cell::{Cell, RefCell};
-use std::collections::HashMap;
-use std::hash::{BuildHasher, Hash};
-use std::marker::PhantomData;
+use std::mem;
 use std::ops::Deref;
 use std::ptr::NonNull;
 
@@ -11,164 +14,139 @@ thread_local! {
 }
 
 pub unsafe trait Trace {
-    unsafe fn trace(&self, tracer: &mut dyn FnMut(NonNull<Inner<dyn Trace>>));
+    unsafe fn root(&self);
+    unsafe fn unroot(&self);
+    unsafe fn trace(&self, tracer: &mut dyn FnMut(NonNull<Inner<dyn Trace>>) -> bool);
 }
 
-#[repr(C)]
-#[derive(Debug)]
-pub struct Inner<T: Trace + ?Sized> {
-    next: Cell<Option<NonNull<Inner<dyn Trace>>>>,
-    prev: Cell<Option<NonNull<Inner<dyn Trace>>>>,
-    refs: Cell<usize>,
-    data: T,
-}
-
-#[derive(Debug)]
-pub struct Gc<T: Trace + ?Sized> {
-    rooted: Cell<bool>,
-    inner: NonNull<Inner<T>>,
-    phantom: PhantomData<T>,
-}
-
-impl<T: Trace> Inner<T> {
-    fn new(data: T) -> Self {
-        Self {
-            next: Cell::new(None),
-            prev: Cell::new(None),
-            refs: Cell::new(1),
-            data,
-        }
+pub fn collect() {
+    let mut cursor = HEAD.get();
+    while let Some(current) = cursor {
+        let current_ref = unsafe { current.as_ref() };
+        cursor = current_ref.next.get();
+        current_ref.marked.set(false);
     }
-}
 
-impl<T: Trace + 'static> Gc<T> {
-    pub fn new(data: T) -> Self {
-        let inner = Box::into_raw(Box::new(Inner::new(data)));
-        let nonnull = NonNull::new(inner).unwrap();
+    let mut cursor = HEAD.get();
+    while let Some(current) = cursor {
+        let current_ref = unsafe { current.as_ref() };
+        cursor = current_ref.next.get();
 
-        let head = HEAD.get();
+        if current_ref.refs.get() > 0 {
+            current_ref.traced.set(true);
+            current_ref.marked.set(true);
 
-        if let Some(head) = head {
             unsafe {
-                nonnull.as_ref().next.set(Some(head));
-                head.as_ref().prev.set(Some(nonnull));
-            }
-        }
+                current_ref.data.trace(&mut |inner| {
+                    let inner = inner.as_ref();
 
-        HEAD.set(Some(nonnull));
+                    inner.marked.set(true);
 
-        Self {
-            rooted: Cell::new(true),
-            inner: nonnull,
-            phantom: PhantomData,
-        }
-    }
-}
-
-impl<T: Trace + ?Sized> Clone for Gc<T> {
-    fn clone(&self) -> Self {
-        unsafe {
-            let refs = self.inner.as_ref().refs.get();
-            self.inner.as_ref().refs.set(refs.checked_add(1).unwrap());
-        }
-        Self {
-            rooted: Cell::new(true),
-            inner: self.inner,
-            phantom: PhantomData,
+                    if inner.traced.get() {
+                        false
+                    } else {
+                        inner.traced.set(true);
+                        true
+                    }
+                });
+            };
         }
     }
-}
 
-impl<T: Trace + ?Sized> Deref for Gc<T> {
-    type Target = T;
-    fn deref(&self) -> &Self::Target {
-        unsafe { &self.inner.as_ref().data }
-    }
-}
+    let mut cursor = HEAD.get();
+    while let Some(current) = cursor {
+        let current_ref = unsafe { current.as_ref() };
+        cursor = current_ref.next.get();
 
-impl<T: Trace + PartialEq + ?Sized> PartialEq for Gc<T> {
-    fn eq(&self, other: &Self) -> bool {
-        unsafe {
-            let a = &self.inner.as_ref().data;
-            let b = &other.inner.as_ref().data;
-            a == b
+        if !current_ref.marked.get() {
+            unsafe {
+                remove_from_list(current);
+                mem::drop(Box::from_raw(current.as_ptr()));
+            };
         }
     }
 }
 
-impl<T: Trace + Eq + ?Sized> Eq for Gc<T> {}
+pub(crate) unsafe fn add_to_list(inner: NonNull<Inner<dyn Trace>>) {
+    let inner_ref = inner.as_ref();
 
-impl<T: Trace + PartialOrd + ?Sized> PartialOrd for Gc<T> {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        unsafe {
-            let a = &self.inner.as_ref().data;
-            let b = &other.inner.as_ref().data;
-            a.partial_cmp(b)
-        }
+    if let Some(head) = HEAD.get() {
+        let head_ref = head.as_ref();
+        inner_ref.next.set(Some(head));
+        head_ref.prev.set(Some(inner));
     }
+
+    HEAD.set(Some(inner));
 }
 
-impl<T: Trace + Ord + ?Sized> Ord for Gc<T> {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        unsafe {
-            let a = &self.inner.as_ref().data;
-            let b = &other.inner.as_ref().data;
-            a.cmp(b)
-        }
-    }
-}
+pub(crate) unsafe fn remove_from_list(inner: NonNull<Inner<dyn Trace>>) {
+    let inner_ref = inner.as_ref();
+    let next = inner_ref.next.get();
+    let prev = inner_ref.prev.get();
 
-impl<T: Trace + Hash + ?Sized> Hash for Gc<T> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        unsafe {
-            self.inner.as_ref().data.hash(state);
-        }
+    if let Some(next) = next {
+        let next_ref = next.as_ref();
+        next_ref.prev.set(prev);
     }
-}
 
-impl<T: Trace + fmt::Display> fmt::Display for Gc<T> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        unsafe { self.inner.as_ref().data.fmt(f) }
-    }
-}
-
-unsafe impl<T: Trace + 'static> Trace for Gc<T> {
-    unsafe fn trace(&self, tracer: &mut dyn FnMut(NonNull<Inner<dyn Trace>>)) {
-        tracer(self.inner);
+    if let Some(prev) = prev {
+        let prev_ref = prev.as_ref();
+        prev_ref.next.set(next);
+    } else {
+        HEAD.set(next);
     }
 }
 
 unsafe impl<T: Trace> Trace for RefCell<T> {
-    unsafe fn trace(&self, tracer: &mut dyn FnMut(NonNull<Inner<dyn Trace>>)) {
+    unsafe fn root(&self) {
+        self.borrow().root();
+    }
+
+    unsafe fn unroot(&self) {
+        self.borrow().unroot();
+    }
+
+    unsafe fn trace(&self, tracer: &mut dyn FnMut(NonNull<Inner<dyn Trace>>) -> bool) {
         self.borrow().deref().trace(tracer);
     }
 }
 
 unsafe impl Trace for String {
-    unsafe fn trace(&self, _: &mut dyn FnMut(NonNull<Inner<dyn Trace>>)) {}
+    unsafe fn root(&self) {}
+    unsafe fn unroot(&self) {}
+    unsafe fn trace(&self, _: &mut dyn FnMut(NonNull<Inner<dyn Trace>>) -> bool) {}
 }
 
-unsafe impl<T: Trace> Trace for [T] {
-    unsafe fn trace(&self, tracer: &mut dyn FnMut(NonNull<Inner<dyn Trace>>)) {
-        for element in self {
+unsafe impl<T: Trace> Trace for &[T] {
+    unsafe fn root(&self) {
+        for element in *self {
+            element.root();
+        }
+    }
+
+    unsafe fn unroot(&self) {
+        for element in *self {
+            element.unroot();
+        }
+    }
+
+    unsafe fn trace(&self, tracer: &mut dyn FnMut(NonNull<Inner<dyn Trace>>) -> bool) {
+        for element in *self {
             element.trace(tracer);
         }
     }
 }
 
 unsafe impl<T: Trace> Trace for Vec<T> {
-    unsafe fn trace(&self, tracer: &mut dyn FnMut(NonNull<Inner<dyn Trace>>)) {
-        for element in self {
-            element.trace(tracer);
-        }
+    unsafe fn root(&self) {
+        self.as_slice().root();
     }
-}
 
-unsafe impl<K: Trace, V: Trace, H: BuildHasher> Trace for HashMap<K, V, H> {
-    unsafe fn trace(&self, tracer: &mut dyn FnMut(NonNull<Inner<dyn Trace>>)) {
-        for (key, val) in self {
-            key.trace(tracer);
-            val.trace(tracer);
-        }
+    unsafe fn unroot(&self) {
+        self.as_slice().unroot();
+    }
+
+    unsafe fn trace(&self, tracer: &mut dyn FnMut(NonNull<Inner<dyn Trace>>) -> bool) {
+        self.as_slice().trace(tracer);
     }
 }
