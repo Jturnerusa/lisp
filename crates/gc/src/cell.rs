@@ -1,6 +1,7 @@
 use crate::Trace;
 use std::{
     cell::{Cell, UnsafeCell},
+    fmt::Display,
     num::NonZeroUsize,
     ops::{Deref, DerefMut},
 };
@@ -139,5 +140,37 @@ unsafe impl<T: Trace> Trace for GcCell<T> {
         tracer: &mut dyn FnMut(std::ptr::NonNull<crate::gc::Inner<dyn Trace>>) -> bool,
     ) {
         self.borrow().trace(tracer);
+    }
+}
+
+impl<T: Trace + PartialEq> PartialEq for GcCell<T> {
+    fn eq(&self, other: &Self) -> bool {
+        *self.borrow() == *other.borrow()
+    }
+}
+
+impl<T: Trace + Eq> Eq for GcCell<T> {}
+
+impl<T: Trace + PartialOrd> PartialOrd for GcCell<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.borrow().partial_cmp(&*other.borrow())
+    }
+}
+
+impl<T: Trace + Ord> Ord for GcCell<T> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.borrow().cmp(&*other.borrow())
+    }
+}
+
+impl<T: Trace + Display> Display for GcCell<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.borrow().fmt(f)
+    }
+}
+
+impl<T: Trace + Clone> Clone for GcCell<T> {
+    fn clone(&self) -> Self {
+        GcCell::new(self.borrow().clone())
     }
 }
