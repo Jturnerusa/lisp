@@ -100,20 +100,6 @@ pub(crate) unsafe fn remove_from_list(inner: NonNull<Inner<dyn Trace>>) {
     }
 }
 
-unsafe impl<T: Trace> Trace for RefCell<T> {
-    unsafe fn root(&self) {
-        self.borrow().root();
-    }
-
-    unsafe fn unroot(&self) {
-        self.borrow().unroot();
-    }
-
-    unsafe fn trace(&self, tracer: &mut dyn FnMut(NonNull<Inner<dyn Trace>>) -> bool) {
-        self.borrow().deref().trace(tracer);
-    }
-}
-
 unsafe impl Trace for String {
     unsafe fn root(&self) {}
     unsafe fn unroot(&self) {}
