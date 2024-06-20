@@ -139,3 +139,26 @@ unsafe impl<T: Trace> Trace for Vec<T> {
         self.as_slice().trace(tracer);
     }
 }
+
+unsafe impl<K: Trace, V: Trace, S: BuildHasher> Trace for HashMap<K, V, S> {
+    unsafe fn root(&self) {
+        for (k, v) in self {
+            k.root();
+            v.root();
+        }
+    }
+
+    unsafe fn unroot(&self) {
+        for (k, v) in self {
+            k.unroot();
+            v.unroot();
+        }
+    }
+
+    unsafe fn trace(&self, tracer: &mut dyn FnMut(NonNull<Inner<dyn Trace>>) -> bool) {
+        for (k, v) in self {
+            k.trace(tracer);
+            v.trace(tracer);
+        }
+    }
+}
