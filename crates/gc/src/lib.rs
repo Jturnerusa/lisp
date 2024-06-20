@@ -3,6 +3,9 @@
 mod cell;
 mod gc;
 
+pub use cell::GcCell;
+pub use gc::Gc;
+
 use crate::gc::Inner;
 use std::cell::{Cell, RefCell};
 use std::mem;
