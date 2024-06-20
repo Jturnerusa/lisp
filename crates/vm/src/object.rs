@@ -1,6 +1,5 @@
 use crate::{Arity, Error, OpCode};
-use gc::{Gc, Trace};
-use std::cell::RefCell;
+use gc::{Gc, GcCell, Trace};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fmt::{self, Debug, Display};
@@ -37,9 +36,9 @@ pub enum HashMapKey {
 #[derive(Clone, Debug, EnumAs, EnumIs)]
 pub enum Object {
     NativeFunction(NativeFunction),
-    Function(Gc<RefCell<Lambda>>),
-    Cons(Gc<RefCell<Cons>>),
-    HashMap(Gc<RefCell<HashMap<HashMapKey, Object>>>),
+    Function(Gc<GcCell<Lambda>>),
+    Cons(Gc<GcCell<Cons>>),
+    HashMap(Gc<GcCell<HashMap<HashMapKey, Object>>>),
     String(Gc<String>),
     Symbol(Gc<String>),
     Int(i64),
@@ -52,7 +51,7 @@ pub enum Object {
 pub struct Lambda {
     pub(crate) arity: Arity,
     pub(crate) opcodes: Rc<[OpCode]>,
-    pub(crate) upvalues: Vec<Gc<RefCell<Object>>>,
+    pub(crate) upvalues: Vec<Gc<GcCell<Object>>>,
 }
 
 #[allow(clippy::type_complexity)]
@@ -174,7 +173,7 @@ impl TryFrom<&Cons> for value::Cons {
 impl PartialEq for Object {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Object::Cons(a), Object::Cons(b)) => a == b,
+            (Object::Cons(a), Object::Cons(b)) => *a.borrow() == *b.borrow(),
             (Object::String(a), Object::String(b)) => a == b,
             (Object::Symbol(a), Object::Symbol(b)) => a == b,
             (Object::Int(a), Object::Int(b)) => a == b,
@@ -224,8 +223,8 @@ impl Display for Object {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::NativeFunction(native_function) => write!(f, "{native_function}",),
-            Self::Function(function) => write!(f, "{}", function.deref().borrow()),
-            Self::Cons(cons) => write!(f, "{}", cons.deref().borrow()),
+            Self::Function(function) => write!(f, "{}", *function.deref().borrow()),
+            Self::Cons(cons) => write!(f, "{}", *cons.deref().borrow()),
             Self::HashMap(map) => {
                 for (key, val) in map.deref().borrow().iter() {
                     writeln!(f, "{key} => {val},")?;
@@ -294,12 +293,24 @@ impl TryFrom<&Object> for HashMapKey {
     }
 }
 
-unsafe impl Trace for OpCode {
-    unsafe fn trace(&self, _: &mut dyn FnMut(NonNull<gc::Inner<dyn Trace>>)) {}
-}
-
 unsafe impl Trace for HashMapKey {
-    unsafe fn trace(&self, tracer: &mut dyn FnMut(NonNull<gc::Inner<dyn Trace>>)) {
+    unsafe fn root(&self) {
+        match self {
+            Self::Symbol(symbol) => symbol.root(),
+            Self::String(string) => string.root(),
+            _ => (),
+        }
+    }
+
+    unsafe fn unroot(&self) {
+        match self {
+            Self::Symbol(symbol) => symbol.unroot(),
+            Self::String(string) => string.unroot(),
+            _ => (),
+        }
+    }
+
+    unsafe fn trace(&self, tracer: &mut dyn FnMut(NonNull<gc::Inner<dyn Trace>>) -> bool) {
         match self {
             Self::Symbol(symbol) => symbol.trace(tracer),
             Self::String(string) => string.trace(tracer),
@@ -309,27 +320,62 @@ unsafe impl Trace for HashMapKey {
 }
 
 unsafe impl Trace for Lambda {
-    unsafe fn trace(&self, tracer: &mut dyn FnMut(NonNull<gc::Inner<dyn Trace>>)) {
+    unsafe fn root(&self) {
+        self.upvalues.root();
+    }
+
+    unsafe fn unroot(&self) {
+        self.upvalues.unroot();
+    }
+
+    unsafe fn trace(&self, tracer: &mut dyn FnMut(NonNull<gc::Inner<dyn Trace>>) -> bool) {
         self.upvalues.trace(tracer);
     }
 }
 
-unsafe impl Trace for Cons {
-    unsafe fn trace(&self, tracer: &mut dyn FnMut(NonNull<gc::Inner<dyn Trace>>)) {
-        self.0.trace(tracer);
-        self.1.trace(tracer);
+unsafe impl Trace for Object {
+    unsafe fn root(&self) {
+        match self {
+            Self::Function(function) => function.root(),
+            Self::Cons(cons) => cons.root(),
+            Self::HashMap(hm) => hm.root(),
+            Self::Symbol(symbol) => symbol.root(),
+            Self::String(string) => string.root(),
+            _ => (),
+        }
+    }
+
+    unsafe fn unroot(&self) {
+        match self {
+            Self::Function(function) => function.unroot(),
+            Self::Cons(cons) => cons.unroot(),
+            Self::HashMap(hm) => hm.unroot(),
+            Self::Symbol(symbol) => symbol.unroot(),
+            Self::String(string) => string.unroot(),
+            _ => (),
+        }
+    }
+
+    unsafe fn trace(&self, tracer: &mut dyn FnMut(NonNull<gc::Inner<dyn Trace>>) -> bool) {
+        match self {
+            Self::Function(function) => function.trace(tracer),
+            Self::Cons(cons) => cons.trace(tracer),
+            Self::HashMap(hm) => hm.trace(tracer),
+            Self::Symbol(symbol) => symbol.trace(tracer),
+            Self::String(string) => string.trace(tracer),
+            _ => (),
+        }
     }
 }
 
-unsafe impl Trace for Object {
-    unsafe fn trace(&self, tracer: &mut dyn FnMut(NonNull<gc::Inner<dyn Trace>>)) {
-        match self {
-            Object::Function(function) => function.trace(tracer),
-            Object::Cons(cons) => cons.trace(tracer),
-            Object::Symbol(symbol) => symbol.trace(tracer),
-            Object::String(string) => string.trace(tracer),
-            _ => (),
-        }
+unsafe impl Trace for Cons {
+    unsafe fn root(&self) {}
+
+    unsafe fn unroot(&self) {}
+
+    unsafe fn trace(&self, tracer: &mut dyn FnMut(NonNull<gc::Inner<dyn Trace>>) -> bool) {
+        self.0.trace(tracer);
+        self.1.trace(tracer);
     }
 }
 

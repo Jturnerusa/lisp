@@ -3,10 +3,9 @@
 pub mod object;
 
 use crate::object::{Cons, Lambda, NativeFunction, Type};
-use gc::Gc;
+use gc::{Gc, GcCell};
 use identity_hasher::IdentityHasher;
 use object::HashMapKey;
-use std::cell::RefCell;
 use std::cmp::{Ordering, PartialOrd};
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -105,7 +104,7 @@ pub enum UpValue {
 
 #[derive(Clone, Debug)]
 struct Frame {
-    function: Option<Gc<RefCell<Lambda>>>,
+    function: Option<Gc<GcCell<Lambda>>>,
     pc: usize,
     bp: usize,
 }
@@ -113,7 +112,7 @@ struct Frame {
 #[derive(Clone, Debug, EnumAs, EnumIs)]
 pub enum Local {
     Value(Object),
-    UpValue(Gc<RefCell<Object>>),
+    UpValue(Gc<GcCell<Object>>),
 }
 
 pub struct Vm {
@@ -121,7 +120,7 @@ pub struct Vm {
     constants: HashMap<u64, Constant, IdentityHasher>,
     stack: Vec<Local>,
     frames: Vec<Frame>,
-    current_function: Option<Gc<RefCell<Lambda>>>,
+    current_function: Option<Gc<GcCell<Lambda>>>,
     pc: usize,
     bp: usize,
 }
@@ -377,7 +376,7 @@ impl Vm {
         let val = match upvalue {
             UpValue::Local(i) => {
                 let val = self.stack[self.bp + i].clone().into_object();
-                let gc = Gc::new(RefCell::new(val));
+                let gc = Gc::new(GcCell::new(val));
                 self.stack[self.bp + i] = Local::UpValue(gc.clone());
                 gc
             }
@@ -514,7 +513,7 @@ impl Vm {
             upvalues: Vec::new(),
         };
 
-        let object = Object::Function(Gc::new(RefCell::new(function)));
+        let object = Object::Function(Gc::new(GcCell::new(function)));
 
         self.stack.push(Local::Value(object));
 
@@ -604,7 +603,7 @@ impl Vm {
         let rhs = self.stack.pop().unwrap();
         let lhs = self.stack.pop().unwrap();
 
-        let cons = Object::Cons(Gc::new(RefCell::new(Cons(
+        let cons = Object::Cons(Gc::new(GcCell::new(Cons(
             lhs.into_object(),
             rhs.into_object(),
         ))));
@@ -760,7 +759,7 @@ impl Vm {
     }
 
     pub fn map_create(&mut self) -> Result<(), Error> {
-        let map = Object::HashMap(Gc::new(RefCell::new(HashMap::new())));
+        let map = Object::HashMap(Gc::new(GcCell::new(HashMap::new())));
         self.stack.push(Local::Value(map));
         Ok(())
     }
@@ -817,7 +816,7 @@ impl Vm {
 
 fn make_list(objects: &[Local]) -> Local {
     if !objects.is_empty() {
-        Local::Value(Object::Cons(Gc::new(RefCell::new(Cons(
+        Local::Value(Object::Cons(Gc::new(GcCell::new(Cons(
             objects[0].clone().into_object(),
             make_list(&objects[1..]).into_object(),
         )))))
