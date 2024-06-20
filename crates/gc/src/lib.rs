@@ -3,13 +3,14 @@
 mod cell;
 mod gc;
 
-pub use cell::GcCell;
-pub use gc::Gc;
+pub use crate::cell::GcCell;
+pub use crate::gc::Gc;
+pub use crate::gc::Inner;
 
-use crate::gc::Inner;
-use std::cell::{Cell, RefCell};
+use std::cell::Cell;
+use std::collections::HashMap;
+use std::hash::BuildHasher;
 use std::mem;
-use std::ops::Deref;
 use std::ptr::NonNull;
 
 thread_local! {
