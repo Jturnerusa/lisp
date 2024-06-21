@@ -326,3 +326,5 @@ deftest!(test_and, "lisp/and.lisp");
 deftest!(test_or, "lisp/or.lisp");
 
 deftest!(test_cond, "lisp/cond.lisp");
+
+deftest!(test_named_let, "lisp/named-let.lisp");

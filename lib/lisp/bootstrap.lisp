@@ -85,7 +85,12 @@
                             (cons (car (car lists))
                                   (apply append (cdr lists)))
                             (cons (car (car lists))
-                                  (apply append (cons (cdr (car lists)) (cdr lists))))))))))
+                                  (apply append (cons (cdr (car lists)) (cdr lists)))))))))
+
+  (def Z (lambda (f)
+         ((lambda (g) (g g)) (lambda (g)
+                               (f (lambda (&rest args)
+                                    (apply (g g) args))))))))
 
 (defmacro progn (&rest body)
   (list (cons 'lambda (cons '() body))))
@@ -134,6 +139,11 @@
                               (list 'list (list 'quote expr)))))
                      exprs)))
 
+(defmacro named-let (name bindings &rest body)
+  `(let ((,name (Z (lambda (,name)
+                     (lambda ,(map car bindings)
+                       ,@body)))))
+     (,name ,@(map cadr bindings))))
 
 (def fold (lambda (fn list)
             (let ((acc (car list)))
