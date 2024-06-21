@@ -369,9 +369,15 @@ unsafe impl Trace for Object {
 }
 
 unsafe impl Trace for Cons {
-    unsafe fn root(&self) {}
+    unsafe fn root(&self) {
+        self.0.root();
+        self.1.root();
+    }
 
-    unsafe fn unroot(&self) {}
+    unsafe fn unroot(&self) {
+        self.0.unroot();
+        self.1.unroot();
+    }
 
     unsafe fn trace(&self, tracer: &mut dyn FnMut(NonNull<gc::Inner<dyn Trace>>) -> bool) {
         self.0.trace(tracer);
