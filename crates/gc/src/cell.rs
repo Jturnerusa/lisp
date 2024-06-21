@@ -126,13 +126,27 @@ impl<'a, T: Trace> DerefMut for RefMut<'a, T> {
 
 unsafe impl<T: Trace> Trace for GcCell<T> {
     unsafe fn root(&self) {
+        debug_assert!(!self.rooted.get());
+
         self.rooted.set(true);
-        self.borrow().root();
+
+        if let State::Shared(_) | State::None = self.state.get() {
+            unsafe {
+                self.data.get().as_ref().unwrap().root();
+            }
+        }
     }
 
     unsafe fn unroot(&self) {
+        debug_assert!(self.rooted.get());
+
         self.rooted.set(false);
-        self.borrow().unroot();
+
+        if let State::Shared(_) | State::None = self.state.get() {
+            unsafe {
+                self.data.get().as_ref().unwrap().unroot();
+            }
+        }
     }
 
     unsafe fn trace(

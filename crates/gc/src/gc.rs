@@ -148,21 +148,23 @@ impl<T: Trace + fmt::Display> fmt::Display for Gc<T> {
 
 unsafe impl<T: Trace + 'static> Trace for Gc<T> {
     unsafe fn root(&self) {
+        debug_assert!(!self.rooted.get());
+
         self.rooted.set(true);
+
         let inner_ref = unsafe { self.inner.as_ref() };
+
         inner_ref.increment_refs();
-        unsafe {
-            inner_ref.data.root();
-        };
     }
 
     unsafe fn unroot(&self) {
+        debug_assert!(self.rooted.get());
+
         self.rooted.set(false);
+
         let inner_ref = unsafe { self.inner.as_ref() };
+
         inner_ref.decrement_refs();
-        unsafe {
-            inner_ref.data.unroot();
-        }
     }
 
     unsafe fn trace(&self, tracer: &mut dyn FnMut(NonNull<Inner<dyn Trace>>) -> bool) {
