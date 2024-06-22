@@ -17,6 +17,7 @@ macro_rules! deftest {
 }
 
 static BOOTSTRAP_SOURCE: &str = include_str!("../lib/lisp/bootstrap.lisp");
+static LIST_UTILS_SOURCE: &str = include_str!("../lib/lisp/list.lisp");
 
 fn eval(input: &str) -> Result<Option<vm::Object>, Box<dyn std::error::Error>> {
     let mut compiler = Compiler::new();
@@ -27,6 +28,11 @@ fn eval(input: &str) -> Result<Option<vm::Object>, Box<dyn std::error::Error>> {
     native_functions::load_module(&mut vm);
 
     for read in Reader::new(BOOTSTRAP_SOURCE) {
+        let value = read?;
+        compiler.compile(&value, &mut opcodes, &mut constants)?;
+    }
+
+    for read in Reader::new(LIST_UTILS_SOURCE) {
         let value = read?;
         compiler.compile(&value, &mut opcodes, &mut constants)?;
     }
@@ -328,3 +334,9 @@ deftest!(test_or, "lisp/or.lisp");
 deftest!(test_cond, "lisp/cond.lisp");
 
 deftest!(test_named_let, "lisp/named-let.lisp");
+
+deftest!(test_list_take, "lisp/list/take.lisp");
+
+deftest!(test_list_drop, "lisp/list/drop.lisp");
+
+deftest!(test_list_sort, "lisp/list/sort.lisp");
