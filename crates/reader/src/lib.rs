@@ -1,3 +1,4 @@
+use core::fmt;
 use logos::{Lexer, Logos, SpannedIter};
 use std::ops::Range;
 use thiserror::Error;
@@ -66,7 +67,7 @@ enum Macro {
     Splice,
 }
 
-#[derive(Clone, Debug, EnumAs, EnumIs)]
+#[derive(Clone, Debug, PartialEq, PartialOrd, Hash, EnumAs, EnumIs)]
 pub enum SExpr {
     List {
         span: Range<usize>,
@@ -103,6 +104,18 @@ impl<'a> Iterator for Reader<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         read(&mut self.0)
+    }
+}
+
+impl fmt::Display for SExpr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::List { list, .. } => pretty_print_list(list.as_slice(), f),
+            Self::Symbol { symbol, .. } => write!(f, "{symbol}"),
+            Self::String { string, .. } => write!(f, r#""{string}""#),
+            Self::Char { char, .. } => write!(f, r#"'{char}"#),
+            Self::Int { int, .. } => write!(f, "{int}"),
+        }
     }
 }
 
@@ -207,6 +220,18 @@ fn quote<'a>(tokens: &mut SpannedIter<'a, Token>, r#macro: Macro) -> Result<SExp
         span: start..start,
         list,
     })
+}
+
+fn pretty_print_list(list: &[SExpr], f: &mut fmt::Formatter) -> fmt::Result {
+    write!(f, "(")?;
+    for (i, sexpr) in list.iter().enumerate() {
+        write!(f, "{sexpr}")?;
+        if i < list.len() - 1 {
+            write!(f, " ")?;
+        }
+    }
+    write!(f, ")");
+    Ok(())
 }
 
 #[cfg(test)]
