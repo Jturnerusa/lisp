@@ -1,242 +1,280 @@
-mod parse;
-
+use logos::{Lexer, Logos, SpannedIter};
+use std::ops::Range;
 use thiserror::Error;
-
-use parse::Parser;
-
-use value::{Cons, Value};
+use unwrap_enum::{EnumAs, EnumIs};
 
 #[derive(Clone, Debug, Error)]
-pub enum Error {
+pub enum Error<'a> {
+    #[error("lexer error: remaining input {0}")]
+    Lexer(&'a str),
+
     #[error("unbalanced parens")]
-    UnbalancedParens,
-    #[error("parser error: {0}")]
-    ParseError(String),
+    UnBalancedParen(&'a str),
+
+    #[error("unexpected paren")]
+    UnExpectedParen(&'a str),
+
+    #[error("unexpected eof")]
+    UnExpectedEof,
 }
 
-#[allow(clippy::enum_variant_names)]
+#[derive(Clone, Copy, Debug, Logos)]
+#[logos(skip r#"[\s\t\n]+|[;][\s]*"#)]
+enum Token {
+    #[token("(")]
+    LeftParen,
+
+    #[token(")")]
+    RightParen,
+
+    #[token("'")]
+    Quote,
+
+    #[token("`")]
+    QuasiQuote,
+
+    #[token(",")]
+    UnQuote,
+
+    #[token(",@")]
+    Splice,
+
+    #[regex(r#"[a-zA-Z+*/<>?-][a-zA-Z0-9+*/<>?-]*"#)]
+    Symbol,
+
+    #[regex(r#""[^"]+""#)]
+    String,
+
+    #[regex(r#"'[*]{1}'"#)]
+    Char,
+
+    #[regex("[0-9]+")]
+    Int,
+
+    #[token("true")]
+    True,
+
+    #[token("false")]
+    False,
+}
+
 #[derive(Clone, Copy, Debug)]
-enum Quote {
+enum Macro {
     Quote,
     QuasiQuote,
     UnQuote,
     Splice,
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct Reader<'a> {
-    parser: Parser<'a>,
+#[derive(Clone, Debug, EnumAs, EnumIs)]
+pub enum SExpr {
+    List {
+        span: Range<usize>,
+        list: Vec<SExpr>,
+    },
+    Symbol {
+        span: Range<usize>,
+        symbol: String,
+    },
+    String {
+        span: Range<usize>,
+        string: String,
+    },
+    Char {
+        span: Range<usize>,
+        char: char,
+    },
+    Int {
+        span: Range<usize>,
+        int: i64,
+    },
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct ReaderWithLines<'a>(Reader<'a>);
+pub struct Reader<'a>(SpannedIter<'a, Token>);
 
 impl<'a> Reader<'a> {
     pub fn new(input: &'a str) -> Self {
-        Self {
-            parser: Parser::new(input),
-        }
-    }
-
-    pub fn lines_read(&self) -> usize {
-        self.parser.lines_read()
-    }
-
-    fn read(&mut self) -> Option<Result<Value, Error>> {
-        self.read_atom()
-    }
-
-    fn read_atom(&mut self) -> Option<Result<Value, Error>> {
-        Some(Ok(match self.parser.next()? {
-            Ok(parse::Node::LeftParen) => match self.read_cons() {
-                Ok(cons) => cons,
-                Err(e) => return Some(Err(Error::ParseError(e.to_string()))),
-            },
-            Ok(parse::Node::RightParen) => return Some(Err(Error::UnbalancedParens)),
-            Ok(parse::Node::Quote) => match self.quote(Quote::Quote) {
-                Ok(value) => value,
-                Err(e) => return Some(Err(Error::ParseError(e.to_string()))),
-            },
-            Ok(parse::Node::QuasiQuote) => match self.quote(Quote::QuasiQuote) {
-                Ok(value) => value,
-                Err(e) => return Some(Err(Error::ParseError(e.to_string()))),
-            },
-            Ok(parse::Node::UnQuote) => match self.quote(Quote::UnQuote) {
-                Ok(value) => value,
-                Err(e) => return Some(Err(Error::ParseError(e.to_string()))),
-            },
-            Ok(parse::Node::UnQuoteSplice) => match self.quote(Quote::Splice) {
-                Ok(value) => value,
-                Err(e) => return Some(Err(Error::ParseError(e.to_string()))),
-            },
-            Ok(parse::Node::Symbol("nil")) => Value::Nil,
-            Ok(parse::Node::Symbol("t")) => Value::True,
-            Ok(parse::Node::Symbol(symbol)) => Value::Symbol(symbol.to_string()),
-            Ok(parse::Node::String(string)) => Value::String(string.to_string()),
-            Ok(parse::Node::Int(i)) => Value::Int(i.parse().unwrap()),
-            Err(e) => return Some(Err(Error::ParseError(e.to_string()))),
-        }))
-    }
-
-    fn read_cons(&mut self) -> Result<Value, Error> {
-        Ok(Value::Cons(Box::new(Cons(
-            match self.parser.next() {
-                Some(Ok(parse::Node::LeftParen)) => self.read_cons()?,
-                Some(Ok(parse::Node::RightParen)) => return Ok(Value::Nil),
-                Some(Ok(parse::Node::Quote)) => self.quote(Quote::Quote)?,
-                Some(Ok(parse::Node::QuasiQuote)) => self.quote(Quote::QuasiQuote)?,
-                Some(Ok(parse::Node::UnQuote)) => self.quote(Quote::UnQuote)?,
-                Some(Ok(parse::Node::UnQuoteSplice)) => self.quote(Quote::Splice)?,
-                Some(Ok(parse::Node::Symbol("nil"))) => Value::Nil,
-                Some(Ok(parse::Node::Symbol("t"))) => Value::True,
-                Some(Ok(parse::Node::Symbol(symbol))) => Value::Symbol(symbol.to_string()),
-                Some(Ok(parse::Node::String(string))) => Value::String(string.to_string()),
-                Some(Ok(parse::Node::Int(i))) => Value::Int(i.parse().unwrap()),
-                Some(Err(e)) => return Err(Error::ParseError(e.to_string())),
-                None => return Err(Error::UnbalancedParens),
-            },
-            self.read_cons()?,
-        ))))
-    }
-
-    fn quote(&mut self, quote: Quote) -> Result<Value, Error> {
-        let symbol = Value::Symbol(
-            match quote {
-                Quote::Quote => "quote",
-                Quote::QuasiQuote => "quasiquote",
-                Quote::UnQuote => "unquote",
-                Quote::Splice => "unquote-splice",
-            }
-            .to_string(),
-        );
-        Ok(match self.read_atom() {
-            Some(Ok(value)) => Value::Cons(Box::new(Cons(
-                symbol,
-                Value::Cons(Box::new(Cons(value, Value::Nil))),
-            ))),
-            None => Value::Cons(Box::new(Cons(symbol, Value::Nil))),
-            Some(Err(e)) => return Err(Error::ParseError(e.to_string())),
-        })
-    }
-}
-
-impl<'a> ReaderWithLines<'a> {
-    pub fn new(input: &'a str) -> Self {
-        Self(Reader::new(input))
+        Self(Lexer::new(input).spanned())
     }
 }
 
 impl<'a> Iterator for Reader<'a> {
-    type Item = Result<Value, Error>;
+    type Item = Result<SExpr, Error<'a>>;
+
     fn next(&mut self) -> Option<Self::Item> {
-        self.read()
+        read(&mut self.0)
     }
 }
 
-impl<'a> Iterator for ReaderWithLines<'a> {
-    type Item = (Result<Value, Error>, usize);
-    fn next(&mut self) -> Option<Self::Item> {
-        Some((self.0.read()?, self.0.lines_read()))
+fn read<'a>(tokens: &mut SpannedIter<'a, Token>) -> Option<Result<SExpr, Error<'a>>> {
+    Some(Ok(match tokens.next()? {
+        (Ok(Token::LeftParen), _) => match read_list(tokens) {
+            Ok(list) => list,
+            Err(e) => return Some(Err(e)),
+        },
+        (Ok(Token::RightParen), _) => return Some(Err(Error::UnExpectedParen(tokens.remainder()))),
+        (Ok(Token::Quote), _) => match quote(tokens, Macro::Quote) {
+            Ok(quoted) => quoted,
+            Err(e) => return Some(Err(e)),
+        },
+        (Ok(Token::QuasiQuote), _) => match quote(tokens, Macro::QuasiQuote) {
+            Ok(quoted) => quoted,
+            Err(e) => return Some(Err(e)),
+        },
+        (Ok(Token::UnQuote), _) => match quote(tokens, Macro::UnQuote) {
+            Ok(quoted) => quoted,
+            Err(e) => return Some(Err(e)),
+        },
+        (Ok(Token::Splice), _) => match quote(tokens, Macro::Splice) {
+            Ok(quoted) => quoted,
+            Err(e) => return Some(Err(e)),
+        },
+        (Ok(Token::Symbol), span) => SExpr::Symbol {
+            span,
+            symbol: tokens.slice().to_string(),
+        },
+        (Ok(Token::String), span) => SExpr::String {
+            span,
+            string: tokens.slice().to_string(),
+        },
+        (Ok(Token::Int), span) => SExpr::Int {
+            span,
+            int: tokens.slice().parse().unwrap(),
+        },
+        (Err(_), _) => return Some(Err(Error::Lexer(tokens.remainder()))),
+        _ => todo!(),
+    }))
+}
+
+fn read_list<'a>(tokens: &mut SpannedIter<'a, Token>) -> Result<SExpr, Error<'a>> {
+    let mut list = Vec::new();
+    let start = tokens.span().start;
+
+    loop {
+        match tokens.next() {
+            Some((Ok(Token::LeftParen), _)) => list.push(read_list(tokens)?),
+            Some((Ok(Token::RightParen), span)) => {
+                return Ok(SExpr::List {
+                    span: start..span.end,
+                    list,
+                })
+            }
+            Some((Ok(Token::Quote), _)) => list.push(quote(tokens, Macro::Quote)?),
+            Some((Ok(Token::QuasiQuote), _)) => list.push(quote(tokens, Macro::QuasiQuote)?),
+            Some((Ok(Token::UnQuote), _)) => list.push(quote(tokens, Macro::UnQuote)?),
+            Some((Ok(Token::Splice), _)) => list.push(quote(tokens, Macro::Splice)?),
+            Some((Ok(Token::Symbol), span)) => list.push(SExpr::Symbol {
+                span,
+                symbol: tokens.slice().to_string(),
+            }),
+            Some((Ok(Token::String), span)) => list.push(SExpr::String {
+                span,
+                string: tokens.slice().to_string(),
+            }),
+            Some((Ok(Token::Int), span)) => list.push(SExpr::Int {
+                span,
+                int: tokens.slice().parse().unwrap(),
+            }),
+            Some((Err(_), _)) => return Err(Error::Lexer(tokens.remainder())),
+            None => return Err(Error::UnExpectedEof),
+            _ => todo!(),
+        }
     }
+}
+
+fn quote<'a>(tokens: &mut SpannedIter<'a, Token>, r#macro: Macro) -> Result<SExpr, Error<'a>> {
+    let mut list = Vec::new();
+    let start = tokens.span().start;
+
+    list.push(SExpr::Symbol {
+        span: start..start,
+        symbol: match r#macro {
+            Macro::Quote => "quote",
+            Macro::QuasiQuote => "quasiquote",
+            Macro::UnQuote => "unquote",
+            Macro::Splice => "unquote-splice",
+        }
+        .to_string(),
+    });
+
+    list.push(match read(tokens) {
+        Some(Ok(sexpr)) => sexpr,
+        Some(Err(e)) => return Err(e),
+        None => return Err(Error::UnExpectedEof),
+    });
+
+    Ok(SExpr::List {
+        span: start..start,
+        list,
+    })
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
-
-    macro_rules! atom {
-        ($e:literal) => {
-            Value::Symbol($e.to_string())
-        };
-        ($e:tt) => {
-            Value::Symbol(stringify!($e).to_string())
-        };
-    }
-
-    macro_rules! cons {
-        ($e:expr) => {
-            Value::Cons(Box::new(value::Cons(
-                $e,
-                Value::Nil
-            )))
-        };
-
-        ($e:expr, $($rest:expr),+) => {
-            Value::Cons(Box::new(value::Cons(
-                $e,
-                cons!($($rest),+)
-            )))
-        };
-    }
 
     #[test]
     fn test_simple() {
-        let expected = cons! {atom!(a), atom!(b), atom!(c)};
-        let mut reader = Reader::new("(a b c)");
-        assert_eq!(expected, reader.next().unwrap().unwrap());
+        let input = "(a b c)";
+        let mut reader = Reader::new(input);
+
+        let list = match reader.next().unwrap().unwrap() {
+            SExpr::List { list, .. } => list,
+            _ => panic!(),
+        };
+
+        assert!(matches!(&list[0], SExpr::Symbol {  symbol, .. } if symbol == "a"));
+        assert!(matches!(&list[1], SExpr::Symbol {  symbol, .. } if symbol == "b"));
+        assert!(matches!(&list[2], SExpr::Symbol {  symbol, .. } if symbol == "c"));
     }
 
     #[test]
     fn test_nested() {
-        let expected = cons!(
-            atom!(a),
-            atom!(b),
-            cons!(atom!(c), atom!(d), cons!(atom!(e), atom!(f)))
-        );
-        let mut reader = Reader::new("(a b (c d (e f)))");
-        assert_eq!(expected, reader.next().unwrap().unwrap());
+        let input = "(a b (c))";
+        let mut reader = Reader::new(input);
+
+        let list = reader
+            .next()
+            .unwrap()
+            .unwrap()
+            .as_list()
+            .map(|(_, list)| list.clone())
+            .unwrap();
+
+        assert!(matches!(&list[0], SExpr::Symbol {  symbol, .. } if symbol == "a"));
+        assert!(matches!(&list[1], SExpr::Symbol {  symbol, .. } if symbol == "b"));
+
+        let inner_list = match &list[2] {
+            SExpr::List { list, .. } => list,
+            _ => panic!(),
+        };
+
+        assert!(matches!(&inner_list[0], SExpr::Symbol {  symbol, .. } if symbol == "c"));
     }
 
     #[test]
-    fn test_quote_shorthand() {
-        let expected = cons!(
-            atom!(a),
-            cons!(atom!(quote), cons!(atom!(b), cons!(atom!(c)), atom!(d)))
-        );
-        let mut reader = Reader::new("(a '(b (c) d))");
-        assert_eq!(expected, reader.next().unwrap().unwrap());
-    }
+    fn test_quote() {
+        let input = "('a)";
+        let mut reader = Reader::new(input);
 
-    #[test]
-    fn test_quasiquote() {
-        let expected = cons!(
-            atom!(a),
-            cons!(
-                atom!(quasiquote),
-                cons!(atom!(b), cons!(atom!(unquote), cons!(atom!(c))), atom!(d))
-            )
-        );
-        let mut reader = Reader::new("(a `(b ,(c) d))");
-        assert_eq!(expected, reader.next().unwrap().unwrap());
-    }
+        let list = reader
+            .next()
+            .unwrap()
+            .unwrap()
+            .as_list()
+            .map(|(_, list)| list.clone())
+            .unwrap();
 
-    #[test]
-    fn test_unquote_splice() {
-        let expected = cons!(
-            atom!(a),
-            cons!(
-                atom!(quasiquote),
-                cons!(
-                    atom!(b),
-                    cons!(atom!("unquote-splice"), cons!(atom!(c))),
-                    atom!(d)
-                )
-            )
-        );
-        let mut reader = Reader::new("(a `(b ,@(c) d))");
-        assert_eq!(expected, reader.next().unwrap().unwrap());
-    }
+        let inner_list = &list[0].as_list().map(|(_, list)| list).unwrap();
 
-    #[test]
-    fn test_quasiquote_on_atom() {
-        let expected = cons!(
-            atom!(a),
-            cons!(
-                atom!(quasiquote),
-                cons!(atom!(b), cons!(atom!(unquote), atom!(c)), atom!(d))
-            )
-        );
-        let mut reader = Reader::new("(a `(b ,c d))");
-        assert_eq!(expected, reader.next().unwrap().unwrap());
+        assert!(matches!(
+            &inner_list[0],
+            SExpr::Symbol { symbol, .. } if symbol == "quote"
+        ));
+
+        assert!(matches!(
+            &inner_list[1],
+            SExpr::Symbol { symbol, .. } if symbol == "a"
+        ));
     }
 }
