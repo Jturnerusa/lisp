@@ -23,7 +23,6 @@ dependencies = [
  "thiserror",
  "twox-hash",
  "unwrap-enum",
- "value",
  "vm",
 ]
 
@@ -88,7 +87,6 @@ dependencies = [
  "identity-hasher",
  "native-functions",
  "reader",
- "value",
  "vm",
 ]
 
@@ -296,13 +294,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "value"
-version = "0.1.0"
-dependencies = [
- "unwrap-enum",
-]
-
-[[package]]
 name = "vm"
 version = "0.1.0"
 dependencies = [
@@ -311,7 +302,6 @@ dependencies = [
  "thiserror",
  "twox-hash",
  "unwrap-enum",
- "value",
 ]
 
 [[package]]

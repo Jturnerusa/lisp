@@ -7,7 +7,6 @@ use std::ops::Deref;
 use std::ptr::NonNull;
 use std::rc::Rc;
 use unwrap_enum::{EnumAs, EnumIs};
-use value::Value;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Type {

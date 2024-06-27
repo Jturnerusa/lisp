@@ -4,7 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-value = { path = "../value" }
 identity-hasher = { path = "../identity-hasher" }
 gc = { path = "../gc" }
 twox-hash = { workspace = true }
