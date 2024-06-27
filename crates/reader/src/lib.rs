@@ -67,7 +67,7 @@ enum Macro {
     Splice,
 }
 
-#[derive(Clone, Debug, PartialEq, PartialOrd, Hash, EnumAs, EnumIs)]
+#[derive(Clone, Debug, PartialEq, Hash, EnumAs, EnumIs)]
 pub enum SExpr {
     List {
         span: Range<usize>,
