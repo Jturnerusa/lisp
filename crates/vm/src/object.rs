@@ -142,33 +142,6 @@ impl fmt::Display for Type {
     }
 }
 
-impl TryFrom<&Object> for Value {
-    type Error = ();
-    fn try_from(object: &Object) -> Result<Self, Self::Error> {
-        Ok(match object {
-            Object::Cons(cons) => Value::Cons(Box::new(value::Cons::try_from(
-                cons.deref().borrow().deref(),
-            )?)),
-            Object::String(string) => Value::String(string.deref().clone()),
-            Object::Symbol(symbol) => Value::Symbol(symbol.deref().clone()),
-            Object::Int(i) => Value::Int(*i),
-            Object::True => Value::True,
-            Object::Nil => Value::Nil,
-            _ => return Err(()),
-        })
-    }
-}
-
-impl TryFrom<&Cons> for value::Cons {
-    type Error = ();
-    fn try_from(value: &Cons) -> Result<Self, Self::Error> {
-        Ok(value::Cons(
-            Value::try_from(&value.0)?,
-            Value::try_from(&value.1)?,
-        ))
-    }
-}
-
 impl PartialEq for Object {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
