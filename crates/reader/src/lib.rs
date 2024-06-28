@@ -89,6 +89,9 @@ pub enum SExpr {
         span: Range<usize>,
         int: i64,
     },
+    Nil {
+        span: Range<usize>,
+    },
 }
 
 pub struct Reader<'a>(SpannedIter<'a, Token>);
@@ -135,7 +138,8 @@ impl SExpr {
             | Self::Symbol { span, .. }
             | Self::String { span, .. }
             | Self::Char { span, .. }
-            | Self::Int { span, .. } => span.clone(),
+            | Self::Int { span, .. }
+            | Self::Nil { span } => span.clone(),
         }
     }
 }
@@ -162,6 +166,7 @@ impl fmt::Display for SExpr {
             Self::String { string, .. } => write!(f, r#""{string}""#),
             Self::Char { char, .. } => write!(f, r#"'{char}"#),
             Self::Int { int, .. } => write!(f, "{int}"),
+            Self::Nil { .. } => write!(f, "nil"),
         }
     }
 }
@@ -213,6 +218,9 @@ fn read_list<'a>(tokens: &mut SpannedIter<'a, Token>) -> Result<SExpr, Error<'a>
     loop {
         match tokens.next() {
             Some((Ok(Token::LeftParen), _)) => list.push(read_list(tokens)?),
+            Some((Ok(Token::RightParen), span)) if list.is_empty() => {
+                return Ok(SExpr::Nil { span })
+            }
             Some((Ok(Token::RightParen), span)) => {
                 return Ok(SExpr::List {
                     span: start..span.end,
