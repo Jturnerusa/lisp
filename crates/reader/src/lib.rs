@@ -2,7 +2,7 @@ use core::fmt;
 use logos::{Lexer, Logos, SpannedIter};
 use std::ops::Range;
 use thiserror::Error;
-use unwrap_enum::{EnumAs, EnumIs};
+use unwrap_enum::EnumIs;
 
 #[derive(Clone, Debug, Error)]
 pub enum Error<'a> {
@@ -67,7 +67,7 @@ enum Macro {
     Splice,
 }
 
-#[derive(Clone, Debug, PartialEq, Hash, EnumAs, EnumIs)]
+#[derive(Clone, Debug, PartialEq, Hash, EnumIs)]
 pub enum SExpr {
     List {
         span: Range<usize>,
@@ -92,6 +92,53 @@ pub enum SExpr {
 }
 
 pub struct Reader<'a>(SpannedIter<'a, Token>);
+
+impl SExpr {
+    pub fn as_list(&self) -> Option<&[SExpr]> {
+        match self {
+            Self::List { list, .. } => Some(list.as_slice()),
+            _ => None,
+        }
+    }
+
+    pub fn as_symbol(&self) -> Option<&str> {
+        match self {
+            Self::Symbol { symbol, .. } => Some(symbol.as_str()),
+            _ => None,
+        }
+    }
+
+    pub fn as_string(&self) -> Option<&str> {
+        match self {
+            Self::String { string, .. } => Some(string.as_str()),
+            _ => None,
+        }
+    }
+
+    pub fn as_char(&self) -> Option<char> {
+        match self {
+            Self::Char { char, .. } => Some(*char),
+            _ => None,
+        }
+    }
+
+    pub fn as_int(&self) -> Option<i64> {
+        match self {
+            SExpr::Int { int, .. } => Some(*int),
+            _ => None,
+        }
+    }
+
+    pub fn span(&self) -> Range<usize> {
+        match self {
+            Self::List { span, .. }
+            | Self::Symbol { span, .. }
+            | Self::String { span, .. }
+            | Self::Char { span, .. }
+            | Self::Int { span, .. } => span.clone(),
+        }
+    }
+}
 
 impl<'a> Reader<'a> {
     pub fn new(input: &'a str) -> Self {
@@ -230,7 +277,7 @@ fn pretty_print_list(list: &[SExpr], f: &mut fmt::Formatter) -> fmt::Result {
             write!(f, " ")?;
         }
     }
-    write!(f, ")");
+    write!(f, ")")?;
     Ok(())
 }
 
@@ -258,13 +305,10 @@ mod tests {
         let input = "(a b (c))";
         let mut reader = Reader::new(input);
 
-        let list = reader
-            .next()
-            .unwrap()
-            .unwrap()
-            .as_list()
-            .map(|(_, list)| list.clone())
-            .unwrap();
+        let list = match reader.next().unwrap().unwrap() {
+            SExpr::List { list, .. } => list.clone(),
+            _ => panic!(),
+        };
 
         assert!(matches!(&list[0], SExpr::Symbol {  symbol, .. } if symbol == "a"));
         assert!(matches!(&list[1], SExpr::Symbol {  symbol, .. } if symbol == "b"));
@@ -282,15 +326,12 @@ mod tests {
         let input = "('a)";
         let mut reader = Reader::new(input);
 
-        let list = reader
-            .next()
-            .unwrap()
-            .unwrap()
-            .as_list()
-            .map(|(_, list)| list.clone())
-            .unwrap();
+        let list = match reader.next().unwrap().unwrap() {
+            SExpr::List { list, .. } => list.clone(),
+            _ => panic!(),
+        };
 
-        let inner_list = &list[0].as_list().map(|(_, list)| list).unwrap();
+        let inner_list = &list[0].as_list().unwrap();
 
         assert!(matches!(
             &inner_list[0],
