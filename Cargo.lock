@@ -20,10 +20,10 @@ version = "0.1.0"
 dependencies = [
  "gc",
  "identity-hasher",
+ "reader",
  "thiserror",
  "twox-hash",
  "unwrap-enum",
- "value",
  "vm",
 ]
 

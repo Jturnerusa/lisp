@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-value = { path = "../value" }
+reader = { path = "../reader" }
 vm = { path = "../vm" }
 identity-hasher = { path = "../identity-hasher" }
 gc = { path = "../gc" }
