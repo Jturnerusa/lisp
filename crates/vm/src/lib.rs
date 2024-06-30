@@ -96,6 +96,12 @@ pub enum OpCode {
     MapRetrieve,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct OpCodeTable<T> {
+    opcodes: Vec<OpCode>,
+    debug: Vec<T>,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum UpValue {
     Local(usize),
@@ -857,5 +863,19 @@ impl Local {
                 f(borrow_guard.deref_mut())
             }
         }
+    }
+}
+
+impl<T> OpCodeTable<T> {
+    pub fn new() -> Self {
+        Self {
+            opcodes: Vec::new(),
+            debug: Vec::new(),
+        }
+    }
+
+    pub fn insert(&mut self, opcode: OpCode, debug: T) {
+        self.opcodes.push(opcode);
+        self.debug.push(debug);
     }
 }
