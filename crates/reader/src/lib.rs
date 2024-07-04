@@ -64,7 +64,7 @@ enum Macro {
     Splice,
 }
 
-#[derive(Clone, Debug, EnumAs, EnumIs)]
+#[derive(Clone, Debug, EnumIs)]
 pub enum Sexpr<'a> {
     List {
         list: Vec<Sexpr<'a>>,
@@ -139,6 +139,50 @@ impl<'a> Reader<'a> {
         Self {
             lexer: Lexer::new(context.source()),
             context,
+        }
+    }
+}
+
+impl<'a> Sexpr<'a> {
+    pub fn as_list(&self) -> Option<&[Sexpr]> {
+        match self {
+            Self::List { list, .. } => Some(list.as_slice()),
+            _ => None,
+        }
+    }
+
+    pub fn as_symbol(&self) -> Option<&str> {
+        match self {
+            Self::Symbol { symbol, .. } => Some(symbol.as_str()),
+            _ => None,
+        }
+    }
+
+    pub fn as_string(&self) -> Option<&str> {
+        match self {
+            Self::String { string, .. } => Some(string.as_str()),
+            _ => None,
+        }
+    }
+
+    pub fn as_char(&self) -> Option<char> {
+        match self {
+            Self::Char { char, .. } => Some(*char),
+            _ => None,
+        }
+    }
+
+    pub fn as_int(&self) -> Option<i64> {
+        match self {
+            Self::Int { int, .. } => Some(*int),
+            _ => None,
+        }
+    }
+
+    pub fn as_bool(&self) -> Option<bool> {
+        match self {
+            Self::Bool { bool, .. } => Some(*bool),
+            _ => None,
         }
     }
 }
