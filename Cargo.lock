@@ -20,6 +20,7 @@ version = "0.1.0"
 dependencies = [
  "gc",
  "identity-hasher",
+ "micro-nom",
  "reader",
  "thiserror",
  "twox-hash",
@@ -124,6 +125,10 @@ checksum = "1c2a69b3eb68d5bd595107c9ee58d7e07fe2bb5e360cc85b0f084dedac80de0a"
 dependencies = [
  "logos-codegen",
 ]
+
+[[package]]
+name = "micro-nom"
+version = "0.1.0"
 
 [[package]]
 name = "native-functions"

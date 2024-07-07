@@ -2,6 +2,7 @@
 members = [ "crates/gc","lib/native"]
 
 [workspace.dependencies]
+micro-nom = { path = "../micro-nom" }
 unwrap-enum = { path = "../unwrap-enum" }
 twox-hash = "=1.6.3"
 
