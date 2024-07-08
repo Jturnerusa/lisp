@@ -955,6 +955,14 @@ impl std::fmt::Debug for OpCodeTable {
     }
 }
 
+unsafe impl Trace for OpCodeTable {
+    unsafe fn root(&self) {}
+
+    unsafe fn trace(&self, _: &mut dyn FnMut(std::ptr::NonNull<gc::Inner<dyn Trace>>) -> bool) {}
+
+    unsafe fn unroot(&self) {}
+}
+
 impl<T> Debug for T
 where
     T: Clone + PartialEq + Hash + Debug,
