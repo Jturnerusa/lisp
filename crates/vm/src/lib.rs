@@ -56,7 +56,7 @@ pub enum Error {
 pub enum Constant {
     String(Gc<String>),
     Symbol(Gc<String>),
-    Opcodes(OpCodeTable),
+    Opcodes(Gc<OpCodeTable>),
 }
 
 #[derive(Clone, Copy, Debug, EnumAs, EnumIs, PartialEq, Eq, Hash)]

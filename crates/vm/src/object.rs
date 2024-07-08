@@ -50,7 +50,7 @@ pub enum Object {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Lambda {
     pub(crate) arity: Arity,
-    pub(crate) opcodes: OpCodeTable,
+    pub(crate) opcodes: Gc<OpCodeTable>,
     pub(crate) upvalues: Vec<Gc<GcCell<Object>>>,
 }
 
