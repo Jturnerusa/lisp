@@ -81,8 +81,8 @@ pub(crate) enum Type {
 
 #[derive(Clone, Debug)]
 pub(crate) struct Variable<'a> {
-    source: &'a Sexpr<'a>,
-    name: String,
+    pub source: &'a Sexpr<'a>,
+    pub name: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
