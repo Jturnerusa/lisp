@@ -3,7 +3,7 @@
 pub mod object;
 
 use crate::object::{Cons, Lambda, NativeFunction, Type};
-use gc::{Gc, GcCell};
+use gc::{Gc, GcCell, Trace};
 use identity_hasher::IdentityHasher;
 use object::HashMapKey;
 use std::any::Any;
