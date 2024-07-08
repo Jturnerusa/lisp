@@ -1,4 +1,9 @@
-use std::hash::{BuildHasher, Hasher};
+use std::{
+    collections::HashMap,
+    hash::{BuildHasher, Hasher},
+};
+
+pub type IdentityMap<K, V> = HashMap<K, V, IdentityHasher>;
 
 pub struct IdentityHasher(u64);
 
