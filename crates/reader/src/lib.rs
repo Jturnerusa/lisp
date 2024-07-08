@@ -1,8 +1,8 @@
 use core::fmt;
 use logos::{Lexer, Logos};
-use std::{ops::Range, rc::Rc};
+use std::ops::Range;
 use thiserror::Error;
-use unwrap_enum::{EnumAs, EnumIs};
+use unwrap_enum::EnumIs;
 
 #[derive(Clone, Debug, Error)]
 pub enum Error<'a> {
@@ -16,7 +16,7 @@ pub enum Error<'a> {
     UnExpectedEof,
 }
 
-#[derive(Logos)]
+#[derive(Clone, Debug, Logos)]
 #[logos(skip r#"[\s\t\n]|[;][\s]*"#)]
 enum Token {
     #[token("(")]
@@ -64,59 +64,60 @@ enum Macro {
     Splice,
 }
 
-#[derive(Clone, Debug, EnumIs)]
-pub enum Sexpr<'a> {
+#[derive(Clone, Debug, PartialEq, Eq, Hash, EnumIs)]
+pub enum Sexpr<'a, T> {
     List {
-        list: Vec<Sexpr<'a>>,
-        context: &'a Context,
+        list: Vec<Sexpr<'a, T>>,
+        context: &'a Context<T>,
         span: Range<usize>,
     },
     Symbol {
         symbol: String,
-        context: &'a Context,
+        context: &'a Context<T>,
         span: Range<usize>,
     },
     String {
         string: String,
-        context: &'a Context,
+        context: &'a Context<T>,
         span: Range<usize>,
     },
     Char {
         char: char,
-        context: &'a Context,
+        context: &'a Context<T>,
         span: Range<usize>,
     },
     Int {
         int: i64,
-        context: &'a Context,
+        context: &'a Context<T>,
         span: Range<usize>,
     },
     Bool {
         bool: bool,
-        context: &'a Context,
+        context: &'a Context<T>,
         span: Range<usize>,
     },
     Nil {
-        context: &'a Context,
+        context: &'a Context<T>,
         span: Range<usize>,
     },
 }
 
-#[derive(Clone)]
-pub struct Context {
-    display: Rc<dyn fmt::Display>,
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Context<T> {
+    display: T,
     source: String,
 }
 
-pub struct Reader<'a> {
+#[derive(Clone, Debug)]
+pub struct Reader<'a, T> {
     lexer: Lexer<'a, Token>,
-    context: &'a Context,
+    context: &'a Context<T>,
 }
 
-impl Context {
-    pub fn new<D: fmt::Display + 'static>(source: &str, display: D) -> Self {
+impl<T> Context<T> {
+    pub fn new(source: &str, display: T) -> Self {
         Self {
-            display: Rc::new(display),
+            display,
             source: source.to_string(),
         }
     }
@@ -125,17 +126,19 @@ impl Context {
         self.source.as_str()
     }
 
-    pub fn display(&self) -> &dyn fmt::Display {
-        &self.display
-    }
-
     pub fn span(&self, span: Range<usize>) -> &str {
         &self.source[span.start..span.end]
     }
 }
 
-impl<'a> Reader<'a> {
-    pub fn new(context: &'a Context) -> Self {
+impl<T: fmt::Display> Context<T> {
+    pub fn display(&self) -> &T {
+        &self.display
+    }
+}
+
+impl<'a, T> Reader<'a, T> {
+    pub fn new(context: &'a Context<T>) -> Self {
         Self {
             lexer: Lexer::new(context.source()),
             context,
@@ -143,8 +146,8 @@ impl<'a> Reader<'a> {
     }
 }
 
-impl<'a> Sexpr<'a> {
-    pub fn as_list(&self) -> Option<&[Sexpr]> {
+impl<'a, T> Sexpr<'a, T> {
+    pub fn as_list(&self) -> Option<&[Sexpr<T>]> {
         match self {
             Self::List { list, .. } => Some(list.as_slice()),
             _ => None,
@@ -187,20 +190,14 @@ impl<'a> Sexpr<'a> {
     }
 }
 
-impl fmt::Debug for Context {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Context: {}", self.display)
-    }
-}
-
-impl<'a> Iterator for Reader<'a> {
-    type Item = Result<Sexpr<'a>, Error<'a>>;
+impl<'a, T> Iterator for Reader<'a, T> {
+    type Item = Result<Sexpr<'a, T>, Error<'a>>;
     fn next(&mut self) -> Option<Self::Item> {
-        read(&mut self.lexer, &self.context)
+        read(&mut self.lexer, self.context)
     }
 }
 
-impl<'a> fmt::Display for Sexpr<'a> {
+impl<'a, T> fmt::Display for Sexpr<'a, T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Sexpr::List { list, .. } => {
@@ -225,10 +222,10 @@ impl<'a> fmt::Display for Sexpr<'a> {
     }
 }
 
-fn read<'a>(
+fn read<'a, T>(
     lexer: &mut Lexer<'a, Token>,
-    context: &'a Context,
-) -> Option<Result<Sexpr<'a>, Error<'a>>> {
+    context: &'a Context<T>,
+) -> Option<Result<Sexpr<'a, T>, Error<'a>>> {
     Some(Ok(match lexer.next()? {
         Ok(Token::LeftParen) => match read_list(lexer, context) {
             Ok(sexpr) => sexpr,
@@ -285,10 +282,10 @@ fn read<'a>(
     }))
 }
 
-fn read_list<'a>(
+fn read_list<'a, T>(
     lexer: &mut Lexer<'a, Token>,
-    context: &'a Context,
-) -> Result<Sexpr<'a>, Error<'a>> {
+    context: &'a Context<T>,
+) -> Result<Sexpr<'a, T>, Error<'a>> {
     let mut list = Vec::new();
 
     loop {
@@ -349,11 +346,11 @@ fn read_list<'a>(
     }
 }
 
-fn expand_macro<'a>(
+fn expand_macro<'a, T>(
     lexer: &mut Lexer<'a, Token>,
-    context: &'a Context,
+    context: &'a Context<T>,
     r#macro: Macro,
-) -> Result<Sexpr<'a>, Error<'a>> {
+) -> Result<Sexpr<'a, T>, Error<'a>> {
     let span = lexer.span();
 
     let symbol = Sexpr::Symbol {
