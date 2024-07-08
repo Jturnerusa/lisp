@@ -954,3 +954,23 @@ impl std::fmt::Debug for OpCodeTable {
         Ok(())
     }
 }
+
+impl<T> Debug for T
+where
+    T: Clone + PartialEq + Hash + Debug,
+{
+    fn dyn_clone(&self) -> Box<dyn Debug> {
+        Box::new(self.clone())
+    }
+
+    fn dyn_hash(&self, hasher: &mut dyn Hasher) {
+        self.hash(&mut Box::new(hasher));
+    }
+
+    fn dyn_partial_eq(&self, other: &dyn Any) -> bool {
+        match other.downcast_ref::<Self>() {
+            Some(s) => self == s,
+            None => false,
+        }
+    }
+}
