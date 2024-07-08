@@ -1,10 +1,35 @@
 use core::fmt;
-use logos::{Lexer, Logos};
-use std::{ops::Range, rc::Rc};
-use thiserror::Error;
-use unwrap_enum::{EnumAs, EnumIs};
 
-#[derive(Clone, Debug, Error)]
+use logos::{Lexer, Logos};
+use std::{
+    any::Any,
+    fmt::Display,
+    fs,
+    hash::{Hash, Hasher},
+    io::Read,
+    ops::Range,
+    path::{Path, PathBuf},
+};
+
+use unwrap_enum::EnumIs;
+
+pub trait Context: fmt::Debug {
+    fn context(&self) -> Box<dyn fmt::Display>;
+
+    fn source(&self) -> &str;
+
+    fn span(&self, range: Range<usize>) -> &str {
+        &self.source()[range]
+    }
+
+    fn dyn_clone(&self) -> Box<dyn Context>;
+
+    fn dyn_hash(&self, hasher: &mut dyn Hasher);
+
+    fn dyn_partial_eq(&self, other: &dyn Any) -> bool;
+}
+
+#[derive(Clone, Debug, thiserror::Error)]
 pub enum Error<'a> {
     #[error("lexer error: remaining input: {0}")]
     Lexer(&'a str),
@@ -68,74 +93,66 @@ enum Macro {
 pub enum Sexpr<'a> {
     List {
         list: Vec<Sexpr<'a>>,
-        context: &'a Context,
+        context: &'a dyn Context,
         span: Range<usize>,
     },
     Symbol {
         symbol: String,
-        context: &'a Context,
+        context: &'a dyn Context,
         span: Range<usize>,
     },
     String {
         string: String,
-        context: &'a Context,
+        context: &'a dyn Context,
         span: Range<usize>,
     },
     Char {
         char: char,
-        context: &'a Context,
+        context: &'a dyn Context,
         span: Range<usize>,
     },
     Int {
         int: i64,
-        context: &'a Context,
+        context: &'a dyn Context,
         span: Range<usize>,
     },
     Bool {
         bool: bool,
-        context: &'a Context,
+        context: &'a dyn Context,
         span: Range<usize>,
     },
     Nil {
-        context: &'a Context,
+        context: &'a dyn Context,
         span: Range<usize>,
     },
 }
 
-#[derive(Clone)]
-pub struct Context {
-    display: Rc<dyn fmt::Display>,
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct SourceFile {
+    path: PathBuf,
     source: String,
 }
 
 pub struct Reader<'a> {
     lexer: Lexer<'a, Token>,
-    context: &'a Context,
+    context: &'a dyn Context,
 }
 
-impl Context {
-    pub fn new<D: fmt::Display + 'static>(source: &str, display: D) -> Self {
-        Self {
-            display: Rc::new(display),
-            source: source.to_string(),
-        }
-    }
+impl SourceFile {
+    pub fn new(path: &Path) -> Result<Self, Box<dyn std::error::Error>> {
+        let mut file = fs::File::open(path)?;
+        let mut source = String::new();
+        file.read_to_string(&mut source)?;
 
-    pub fn source(&self) -> &str {
-        self.source.as_str()
-    }
-
-    pub fn display(&self) -> &dyn fmt::Display {
-        &self.display
-    }
-
-    pub fn span(&self, span: Range<usize>) -> &str {
-        &self.source[span.start..span.end]
+        Ok(Self {
+            path: path.to_owned(),
+            source,
+        })
     }
 }
 
 impl<'a> Reader<'a> {
-    pub fn new(context: &'a Context) -> Self {
+    pub fn new(context: &'a dyn Context) -> Self {
         Self {
             lexer: Lexer::new(context.source()),
             context,
@@ -187,16 +204,10 @@ impl<'a> Sexpr<'a> {
     }
 }
 
-impl fmt::Debug for Context {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Context: {}", self.display)
-    }
-}
-
 impl<'a> Iterator for Reader<'a> {
     type Item = Result<Sexpr<'a>, Error<'a>>;
     fn next(&mut self) -> Option<Self::Item> {
-        read(&mut self.lexer, &self.context)
+        read(&mut self.lexer, self.context)
     }
 }
 
@@ -227,7 +238,7 @@ impl<'a> fmt::Display for Sexpr<'a> {
 
 fn read<'a>(
     lexer: &mut Lexer<'a, Token>,
-    context: &'a Context,
+    context: &'a dyn Context,
 ) -> Option<Result<Sexpr<'a>, Error<'a>>> {
     Some(Ok(match lexer.next()? {
         Ok(Token::LeftParen) => match read_list(lexer, context) {
@@ -287,7 +298,7 @@ fn read<'a>(
 
 fn read_list<'a>(
     lexer: &mut Lexer<'a, Token>,
-    context: &'a Context,
+    context: &'a dyn Context,
 ) -> Result<Sexpr<'a>, Error<'a>> {
     let mut list = Vec::new();
 
@@ -351,7 +362,7 @@ fn read_list<'a>(
 
 fn expand_macro<'a>(
     lexer: &mut Lexer<'a, Token>,
-    context: &'a Context,
+    context: &'a dyn Context,
     r#macro: Macro,
 ) -> Result<Sexpr<'a>, Error<'a>> {
     let span = lexer.span();
@@ -379,4 +390,165 @@ fn expand_macro<'a>(
         context,
         span,
     })
+}
+
+impl Context for SourceFile {
+    fn context(&self) -> Box<dyn Display> {
+        Box::new(self.path.as_path().to_str().unwrap().to_string())
+    }
+
+    fn source(&self) -> &str {
+        &self.source
+    }
+
+    fn span(&self, range: Range<usize>) -> &str {
+        &self.source[range]
+    }
+
+    fn dyn_hash(&self, hasher: &mut dyn Hasher) {
+        let mut boxed_hasher = Box::new(hasher);
+        self.path.hash(&mut boxed_hasher);
+        self.source.hash(&mut boxed_hasher);
+    }
+
+    fn dyn_clone(&self) -> Box<dyn Context> {
+        Box::new(Self {
+            path: self.path.clone(),
+            source: self.source.clone(),
+        })
+    }
+
+    fn dyn_partial_eq(&self, other: &dyn Any) -> bool {
+        match other.downcast_ref::<Self>() {
+            Some(s) => self == s,
+            None => false,
+        }
+    }
+}
+
+impl<'a: 'static> PartialEq for Sexpr<'a> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (
+                Self::List {
+                    list: list_a,
+                    context: context_a,
+                    span: span_a,
+                },
+                Self::List {
+                    list: list_b,
+                    context: context_b,
+                    span: span_b,
+                },
+            ) => list_a == list_b && context_a.dyn_partial_eq(context_b) && span_a == span_b,
+            (
+                Self::Symbol {
+                    symbol: symbol_a,
+                    context: context_a,
+                    span: span_a,
+                },
+                Self::Symbol {
+                    symbol: symbol_b,
+                    context: context_b,
+                    span: span_b,
+                },
+            ) => symbol_a == symbol_b && context_a.dyn_partial_eq(context_b) && span_a == span_b,
+            (
+                Self::String {
+                    string: string_a,
+                    context: context_a,
+                    span: span_a,
+                },
+                Self::String {
+                    string: string_b,
+                    context: context_b,
+                    span: span_b,
+                },
+            ) => string_a == string_b && context_a.dyn_partial_eq(context_b) && span_a == span_b,
+            (
+                Self::Char {
+                    char: char_a,
+                    context: context_a,
+                    span: span_a,
+                },
+                Self::Char {
+                    char: char_b,
+                    context: context_b,
+                    span: span_b,
+                },
+            ) => char_a == char_b && context_a.dyn_partial_eq(context_b) && span_a == span_b,
+            (
+                Self::Int {
+                    int: int_a,
+                    context: context_a,
+                    span: span_a,
+                },
+                Self::Int {
+                    int: int_b,
+                    context: context_b,
+                    span: span_b,
+                },
+            ) => int_a == int_b && context_a.dyn_partial_eq(context_b) && span_a == span_b,
+            (
+                Self::Bool {
+                    bool: bool_a,
+                    context: context_a,
+                    span: span_a,
+                },
+                Self::Bool {
+                    bool: bool_b,
+                    context: context_b,
+                    span: span_b,
+                },
+            ) => bool_a == bool_b && context_a.dyn_partial_eq(context_b) && span_a == span_b,
+            (
+                Self::Nil {
+                    context: context_a,
+                    span: span_a,
+                },
+                Self::Nil {
+                    context: context_b,
+                    span: span_b,
+                },
+            ) => context_a.dyn_partial_eq(context_b) && span_a == span_b,
+            _ => false,
+        }
+    }
+}
+
+impl<'a> Hash for Sexpr<'a> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let context = match self {
+            Self::List { context, .. }
+            | Self::Symbol { context, .. }
+            | Self::String { context, .. }
+            | Self::Char { context, .. }
+            | Self::Int { context, .. }
+            | Self::Bool { context, .. }
+            | Self::Nil { context, .. } => context,
+        };
+
+        let span = match self {
+            Self::List { span, .. }
+            | Self::Symbol { span, .. }
+            | Self::String { span, .. }
+            | Self::Char { span, .. }
+            | Self::Int { span, .. }
+            | Self::Bool { span, .. }
+            | Self::Nil { span, .. } => span,
+        };
+
+        context.dyn_hash(state);
+        span.hash(state);
+
+        match self {
+            Self::List { list, .. } => list.hash(state),
+            Self::Symbol { symbol, .. } => symbol.hash(state),
+            Self::String { string, .. } => string.hash(state),
+            Self::Char { char, .. } => char.hash(state),
+            Self::Int { int, .. } => int.hash(state),
+            Self::Bool { bool, .. } => bool.hash(state),
+            _ => (),
+        }
+    }
 }
