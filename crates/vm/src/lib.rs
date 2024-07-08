@@ -20,7 +20,7 @@ pub use crate::object::Object;
 pub trait Debug: Any + std::fmt::Debug {
     fn dyn_clone(&self) -> Box<dyn Debug>;
 
-    fn dyn_hash(&self, hasher: &dyn Hasher);
+    fn dyn_hash(&self, hasher: &mut dyn Hasher);
 
     fn dyn_partial_eq(&self, other: &dyn Any) -> bool;
 }
