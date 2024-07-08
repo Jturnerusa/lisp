@@ -1,4 +1,4 @@
-use crate::{Arity, Error, OpCode};
+use crate::{Arity, Error, OpCode, OpCodeTable};
 use gc::{Gc, GcCell, Trace};
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -50,7 +50,7 @@ pub enum Object {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Lambda {
     pub(crate) arity: Arity,
-    pub(crate) opcodes: Rc<[OpCode]>,
+    pub(crate) opcodes: OpCodeTable,
     pub(crate) upvalues: Vec<Gc<GcCell<Object>>>,
 }
 

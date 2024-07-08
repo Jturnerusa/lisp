@@ -6,17 +6,24 @@ use crate::object::{Cons, Lambda, NativeFunction, Type};
 use gc::{Gc, GcCell};
 use identity_hasher::IdentityHasher;
 use object::HashMapKey;
+use std::any::Any;
 use std::cmp::{Ordering, PartialOrd};
 use std::collections::HashMap;
-use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 use std::ops::{Deref, DerefMut};
-use std::rc::Rc;
 use thiserror::Error;
 use twox_hash::Xxh3Hash64;
 use unwrap_enum::{EnumAs, EnumIs};
 
 pub use crate::object::Object;
+
+pub trait Debug: Any + std::fmt::Debug {
+    fn dyn_clone(&self) -> Box<dyn Debug>;
+
+    fn dyn_hash(&self, hasher: &dyn Hasher);
+
+    fn dyn_partial_eq(&self, other: &dyn Any) -> bool;
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Arity {
@@ -49,7 +56,7 @@ pub enum Error {
 pub enum Constant {
     String(Gc<String>),
     Symbol(Gc<String>),
-    Opcodes(Rc<[OpCode]>),
+    Opcodes(OpCodeTable),
 }
 
 #[derive(Clone, Copy, Debug, EnumAs, EnumIs, PartialEq, Eq, Hash)]
@@ -96,10 +103,9 @@ pub enum OpCode {
     MapRetrieve,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct OpCodeTable<T> {
+pub struct OpCodeTable {
     opcodes: Vec<OpCode>,
-    debug: Vec<T>,
+    debug: Vec<Box<dyn Debug>>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -163,12 +169,15 @@ impl Vm {
             .insert(name.to_string(), Object::NativeFunction(native_function));
     }
 
-    pub fn eval(&mut self, opcodes: &[OpCode]) -> Result<Option<Local>, Error> {
+    pub fn eval(
+        &mut self,
+        opcode_table: &OpCodeTable,
+    ) -> Result<Option<Local>, (Error, Box<dyn Debug>)> {
         loop {
             let opcode = if let Some(function) = &self.current_function {
-                function.borrow().opcodes[self.pc]
-            } else if self.pc < opcodes.len() {
-                opcodes[self.pc]
+                function.borrow().opcodes.opcodes[self.pc]
+            } else if self.pc < opcode_table.opcodes.len() {
+                opcode_table.opcodes[self.pc]
             } else {
                 let ret = self.stack.pop();
                 self.stack.clear();
@@ -177,75 +186,91 @@ impl Vm {
                 return Ok(ret);
             };
 
-            self.pc += 1;
-
-            match opcode {
-                OpCode::DefGlobal(global) => self.def_global(global)?,
-                OpCode::SetGlobal(global) => self.set_global(global)?,
-                OpCode::GetGlobal(global) => self.get_global(global)?,
-                OpCode::SetLocal(local) => self.set_local(local)?,
-                OpCode::GetLocal(local) => self.get_local(local)?,
-                OpCode::SetUpValue(upvalue) => self.set_upvalue(upvalue)?,
-                OpCode::GetUpValue(upvalue) => self.get_upvalue(upvalue)?,
-                OpCode::Call(args) => self.call(args)?,
-                OpCode::Return => self.ret()?,
-                OpCode::Apply => self.apply()?,
-                OpCode::Lambda { arity, body } => self.lambda(arity, body)?,
-                OpCode::CreateUpValue(upvalue) => self.create_upvalue(upvalue)?,
-                OpCode::PushSymbol(symbol) => {
-                    let symbol_value = self
-                        .constants
-                        .get(&symbol)
-                        .unwrap()
-                        .as_symbol()
-                        .cloned()
-                        .unwrap();
-                    self.stack
-                        .push(Local::Value(Object::Symbol(symbol_value.clone())));
+            match self.dispatch(opcode) {
+                Ok(_) => {
+                    self.pc += 1;
                 }
-                OpCode::PushString(string) => {
-                    let string_value = self
-                        .constants
-                        .get(&string)
-                        .unwrap()
-                        .as_string()
-                        .cloned()
-                        .unwrap();
-                    self.stack
-                        .push(Local::Value(Object::String(string_value.clone())));
+                Err(e) => {
+                    let debug = if let Some(function) = &self.current_function {
+                        function.borrow().opcodes.debug[self.pc].dyn_clone()
+                    } else {
+                        opcode_table.debug[self.pc].dyn_clone()
+                    };
+                    return Err((e, debug));
                 }
-                OpCode::PushInt(i) => self.stack.push(Local::Value(Object::Int(i))),
-                OpCode::PushChar(c) => self.stack.push(Local::Value(Object::Char(c))),
-                OpCode::PushTrue => self.stack.push(Local::Value(Object::True)),
-                OpCode::PushNil => self.stack.push(Local::Value(Object::Nil)),
-                OpCode::Pop => {
-                    self.stack.pop().unwrap();
-                }
-                OpCode::Add => self.add()?,
-                OpCode::Sub => self.sub()?,
-                OpCode::Mul => self.mul()?,
-                OpCode::Div => self.div()?,
-                OpCode::Cons => self.cons()?,
-                OpCode::Car => self.car()?,
-                OpCode::Cdr => self.cdr()?,
-                OpCode::SetCar => self.set_car()?,
-                OpCode::SetCdr => self.set_cdr()?,
-                OpCode::List(args) => self.list(args)?,
-                OpCode::Branch(offset) => self.branch(offset)?,
-                OpCode::Jmp(offset) => {
-                    self.pc += offset as usize;
-                }
-                OpCode::IsType(ty) => self.is_type(ty)?,
-                OpCode::Assert => self.assert()?,
-                OpCode::Eq => self.eq()?,
-                OpCode::Lt => self.lt()?,
-                OpCode::Gt => self.gt()?,
-                OpCode::MapCreate => self.map_create()?,
-                OpCode::MapInsert => self.map_insert()?,
-                OpCode::MapRetrieve => self.map_retrieve()?,
-                _ => todo!(),
             }
         }
+    }
+
+    fn dispatch(&mut self, opcode: OpCode) -> Result<(), Error> {
+        match opcode {
+            OpCode::DefGlobal(global) => self.def_global(global)?,
+            OpCode::SetGlobal(global) => self.set_global(global)?,
+            OpCode::GetGlobal(global) => self.get_global(global)?,
+            OpCode::SetLocal(local) => self.set_local(local)?,
+            OpCode::GetLocal(local) => self.get_local(local)?,
+            OpCode::SetUpValue(upvalue) => self.set_upvalue(upvalue)?,
+            OpCode::GetUpValue(upvalue) => self.get_upvalue(upvalue)?,
+            OpCode::Call(args) => self.call(args)?,
+            OpCode::Return => self.ret()?,
+            OpCode::Apply => self.apply()?,
+            OpCode::Lambda { arity, body } => self.lambda(arity, body)?,
+            OpCode::CreateUpValue(upvalue) => self.create_upvalue(upvalue)?,
+            OpCode::PushSymbol(symbol) => {
+                let symbol_value = self
+                    .constants
+                    .get(&symbol)
+                    .unwrap()
+                    .as_symbol()
+                    .cloned()
+                    .unwrap();
+                self.stack
+                    .push(Local::Value(Object::Symbol(symbol_value.clone())));
+            }
+            OpCode::PushString(string) => {
+                let string_value = self
+                    .constants
+                    .get(&string)
+                    .unwrap()
+                    .as_string()
+                    .cloned()
+                    .unwrap();
+                self.stack
+                    .push(Local::Value(Object::String(string_value.clone())));
+            }
+            OpCode::PushInt(i) => self.stack.push(Local::Value(Object::Int(i))),
+            OpCode::PushChar(c) => self.stack.push(Local::Value(Object::Char(c))),
+            OpCode::PushTrue => self.stack.push(Local::Value(Object::True)),
+            OpCode::PushNil => self.stack.push(Local::Value(Object::Nil)),
+            OpCode::Pop => {
+                self.stack.pop().unwrap();
+            }
+            OpCode::Add => self.add()?,
+            OpCode::Sub => self.sub()?,
+            OpCode::Mul => self.mul()?,
+            OpCode::Div => self.div()?,
+            OpCode::Cons => self.cons()?,
+            OpCode::Car => self.car()?,
+            OpCode::Cdr => self.cdr()?,
+            OpCode::SetCar => self.set_car()?,
+            OpCode::SetCdr => self.set_cdr()?,
+            OpCode::List(args) => self.list(args)?,
+            OpCode::Branch(offset) => self.branch(offset)?,
+            OpCode::Jmp(offset) => {
+                self.pc += offset as usize;
+            }
+            OpCode::IsType(ty) => self.is_type(ty)?,
+            OpCode::Assert => self.assert()?,
+            OpCode::Eq => self.eq()?,
+            OpCode::Lt => self.lt()?,
+            OpCode::Gt => self.gt()?,
+            OpCode::MapCreate => self.map_create()?,
+            OpCode::MapInsert => self.map_insert()?,
+            OpCode::MapRetrieve => self.map_retrieve()?,
+            _ => todo!(),
+        }
+
+        Ok(())
     }
 
     pub fn peek(&self, i: usize) -> Option<&Local> {
@@ -866,7 +891,7 @@ impl Local {
     }
 }
 
-impl<T> OpCodeTable<T> {
+impl OpCodeTable {
     pub fn new() -> Self {
         Self {
             opcodes: Vec::new(),
@@ -874,8 +899,58 @@ impl<T> OpCodeTable<T> {
         }
     }
 
-    pub fn insert(&mut self, opcode: OpCode, debug: T) {
+    pub fn insert(&mut self, opcode: OpCode, debug: Box<dyn Debug>) {
         self.opcodes.push(opcode);
         self.debug.push(debug);
+    }
+}
+
+impl Clone for OpCodeTable {
+    fn clone(&self) -> Self {
+        Self {
+            opcodes: self.opcodes.clone(),
+            debug: self.debug.iter().map(|debug| debug.dyn_clone()).collect(),
+        }
+    }
+}
+
+impl PartialEq for OpCodeTable {
+    fn eq(&self, other: &Self) -> bool {
+        for (a, b) in self.opcodes.iter().zip(other.opcodes.iter()) {
+            if a != b {
+                return false;
+            }
+        }
+
+        for (a, b) in self.debug.iter().zip(other.debug.iter()) {
+            if !a.dyn_partial_eq(b) {
+                return false;
+            }
+        }
+
+        true
+    }
+}
+
+impl Eq for OpCodeTable {}
+
+impl Hash for OpCodeTable {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        for opcode in &self.opcodes {
+            opcode.hash(state);
+        }
+
+        for debug in &self.debug {
+            debug.dyn_hash(state);
+        }
+    }
+}
+
+impl std::fmt::Debug for OpCodeTable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (opcode, debug) in self.opcodes.iter().zip(self.debug.iter()) {
+            write!(f, "{opcode:?} => {debug:?}")?;
+        }
+        Ok(())
     }
 }
