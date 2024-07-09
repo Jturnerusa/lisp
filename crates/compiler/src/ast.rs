@@ -303,6 +303,30 @@ impl<'a> Ast<'a> {
             },
         )
     }
+
+    pub(crate) fn source(&self) -> &Sexpr {
+        match self {
+            Self::DefMacro(DefMacro { source, .. })
+            | Self::Lambda(Lambda { source, .. })
+            | Self::Def(Def { source, .. })
+            | Self::Set(Set { source, .. })
+            | Self::If(If { source, .. })
+            | Self::BinaryArithemticOperation(BinaryArithmeticOperation { source, .. })
+            | Self::ComparisonOperation(ComparisonOperation { source, .. })
+            | Self::List(List { source, .. })
+            | Self::Cons(Cons { source, .. })
+            | Self::Car(Car { source, .. })
+            | Self::Cdr(Cdr { source, .. })
+            | Self::FnCall(FnCall { source, .. })
+            | Self::Quote(Quote { source, .. })
+            | Self::Variable(Variable { source, .. })
+            | Self::Constant(Constant::String { source, .. })
+            | Self::Constant(Constant::Char { source, .. })
+            | Self::Constant(Constant::Int { source, .. })
+            | Self::Constant(Constant::Bool { source, .. })
+            | Self::Constant(Constant::Nil { source }) => source,
+        }
+    }
 }
 
 impl Type {
