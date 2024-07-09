@@ -1,12 +1,11 @@
 use crate::{check_arity, check_type};
 use gc::{Gc, GcCell};
-use std::cell::RefCell;
 use vm::{
     object::{Cons, Type},
     Error, Local, Object,
 };
 
-pub fn split(objects: &mut [Local]) -> Result<Object, Error> {
+pub fn split<D: Clone>(objects: &mut [Local<D>]) -> Result<Object<D>, Error> {
     check_arity!("string-split", 2, objects);
 
     let string = check_type!(objects[0], String);
@@ -17,7 +16,7 @@ pub fn split(objects: &mut [Local]) -> Result<Object, Error> {
     ))
 }
 
-pub fn split_ascii_whitespace(objects: &mut [Local]) -> Result<Object, Error> {
+pub fn split_ascii_whitespace<D: Clone>(objects: &mut [Local<D>]) -> Result<Object<D>, Error> {
     check_arity!("string-split-whitespace", 1, objects);
 
     let string = check_type!(objects[0], String);
@@ -27,7 +26,7 @@ pub fn split_ascii_whitespace(objects: &mut [Local]) -> Result<Object, Error> {
     ))
 }
 
-pub fn to_list(objects: &mut [Local]) -> Result<Object, Error> {
+pub fn to_list<D: Clone>(objects: &mut [Local<D>]) -> Result<Object<D>, Error> {
     check_arity!("string->list", 1, objects);
 
     let string = check_type!(objects[0], String);
@@ -35,7 +34,7 @@ pub fn to_list(objects: &mut [Local]) -> Result<Object, Error> {
     Ok(make_list_of_char(string.chars()))
 }
 
-pub fn from_list(objects: &mut [Local]) -> Result<Object, Error> {
+pub fn from_list<D: Clone>(objects: &mut [Local<D>]) -> Result<Object<D>, Error> {
     check_arity!("list->string", 1, objects);
 
     let list = check_type!(objects[0], Cons);
@@ -55,7 +54,7 @@ pub fn from_list(objects: &mut [Local]) -> Result<Object, Error> {
     Ok(Object::String(Gc::new(string)))
 }
 
-pub fn parse(objects: &mut [Local]) -> Result<Object, Error> {
+pub fn parse<D: Clone>(objects: &mut [Local<D>]) -> Result<Object<D>, Error> {
     check_arity!("string->int", 1, objects);
 
     let string = check_type!(objects[0], String);
@@ -65,7 +64,7 @@ pub fn parse(objects: &mut [Local]) -> Result<Object, Error> {
     Ok(Object::Int(i))
 }
 
-pub fn lines(objects: &mut [Local]) -> Result<Object, Error> {
+pub fn lines<D: Clone>(objects: &mut [Local<D>]) -> Result<Object<D>, Error> {
     check_arity!("string-lines", 1, objects);
 
     let string = check_type!(objects[0], String);
@@ -73,7 +72,7 @@ pub fn lines(objects: &mut [Local]) -> Result<Object, Error> {
     Ok(make_list_of_string(string.lines().map(|s| s.to_string())))
 }
 
-pub fn is_digit(objects: &mut [Local]) -> Result<Object, Error> {
+pub fn is_digit<D: Clone>(objects: &mut [Local<D>]) -> Result<Object<D>, Error> {
     check_arity!("is-digit?", 1, objects);
 
     let c = check_type!(objects[0], Char);
@@ -85,7 +84,7 @@ pub fn is_digit(objects: &mut [Local]) -> Result<Object, Error> {
     }
 }
 
-fn make_list_of_string(mut strings: impl Iterator<Item = String>) -> Object {
+fn make_list_of_string<D: Clone>(mut strings: impl Iterator<Item = String>) -> Object<D> {
     let Some(first) = strings.next() else {
         return Object::Nil;
     };
@@ -102,7 +101,7 @@ fn make_list_of_string(mut strings: impl Iterator<Item = String>) -> Object {
     list
 }
 
-fn make_list_of_char(mut chars: impl Iterator<Item = char>) -> Object {
+fn make_list_of_char<D: Clone>(mut chars: impl Iterator<Item = char>) -> Object<D> {
     let Some(first) = chars.next() else {
         return Object::Nil;
     };

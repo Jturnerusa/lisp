@@ -3,13 +3,13 @@ use gc::Gc;
 use std::{fs::File, io::Read};
 use vm::{object::Type, Error, Local, Object};
 
-pub fn print(objects: &mut [Local]) -> Result<Object, Error> {
+pub fn print<D: Clone>(objects: &mut [Local<D>]) -> Result<Object<D>, Error> {
     check_arity!("print", 1, objects);
     objects.first().unwrap().with(|object| println!("{object}"));
     Ok(Object::Nil)
 }
 
-pub fn read_file(objects: &mut [Local]) -> Result<Object, Error> {
+pub fn read_file<D: Clone>(objects: &mut [Local<D>]) -> Result<Object<D>, Error> {
     check_arity!("read-file", 1, objects);
 
     let path = check_type!(objects.first().unwrap(), String);
