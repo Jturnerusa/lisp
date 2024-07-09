@@ -46,10 +46,10 @@ pub enum Error {
 }
 
 #[derive(Clone, Debug, EnumAs, EnumIs, PartialEq, Eq, Hash)]
-pub enum Constant {
+pub enum Constant<D> {
     String(Gc<String>),
     Symbol(Gc<String>),
-    Opcodes(Rc<[OpCode]>),
+    Opcodes(Rc<OpCodeTable<D>>),
 }
 
 #[derive(Clone, Copy, Debug, EnumAs, EnumIs, PartialEq, Eq, Hash)]
@@ -109,30 +109,30 @@ pub enum UpValue {
 }
 
 #[derive(Clone, Debug)]
-struct Frame {
-    function: Option<Gc<GcCell<Lambda>>>,
+struct Frame<D: 'static> {
+    function: Option<Gc<GcCell<Lambda<D>>>>,
     pc: usize,
     bp: usize,
 }
 
 #[derive(Clone, Debug, EnumAs, EnumIs)]
-pub enum Local {
-    Value(Object),
-    UpValue(Gc<GcCell<Object>>),
+pub enum Local<D: 'static> {
+    Value(Object<D>),
+    UpValue(Gc<GcCell<Object<D>>>),
 }
 
-pub struct Vm {
-    globals: HashMap<String, Object>,
-    constants: HashMap<u64, Constant, IdentityHasher>,
-    stack: Vec<Local>,
-    frames: Vec<Frame>,
-    current_function: Option<Gc<GcCell<Lambda>>>,
+pub struct Vm<D: 'static> {
+    globals: HashMap<String, Object<D>>,
+    constants: HashMap<u64, Constant<D>, IdentityHasher>,
+    stack: Vec<Local<D>>,
+    frames: Vec<Frame<D>>,
+    current_function: Option<Gc<GcCell<Lambda<D>>>>,
     pc: usize,
     bp: usize,
 }
 
 #[allow(clippy::new_without_default)]
-impl Vm {
+impl<D: Clone + PartialEq + PartialOrd + Hash> Vm<D> {
     pub fn new() -> Self {
         Self {
             globals: HashMap::new(),
@@ -145,7 +145,7 @@ impl Vm {
         }
     }
 
-    pub fn load_constants(&mut self, constants: impl Iterator<Item = Constant>) {
+    pub fn load_constants(&mut self, constants: impl Iterator<Item = Constant<D>>) {
         for constant in constants {
             let mut hasher = Xxh3Hash64::with_seed(0);
             constant.hash(&mut hasher);
@@ -156,19 +156,19 @@ impl Vm {
 
     pub fn load_native_function<F>(&mut self, name: &str, f: F)
     where
-        F: Fn(&mut [Local]) -> Result<Object, Error> + 'static,
+        F: Fn(&mut [Local<D>]) -> Result<Object<D>, Error> + 'static,
     {
         let native_function = NativeFunction::new(f);
         self.globals
             .insert(name.to_string(), Object::NativeFunction(native_function));
     }
 
-    pub fn eval(&mut self, opcodes: &[OpCode]) -> Result<Option<Local>, Error> {
+    pub fn eval(&mut self, opcode_table: &OpCodeTable<D>) -> Result<Option<Local<D>>, (Error, D)> {
         loop {
             let opcode = if let Some(function) = &self.current_function {
-                function.borrow().opcodes[self.pc]
-            } else if self.pc < opcodes.len() {
-                opcodes[self.pc]
+                function.borrow().opcodes.opcodes[self.pc]
+            } else if self.pc < opcode_table.opcodes.len() {
+                opcode_table.opcodes[self.pc]
             } else {
                 let ret = self.stack.pop();
                 self.stack.clear();
@@ -177,86 +177,102 @@ impl Vm {
                 return Ok(ret);
             };
 
-            self.pc += 1;
-
-            match opcode {
-                OpCode::DefGlobal(global) => self.def_global(global)?,
-                OpCode::SetGlobal(global) => self.set_global(global)?,
-                OpCode::GetGlobal(global) => self.get_global(global)?,
-                OpCode::SetLocal(local) => self.set_local(local)?,
-                OpCode::GetLocal(local) => self.get_local(local)?,
-                OpCode::SetUpValue(upvalue) => self.set_upvalue(upvalue)?,
-                OpCode::GetUpValue(upvalue) => self.get_upvalue(upvalue)?,
-                OpCode::Call(args) => self.call(args)?,
-                OpCode::Return => self.ret()?,
-                OpCode::Apply => self.apply()?,
-                OpCode::Lambda { arity, body } => self.lambda(arity, body)?,
-                OpCode::CreateUpValue(upvalue) => self.create_upvalue(upvalue)?,
-                OpCode::PushSymbol(symbol) => {
-                    let symbol_value = self
-                        .constants
-                        .get(&symbol)
-                        .unwrap()
-                        .as_symbol()
-                        .cloned()
-                        .unwrap();
-                    self.stack
-                        .push(Local::Value(Object::Symbol(symbol_value.clone())));
+            match self.dispatch(opcode) {
+                Ok(_) => {
+                    self.pc += 1;
                 }
-                OpCode::PushString(string) => {
-                    let string_value = self
-                        .constants
-                        .get(&string)
-                        .unwrap()
-                        .as_string()
-                        .cloned()
-                        .unwrap();
-                    self.stack
-                        .push(Local::Value(Object::String(string_value.clone())));
+                Err(e) => {
+                    let debug = if let Some(function) = &self.current_function {
+                        function.borrow().opcodes.debug[self.pc].clone()
+                    } else {
+                        opcode_table.debug[self.pc].clone()
+                    };
+                    return Err((e, debug));
                 }
-                OpCode::PushInt(i) => self.stack.push(Local::Value(Object::Int(i))),
-                OpCode::PushChar(c) => self.stack.push(Local::Value(Object::Char(c))),
-                OpCode::PushTrue => self.stack.push(Local::Value(Object::True)),
-                OpCode::PushNil => self.stack.push(Local::Value(Object::Nil)),
-                OpCode::Pop => {
-                    self.stack.pop().unwrap();
-                }
-                OpCode::Add => self.add()?,
-                OpCode::Sub => self.sub()?,
-                OpCode::Mul => self.mul()?,
-                OpCode::Div => self.div()?,
-                OpCode::Cons => self.cons()?,
-                OpCode::Car => self.car()?,
-                OpCode::Cdr => self.cdr()?,
-                OpCode::SetCar => self.set_car()?,
-                OpCode::SetCdr => self.set_cdr()?,
-                OpCode::List(args) => self.list(args)?,
-                OpCode::Branch(offset) => self.branch(offset)?,
-                OpCode::Jmp(offset) => {
-                    self.pc += offset as usize;
-                }
-                OpCode::IsType(ty) => self.is_type(ty)?,
-                OpCode::Assert => self.assert()?,
-                OpCode::Eq => self.eq()?,
-                OpCode::Lt => self.lt()?,
-                OpCode::Gt => self.gt()?,
-                OpCode::MapCreate => self.map_create()?,
-                OpCode::MapInsert => self.map_insert()?,
-                OpCode::MapRetrieve => self.map_retrieve()?,
-                _ => todo!(),
             }
         }
     }
 
-    pub fn peek(&self, i: usize) -> Option<&Local> {
+    fn dispatch(&mut self, opcode: OpCode) -> Result<(), Error> {
+        match opcode {
+            OpCode::DefGlobal(global) => self.def_global(global)?,
+            OpCode::SetGlobal(global) => self.set_global(global)?,
+            OpCode::GetGlobal(global) => self.get_global(global)?,
+            OpCode::SetLocal(local) => self.set_local(local)?,
+            OpCode::GetLocal(local) => self.get_local(local)?,
+            OpCode::SetUpValue(upvalue) => self.set_upvalue(upvalue)?,
+            OpCode::GetUpValue(upvalue) => self.get_upvalue(upvalue)?,
+            OpCode::Call(args) => self.call(args)?,
+            OpCode::Return => self.ret()?,
+            OpCode::Apply => self.apply()?,
+            OpCode::Lambda { arity, body } => self.lambda(arity, body)?,
+            OpCode::CreateUpValue(upvalue) => self.create_upvalue(upvalue)?,
+            OpCode::PushSymbol(symbol) => {
+                let symbol_value = self
+                    .constants
+                    .get(&symbol)
+                    .unwrap()
+                    .as_symbol()
+                    .cloned()
+                    .unwrap();
+                self.stack
+                    .push(Local::Value(Object::Symbol(symbol_value.clone())));
+            }
+            OpCode::PushString(string) => {
+                let string_value = self
+                    .constants
+                    .get(&string)
+                    .unwrap()
+                    .as_string()
+                    .cloned()
+                    .unwrap();
+                self.stack
+                    .push(Local::Value(Object::String(string_value.clone())));
+            }
+            OpCode::PushInt(i) => self.stack.push(Local::Value(Object::Int(i))),
+            OpCode::PushChar(c) => self.stack.push(Local::Value(Object::Char(c))),
+            OpCode::PushTrue => self.stack.push(Local::Value(Object::True)),
+            OpCode::PushNil => self.stack.push(Local::Value(Object::Nil)),
+            OpCode::Pop => {
+                self.stack.pop().unwrap();
+            }
+            OpCode::Add => self.add()?,
+            OpCode::Sub => self.sub()?,
+            OpCode::Mul => self.mul()?,
+            OpCode::Div => self.div()?,
+            OpCode::Cons => self.cons()?,
+            OpCode::Car => self.car()?,
+            OpCode::Cdr => self.cdr()?,
+            OpCode::SetCar => self.set_car()?,
+            OpCode::SetCdr => self.set_cdr()?,
+            OpCode::List(args) => self.list(args)?,
+            OpCode::Branch(offset) => self.branch(offset)?,
+            OpCode::Jmp(offset) => {
+                self.pc += offset as usize;
+            }
+            OpCode::IsType(ty) => self.is_type(ty)?,
+            OpCode::Assert => self.assert()?,
+            OpCode::Eq => self.eq()?,
+            OpCode::Lt => self.lt()?,
+            OpCode::Gt => self.gt()?,
+            OpCode::MapCreate => self.map_create()?,
+            OpCode::MapInsert => self.map_insert()?,
+            OpCode::MapRetrieve => self.map_retrieve()?,
+            _ => todo!(),
+        }
+
+        Ok(())
+    }
+
+    pub fn peek(&self, i: usize) -> Option<&Local<D>> {
         self.stack.get(self.stack.len() - i - 1)
     }
 
-    pub fn push(&mut self, object: Object) {
+    pub fn push(&mut self, object: Object<D>) {
         self.stack.push(Local::Value(object));
     }
 
-    pub fn pop(&mut self) -> Option<Local> {
+    pub fn pop(&mut self) -> Option<Local<D>> {
         self.stack.pop()
     }
 
@@ -820,7 +836,7 @@ impl Vm {
     }
 }
 
-fn make_list(objects: &[Local]) -> Local {
+fn make_list<D: Clone>(objects: &[Local<D>]) -> Local<D> {
     if !objects.is_empty() {
         Local::Value(Object::Cons(Gc::new(GcCell::new(Cons(
             objects[0].clone().into_object(),
@@ -831,8 +847,8 @@ fn make_list(objects: &[Local]) -> Local {
     }
 }
 
-impl Local {
-    pub fn into_object(self) -> Object {
+impl<D: Clone> Local<D> {
+    pub fn into_object(self) -> Object<D> {
         match self {
             Self::Value(object) => object,
             Self::UpValue(object) => object.borrow().clone(),
@@ -841,7 +857,7 @@ impl Local {
 
     pub fn with<T, F>(&self, f: F) -> T
     where
-        F: Fn(&Object) -> T,
+        F: Fn(&Object<D>) -> T,
     {
         match self {
             Self::Value(object) => f(object),
@@ -854,7 +870,7 @@ impl Local {
 
     pub fn with_mut<T, F>(&mut self, f: F) -> T
     where
-        F: FnOnce(&mut Object) -> T,
+        F: FnOnce(&mut Object<D>) -> T,
     {
         match self {
             Self::Value(object) => f(object),

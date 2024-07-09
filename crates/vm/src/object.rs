@@ -1,4 +1,4 @@
-use crate::{Arity, Error, OpCode};
+use crate::{Arity, Error, OpCodeTable};
 use gc::{Gc, GcCell, Trace};
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -7,7 +7,6 @@ use std::ops::Deref;
 use std::ptr::NonNull;
 use std::rc::Rc;
 use unwrap_enum::{EnumAs, EnumIs};
-use value::Value;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Type {
@@ -34,11 +33,11 @@ pub enum HashMapKey {
 }
 
 #[derive(Clone, Debug, EnumAs, EnumIs)]
-pub enum Object {
-    NativeFunction(NativeFunction),
-    Function(Gc<GcCell<Lambda>>),
-    Cons(Gc<GcCell<Cons>>),
-    HashMap(Gc<GcCell<HashMap<HashMapKey, Object>>>),
+pub enum Object<D: 'static> {
+    NativeFunction(NativeFunction<D>),
+    Function(Gc<GcCell<Lambda<D>>>),
+    Cons(Gc<GcCell<Cons<D>>>),
+    HashMap(Gc<GcCell<HashMap<HashMapKey, Object<D>>>>),
     String(Gc<String>),
     Symbol(Gc<String>),
     Int(i64),
@@ -48,70 +47,72 @@ pub enum Object {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Lambda {
+pub struct Lambda<D: 'static> {
     pub(crate) arity: Arity,
-    pub(crate) opcodes: Rc<[OpCode]>,
-    pub(crate) upvalues: Vec<Gc<GcCell<Object>>>,
+    pub(crate) opcodes: Rc<OpCodeTable<D>>,
+    pub(crate) upvalues: Vec<Gc<GcCell<Object<D>>>>,
 }
 
 #[allow(clippy::type_complexity)]
 #[derive(Clone)]
-pub struct NativeFunction(pub(crate) Rc<dyn Fn(&mut [crate::Local]) -> Result<Object, Error>>);
+pub struct NativeFunction<D: 'static>(
+    pub(crate) Rc<dyn Fn(&mut [crate::Local<D>]) -> Result<Object<D>, Error>>,
+);
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Cons(pub Object, pub Object);
+pub struct Cons<D: 'static>(pub Object<D>, pub Object<D>);
 
 #[derive(Clone, Debug)]
-pub struct IterCons(Option<Cons>);
+pub struct IterCons<D: 'static>(Option<Cons<D>>);
 
 #[derive(Clone, Debug)]
-pub struct IterCars(IterCons);
+pub struct IterCars<D: 'static>(IterCons<D>);
 
-impl Cons {
-    pub fn iter(&self) -> IterCons {
+impl<D: Clone + 'static> Cons<D> {
+    pub fn iter(&self) -> IterCons<D> {
         IterCons(Some(self.clone()))
     }
 
-    pub fn iter_cars(&self) -> IterCars {
+    pub fn iter_cars(&self) -> IterCars<D> {
         IterCars(self.iter())
     }
 }
 
-impl Lambda {
+impl<D> Lambda<D> {
     pub fn arity(&self) -> Arity {
         self.arity
     }
 }
 
-impl NativeFunction {
+impl<D> NativeFunction<D> {
     pub fn new<F>(f: F) -> Self
     where
-        F: Fn(&mut [crate::Local]) -> Result<Object, Error> + 'static,
+        F: Fn(&mut [crate::Local<D>]) -> Result<Object<D>, Error> + 'static,
     {
         Self(Rc::new(f))
     }
 }
 
-impl PartialEq for NativeFunction {
+impl<D> PartialEq for NativeFunction<D> {
     fn eq(&self, _: &Self) -> bool {
         false
     }
 }
 
-impl PartialOrd for NativeFunction {
+impl<D> PartialOrd for NativeFunction<D> {
     fn partial_cmp(&self, _: &Self) -> Option<Ordering> {
         None
     }
 }
 
-impl Debug for NativeFunction {
+impl<D> Debug for NativeFunction<D> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("NativeFunction").finish()
     }
 }
 
-impl From<&Object> for Type {
-    fn from(value: &Object) -> Self {
+impl<D> From<&Object<D>> for Type {
+    fn from(value: &Object<D>) -> Self {
         match value {
             Object::Function(_) | Object::NativeFunction(_) => Type::Function,
             Object::Cons(_) => Type::Cons,
@@ -143,34 +144,7 @@ impl fmt::Display for Type {
     }
 }
 
-impl TryFrom<&Object> for Value {
-    type Error = ();
-    fn try_from(object: &Object) -> Result<Self, Self::Error> {
-        Ok(match object {
-            Object::Cons(cons) => Value::Cons(Box::new(value::Cons::try_from(
-                cons.deref().borrow().deref(),
-            )?)),
-            Object::String(string) => Value::String(string.deref().clone()),
-            Object::Symbol(symbol) => Value::Symbol(symbol.deref().clone()),
-            Object::Int(i) => Value::Int(*i),
-            Object::True => Value::True,
-            Object::Nil => Value::Nil,
-            _ => return Err(()),
-        })
-    }
-}
-
-impl TryFrom<&Cons> for value::Cons {
-    type Error = ();
-    fn try_from(value: &Cons) -> Result<Self, Self::Error> {
-        Ok(value::Cons(
-            Value::try_from(&value.0)?,
-            Value::try_from(&value.1)?,
-        ))
-    }
-}
-
-impl PartialEq for Object {
+impl<D: PartialEq> PartialEq for Object<D> {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Object::Cons(a), Object::Cons(b)) => *a.borrow() == *b.borrow(),
@@ -184,7 +158,7 @@ impl PartialEq for Object {
     }
 }
 
-impl PartialOrd for Object {
+impl<D: PartialOrd> PartialOrd for Object<D> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(match (self, other) {
             (Object::Symbol(a), Object::Symbol(b)) => a.cmp(b),
@@ -197,7 +171,7 @@ impl PartialOrd for Object {
     }
 }
 
-impl Display for Lambda {
+impl<D> Display for Lambda<D> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.arity {
             Arity::Nullary => write!(f, "nullary lambda"),
@@ -207,24 +181,24 @@ impl Display for Lambda {
     }
 }
 
-impl Display for NativeFunction {
+impl<D> Display for NativeFunction<D> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "native function")
     }
 }
 
-impl Display for Cons {
+impl<D: Clone> Display for Cons<D> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         pretty_print(self, 0, f)
     }
 }
 
-impl Display for Object {
+impl<D: Clone> Display for Object<D> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::NativeFunction(native_function) => write!(f, "{native_function}",),
             Self::Function(function) => write!(f, "{}", *function.deref().borrow()),
-            Self::Cons(cons) => write!(f, "{}", *cons.deref().borrow()),
+            Self::Cons(cons) => write!(f, "{}", cons.borrow().deref()),
             Self::HashMap(map) => {
                 for (key, val) in map.deref().borrow().iter() {
                     writeln!(f, "{key} => {val},")?;
@@ -254,8 +228,8 @@ impl Display for HashMapKey {
     }
 }
 
-impl Iterator for IterCons {
-    type Item = Cons;
+impl<D: Clone> Iterator for IterCons<D> {
+    type Item = Cons<D>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let current = self.0.take();
@@ -271,16 +245,16 @@ impl Iterator for IterCons {
     }
 }
 
-impl Iterator for IterCars {
-    type Item = Object;
+impl<D: Clone> Iterator for IterCars<D> {
+    type Item = Object<D>;
     fn next(&mut self) -> Option<Self::Item> {
         self.0.next().map(|cons| cons.0.clone())
     }
 }
 
-impl TryFrom<&Object> for HashMapKey {
+impl<D> TryFrom<&Object<D>> for HashMapKey {
     type Error = ();
-    fn try_from(value: &Object) -> Result<Self, Self::Error> {
+    fn try_from(value: &Object<D>) -> Result<Self, Self::Error> {
         Ok(match value {
             Object::Symbol(symbol) => Self::Symbol(symbol.clone()),
             Object::String(string) => Self::String(string.clone()),
@@ -319,7 +293,7 @@ unsafe impl Trace for HashMapKey {
     }
 }
 
-unsafe impl Trace for Lambda {
+unsafe impl<D: 'static> Trace for Lambda<D> {
     unsafe fn root(&self) {
         self.upvalues.root();
     }
@@ -333,7 +307,7 @@ unsafe impl Trace for Lambda {
     }
 }
 
-unsafe impl Trace for Object {
+unsafe impl<D: 'static> Trace for Object<D> {
     unsafe fn root(&self) {
         match self {
             Self::Function(function) => function.root(),
@@ -368,7 +342,7 @@ unsafe impl Trace for Object {
     }
 }
 
-unsafe impl Trace for Cons {
+unsafe impl<D> Trace for Cons<D> {
     unsafe fn root(&self) {
         self.0.root();
         self.1.root();
@@ -385,7 +359,7 @@ unsafe impl Trace for Cons {
     }
 }
 
-fn pretty_print(cons: &Cons, depth: usize, f: &mut fmt::Formatter) -> fmt::Result {
+fn pretty_print<D: Clone>(cons: &Cons<D>, depth: usize, f: &mut fmt::Formatter) -> fmt::Result {
     let indent = " ".repeat(depth);
     write!(f, "{indent}(")?;
     for (i, expr) in cons.iter_cars().enumerate() {
