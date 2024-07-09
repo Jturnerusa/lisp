@@ -304,7 +304,7 @@ impl<'a> Ast<'a> {
         )
     }
 
-    pub(crate) fn source(&self) -> &Sexpr {
+    pub(crate) fn source_sexpr(&self) -> &Sexpr {
         match self {
             Self::DefMacro(DefMacro { source, .. })
             | Self::Lambda(Lambda { source, .. })

@@ -965,7 +965,7 @@ unsafe impl Trace for OpCodeTable {
 
 impl<T> Debug for T
 where
-    T: Clone + PartialEq + Hash + Debug,
+    T: Clone + PartialEq + Hash + std::fmt::Debug + 'static,
 {
     fn dyn_clone(&self) -> Box<dyn Debug> {
         Box::new(self.clone())
