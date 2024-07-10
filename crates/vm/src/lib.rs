@@ -890,7 +890,7 @@ impl<T> OpCodeTable<T> {
         }
     }
 
-    pub fn insert(&mut self, opcode: OpCode, debug: T) {
+    pub fn push(&mut self, opcode: OpCode, debug: T) {
         self.opcodes.push(opcode);
         self.debug.push(debug);
     }
