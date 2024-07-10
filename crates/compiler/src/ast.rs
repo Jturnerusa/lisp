@@ -175,10 +175,10 @@ pub(crate) enum ComparisonOperator {
 
 #[derive(Clone, Debug)]
 pub(crate) struct ComparisonOperation<'a, T> {
-    source: &'a Sexpr<'a, T>,
-    operator: ComparisonOperator,
-    lhs: Box<Ast<'a, T>>,
-    rhs: Box<Ast<'a, T>>,
+    pub source: &'a Sexpr<'a, T>,
+    pub operator: ComparisonOperator,
+    pub lhs: Box<Ast<'a, T>>,
+    pub rhs: Box<Ast<'a, T>>,
 }
 
 #[derive(Clone, Debug)]
