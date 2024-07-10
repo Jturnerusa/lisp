@@ -108,6 +108,10 @@ impl Environment {
             .iter()
             .map(|(_, upvalue)| *upvalue)
     }
+
+    pub(crate) fn is_global_scope(&self) -> bool {
+        self.scopes.is_empty()
+    }
 }
 
 fn search_for_upvalue<'a>(
