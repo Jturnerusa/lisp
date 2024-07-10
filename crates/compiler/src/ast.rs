@@ -215,7 +215,38 @@ pub(crate) struct FnCall<'a, T> {
 #[derive(Clone, Debug)]
 pub(crate) struct Quote<'a, T> {
     pub source: &'a Sexpr<'a, T>,
-    pub body: Box<Ast<'a, T>>,
+    pub body: Quoted<'a, T>,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) enum Quoted<'a, T> {
+    List {
+        source: &'a Sexpr<'a, T>,
+        list: Vec<Quoted<'a, T>>,
+    },
+    Symbol {
+        source: &'a Sexpr<'a, T>,
+        symbol: String,
+    },
+    String {
+        source: &'a Sexpr<'a, T>,
+        string: String,
+    },
+    Char {
+        source: &'a Sexpr<'a, T>,
+        char: char,
+    },
+    Int {
+        source: &'a Sexpr<'a, T>,
+        int: i64,
+    },
+    Bool {
+        source: &'a Sexpr<'a, T>,
+        bool: bool,
+    },
+    Nil {
+        source: &'a Sexpr<'a, T>,
+    },
 }
 
 impl<'a, T> Ast<'a, T> {
@@ -734,7 +765,57 @@ impl<'a, T> Quote<'a, T> {
     ) -> Result<Self, Error<'a, T>> {
         Ok(Self {
             source,
-            body: Box::new(Ast::from_sexpr(body)?),
+            body: match body {
+                Sexpr::List { list, .. } => quote_list(source, list.as_slice()),
+                Sexpr::Symbol { symbol, .. } => Quoted::Symbol {
+                    source,
+                    symbol: symbol.clone(),
+                },
+                Sexpr::String { string, .. } => Quoted::String {
+                    source,
+                    string: string.clone(),
+                },
+                Sexpr::Char { char, .. } => Quoted::Char {
+                    source,
+                    char: *char,
+                },
+                Sexpr::Int { int, .. } => Quoted::Int { source, int: *int },
+                Sexpr::Bool { bool, .. } => Quoted::Bool {
+                    source,
+                    bool: *bool,
+                },
+                Sexpr::Nil { .. } => Quoted::Nil { source },
+            },
         })
+    }
+}
+
+fn quote_list<'a, T>(source: &'a Sexpr<'a, T>, list: &'a [Sexpr<'a, T>]) -> Quoted<'a, T> {
+    Quoted::List {
+        source,
+        list: list
+            .iter()
+            .map(|sexpr| match sexpr {
+                Sexpr::List { list, .. } => quote_list(source, list.as_slice()),
+                Sexpr::Symbol { symbol, .. } => Quoted::Symbol {
+                    source,
+                    symbol: symbol.clone(),
+                },
+                Sexpr::String { string, .. } => Quoted::String {
+                    source,
+                    string: string.clone(),
+                },
+                Sexpr::Char { char, .. } => Quoted::Char {
+                    source,
+                    char: *char,
+                },
+                Sexpr::Int { int, .. } => Quoted::Int { source, int: *int },
+                Sexpr::Bool { bool, .. } => Quoted::Bool {
+                    source,
+                    bool: *bool,
+                },
+                Sexpr::Nil { .. } => Quoted::Nil { source },
+            })
+            .collect(),
     }
 }
