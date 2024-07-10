@@ -33,7 +33,7 @@ pub struct Error<'a, T> {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) enum Ast<'a, T> {
+pub enum Ast<'a, T> {
     EvalWhenCompile(EvalWhenCompile<'a, T>),
     DefMacro(DefMacro<'a, T>),
     Lambda(Lambda<'a, T>),
@@ -54,13 +54,13 @@ pub(crate) enum Ast<'a, T> {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct EvalWhenCompile<'a, T> {
+pub struct EvalWhenCompile<'a, T> {
     pub source: &'a Sexpr<'a, T>,
     pub exprs: Vec<Ast<'a, T>>,
 }
 
 #[derive(Clone, Debug)]
-pub(crate) enum Constant<'a, T> {
+pub enum Constant<'a, T> {
     String {
         source: &'a Sexpr<'a, T>,
         string: String,
@@ -83,31 +83,31 @@ pub(crate) enum Constant<'a, T> {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) enum Type {
+pub enum Type {
     Scalar(String),
     Composite(Vec<Type>),
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct Variable<'a, T> {
+pub struct Variable<'a, T> {
     pub source: &'a Sexpr<'a, T>,
     pub name: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct Parameter {
+pub struct Parameter {
     pub name: String,
     pub r#type: Option<Type>,
 }
 
 #[derive(Clone, Debug)]
-pub(crate) enum Parameters {
+pub enum Parameters {
     Normal(Vec<Parameter>),
     Rest(Vec<Parameter>, Parameter),
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct DefMacro<'a, T> {
+pub struct DefMacro<'a, T> {
     pub source: &'a Sexpr<'a, T>,
     pub name: String,
     pub parameters: Parameters,
@@ -115,7 +115,7 @@ pub(crate) struct DefMacro<'a, T> {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct Lambda<'a, T> {
+pub struct Lambda<'a, T> {
     pub source: &'a Sexpr<'a, T>,
     pub r#type: Option<Type>,
     pub parameters: Parameters,
@@ -123,21 +123,21 @@ pub(crate) struct Lambda<'a, T> {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct Def<'a, T> {
+pub struct Def<'a, T> {
     pub source: &'a Sexpr<'a, T>,
     pub parameter: Parameter,
     pub body: Box<Ast<'a, T>>,
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct Set<'a, T> {
+pub struct Set<'a, T> {
     pub source: &'a Sexpr<'a, T>,
     pub variable: String,
     pub body: Box<Ast<'a, T>>,
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct If<'a, T> {
+pub struct If<'a, T> {
     pub source: &'a Sexpr<'a, T>,
     pub predicate: Box<Ast<'a, T>>,
     pub then: Box<Ast<'a, T>>,
@@ -145,13 +145,13 @@ pub(crate) struct If<'a, T> {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct Apply<'a, T> {
+pub struct Apply<'a, T> {
     pub source: &'a Sexpr<'a, T>,
     pub exprs: Vec<Ast<'a, T>>,
 }
 
 #[derive(Clone, Debug)]
-pub(crate) enum BinaryArithmeticOperator {
+pub enum BinaryArithmeticOperator {
     Add,
     Sub,
     Mul,
@@ -159,7 +159,7 @@ pub(crate) enum BinaryArithmeticOperator {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct BinaryArithmeticOperation<'a, T> {
+pub struct BinaryArithmeticOperation<'a, T> {
     pub source: &'a Sexpr<'a, T>,
     pub operator: BinaryArithmeticOperator,
     pub lhs: Box<Ast<'a, T>>,
@@ -167,14 +167,14 @@ pub(crate) struct BinaryArithmeticOperation<'a, T> {
 }
 
 #[derive(Clone, Debug, EnumAs, EnumIs)]
-pub(crate) enum ComparisonOperator {
+pub enum ComparisonOperator {
     Lt,
     Gt,
     Eq,
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct ComparisonOperation<'a, T> {
+pub struct ComparisonOperation<'a, T> {
     pub source: &'a Sexpr<'a, T>,
     pub operator: ComparisonOperator,
     pub lhs: Box<Ast<'a, T>>,
@@ -182,44 +182,44 @@ pub(crate) struct ComparisonOperation<'a, T> {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct List<'a, T> {
+pub struct List<'a, T> {
     pub source: &'a Sexpr<'a, T>,
     pub exprs: Vec<Ast<'a, T>>,
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct Cons<'a, T> {
+pub struct Cons<'a, T> {
     pub source: &'a Sexpr<'a, T>,
     pub lhs: Box<Ast<'a, T>>,
     pub rhs: Box<Ast<'a, T>>,
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct Car<'a, T> {
+pub struct Car<'a, T> {
     pub source: &'a Sexpr<'a, T>,
     pub body: Box<Ast<'a, T>>,
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct Cdr<'a, T> {
+pub struct Cdr<'a, T> {
     pub source: &'a Sexpr<'a, T>,
     pub body: Box<Ast<'a, T>>,
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct FnCall<'a, T> {
+pub struct FnCall<'a, T> {
     pub source: &'a Sexpr<'a, T>,
     pub exprs: Vec<Ast<'a, T>>,
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct Quote<'a, T> {
+pub struct Quote<'a, T> {
     pub source: &'a Sexpr<'a, T>,
     pub body: Quoted<'a, T>,
 }
 
 #[derive(Clone, Debug)]
-pub(crate) enum Quoted<'a, T> {
+pub enum Quoted<'a, T> {
     List {
         source: &'a Sexpr<'a, T>,
         list: Vec<Quoted<'a, T>>,
@@ -250,7 +250,7 @@ pub(crate) enum Quoted<'a, T> {
 }
 
 impl<'a, T> Ast<'a, T> {
-    pub(crate) fn from_sexpr(sexpr: &'a Sexpr<'a, T>) -> Result<Self, Error<'a, T>> {
+    pub fn from_sexpr(sexpr: &'a Sexpr<'a, T>) -> Result<Self, Error<'a, T>> {
         Ok(
             if let Sexpr::List { list, .. } = sexpr
                 && let Some(Sexpr::Symbol { symbol, .. }) = list.first()
@@ -357,7 +357,7 @@ impl<'a, T> Ast<'a, T> {
         )
     }
 
-    pub(crate) fn source_sexpr(&self) -> &Sexpr<T> {
+    pub fn source_sexpr(&self) -> &Sexpr<T> {
         match self {
             Self::EvalWhenCompile(EvalWhenCompile { source, .. })
             | Self::DefMacro(DefMacro { source, .. })
@@ -385,7 +385,7 @@ impl<'a, T> Ast<'a, T> {
 }
 
 impl Type {
-    pub(crate) fn from_sexpr<T>(sexpr: &Sexpr<'_, T>) -> Result<Self, ()> {
+    pub fn from_sexpr<T>(sexpr: &Sexpr<'_, T>) -> Result<Self, ()> {
         Ok(match sexpr {
             Sexpr::List { list, .. } => Type::Composite(
                 list.iter()
@@ -399,7 +399,7 @@ impl Type {
 }
 
 impl Parameter {
-    pub(crate) fn from_sexpr<T>(sexpr: &Sexpr<'_, T>) -> Result<Self, ()> {
+    pub fn from_sexpr<T>(sexpr: &Sexpr<'_, T>) -> Result<Self, ()> {
         Ok(match sexpr {
             Sexpr::List { list, .. } => {
                 if list.len() != 2 {
@@ -422,7 +422,7 @@ impl Parameter {
 }
 
 impl Parameters {
-    pub(crate) fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         match self {
             Parameters::Normal(params) => params.len(),
             Parameters::Rest(params, _) => params.len() + 1,
@@ -475,7 +475,7 @@ fn parse_parameters<'a, T>(
 }
 
 impl<'a, T> EvalWhenCompile<'a, T> {
-    pub(crate) fn from_sexpr(
+    pub fn from_sexpr(
         source: &'a Sexpr<'a, T>,
         exprs: &'a [Sexpr<'a, T>],
     ) -> Result<Self, Error<'a, T>> {
@@ -490,7 +490,7 @@ impl<'a, T> EvalWhenCompile<'a, T> {
 }
 
 impl<'a, T> DefMacro<'a, T> {
-    pub(crate) fn from_sexpr(
+    pub fn from_sexpr(
         source: &'a Sexpr<'a, T>,
         name: &'a Sexpr<'a, T>,
         parameters: &'a Sexpr<'a, T>,
@@ -524,7 +524,7 @@ impl<'a, T> DefMacro<'a, T> {
 }
 
 impl<'a, T> Lambda<'a, T> {
-    pub(crate) fn from_sexpr(
+    pub fn from_sexpr(
         source: &'a Sexpr<'a, T>,
         parameters: &'a Sexpr<'a, T>,
         r#type: Option<&'a Sexpr<'a, T>>,
@@ -558,7 +558,7 @@ impl<'a, T> Lambda<'a, T> {
 }
 
 impl<'a, T> Def<'a, T> {
-    pub(crate) fn from_sexpr(
+    pub fn from_sexpr(
         source: &'a Sexpr<'a, T>,
         parameter: &'a Sexpr<'a, T>,
         body: &'a Sexpr<'a, T>,
@@ -575,7 +575,7 @@ impl<'a, T> Def<'a, T> {
 }
 
 impl<'a, T> Set<'a, T> {
-    pub(crate) fn from_sexpr(
+    pub fn from_sexpr(
         source: &'a Sexpr<'a, T>,
         variable: &'a Sexpr<'a, T>,
         body: &'a Sexpr<'a, T>,
@@ -595,7 +595,7 @@ impl<'a, T> Set<'a, T> {
 }
 
 impl<'a, T> If<'a, T> {
-    pub(crate) fn from_sexpr(
+    pub fn from_sexpr(
         source: &'a Sexpr<'a, T>,
         predicate: &'a Sexpr<'a, T>,
         then: &'a Sexpr<'a, T>,
@@ -611,7 +611,7 @@ impl<'a, T> If<'a, T> {
 }
 
 impl<'a, T> Apply<'a, T> {
-    pub(crate) fn from_sexpr(
+    pub fn from_sexpr(
         source: &'a Sexpr<'a, T>,
         exprs: &'a [Sexpr<'a, T>],
     ) -> Result<Self, Error<'a, T>> {
@@ -626,7 +626,7 @@ impl<'a, T> Apply<'a, T> {
 }
 
 impl<'a, T> BinaryArithmeticOperation<'a, T> {
-    pub(crate) fn from_sexpr(
+    pub fn from_sexpr(
         source: &'a Sexpr<'a, T>,
         operator: &'a Sexpr<'a, T>,
         lhs: &'a Sexpr<'a, T>,
@@ -659,7 +659,7 @@ impl<'a, T> BinaryArithmeticOperation<'a, T> {
 }
 
 impl<'a, T> ComparisonOperation<'a, T> {
-    pub(crate) fn from_sexpr(
+    pub fn from_sexpr(
         source: &'a Sexpr<'a, T>,
         operator: &'a Sexpr<'a, T>,
         lhs: &'a Sexpr<'a, T>,
@@ -691,7 +691,7 @@ impl<'a, T> ComparisonOperation<'a, T> {
 }
 
 impl<'a, T> List<'a, T> {
-    pub(crate) fn from_sexpr(
+    pub fn from_sexpr(
         source: &'a Sexpr<'a, T>,
         list: &'a [Sexpr<'a, T>],
     ) -> Result<Self, Error<'a, T>> {
@@ -706,7 +706,7 @@ impl<'a, T> List<'a, T> {
 }
 
 impl<'a, T> Cons<'a, T> {
-    pub(crate) fn from_sexpr(
+    pub fn from_sexpr(
         source: &'a Sexpr<'a, T>,
         lhs: &'a Sexpr<'a, T>,
         rhs: &'a Sexpr<'a, T>,
@@ -720,7 +720,7 @@ impl<'a, T> Cons<'a, T> {
 }
 
 impl<'a, T> Car<'a, T> {
-    pub(crate) fn from_sexpr(
+    pub fn from_sexpr(
         source: &'a Sexpr<'a, T>,
         body: &'a Sexpr<'a, T>,
     ) -> Result<Self, Error<'a, T>> {
@@ -732,7 +732,7 @@ impl<'a, T> Car<'a, T> {
 }
 
 impl<'a, T> Cdr<'a, T> {
-    pub(crate) fn from_sexpr(
+    pub fn from_sexpr(
         source: &'a Sexpr<'a, T>,
         body: &'a Sexpr<'a, T>,
     ) -> Result<Self, Error<'a, T>> {
@@ -744,7 +744,7 @@ impl<'a, T> Cdr<'a, T> {
 }
 
 impl<'a, T> FnCall<'a, T> {
-    pub(crate) fn from_sexpr(
+    pub fn from_sexpr(
         source: &'a Sexpr<'a, T>,
         exprs: &'a [Sexpr<'a, T>],
     ) -> Result<Self, Error<'a, T>> {
@@ -759,7 +759,7 @@ impl<'a, T> FnCall<'a, T> {
 }
 
 impl<'a, T> Quote<'a, T> {
-    pub(crate) fn from_sexpr(
+    pub fn from_sexpr(
         source: &'a Sexpr<'a, T>,
         body: &'a Sexpr<'a, T>,
     ) -> Result<Self, Error<'a, T>> {

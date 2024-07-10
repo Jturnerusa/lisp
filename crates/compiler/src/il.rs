@@ -13,7 +13,7 @@ pub struct Error<'a, T> {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub(crate) enum Type {
+pub enum Type {
     List(Box<Type>),
     Cons,
     Function,
@@ -27,7 +27,7 @@ pub(crate) enum Type {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) enum Il<'a, T> {
+pub enum Il<'a, T> {
     EvalWhenCompile(EvalWhenCompile<'a, T>),
     DefMacro(DefMacro<'a, T>),
     Lambda(Lambda<'a, T>),
@@ -77,7 +77,7 @@ pub enum Constant<'a, T> {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) enum VarRef<'a, T> {
+pub enum VarRef<'a, T> {
     Local {
         source: &'a Ast<'a, T>,
         name: String,
@@ -98,26 +98,26 @@ pub(crate) enum VarRef<'a, T> {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct Parameter<'a, T> {
+pub struct Parameter<'a, T> {
     pub source: &'a Ast<'a, T>,
     pub name: String,
     pub r#type: Option<Type>,
 }
 
 #[derive(Clone, Debug)]
-pub(crate) enum Parameters<'a, T> {
+pub enum Parameters<'a, T> {
     Nary(Vec<Parameter<'a, T>>),
     Variadic(Vec<Parameter<'a, T>>),
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct EvalWhenCompile<'a, T> {
+pub struct EvalWhenCompile<'a, T> {
     source: &'a Ast<'a, T>,
     exprs: Vec<Il<'a, T>>,
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct DefMacro<'a, T> {
+pub struct DefMacro<'a, T> {
     pub source: &'a Ast<'a, T>,
     pub name: String,
     pub parameters: Parameters<'a, T>,
@@ -126,7 +126,7 @@ pub(crate) struct DefMacro<'a, T> {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct Lambda<'a, T> {
+pub struct Lambda<'a, T> {
     pub source: &'a Ast<'a, T>,
     pub parameters: Parameters<'a, T>,
     pub r#type: Option<Type>,
@@ -136,7 +136,7 @@ pub(crate) struct Lambda<'a, T> {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct If<'a, T> {
+pub struct If<'a, T> {
     pub source: &'a Ast<'a, T>,
     pub predicate: Box<Il<'a, T>>,
     pub then: Box<Il<'a, T>>,
@@ -144,45 +144,45 @@ pub(crate) struct If<'a, T> {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct FnCall<'a, T> {
+pub struct FnCall<'a, T> {
     pub source: &'a Ast<'a, T>,
     function: Box<Il<'a, T>>,
     args: Vec<Il<'a, T>>,
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct Apply<'a, T> {
+pub struct Apply<'a, T> {
     source: &'a Ast<'a, T>,
     exprs: Vec<Il<'a, T>>,
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct List<'a, T> {
+pub struct List<'a, T> {
     source: &'a Ast<'a, T>,
     exprs: Vec<Il<'a, T>>,
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct Cons<'a, T> {
+pub struct Cons<'a, T> {
     source: &'a Ast<'a, T>,
     lhs: Box<Il<'a, T>>,
     rhs: Box<Il<'a, T>>,
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct Car<'a, T> {
+pub struct Car<'a, T> {
     source: &'a Ast<'a, T>,
     body: Box<Il<'a, T>>,
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct Cdr<'a, T> {
+pub struct Cdr<'a, T> {
     source: &'a Ast<'a, T>,
     body: Box<Il<'a, T>>,
 }
 
 #[derive(Clone, Debug)]
-pub(crate) enum ArithmeticOperator {
+pub enum ArithmeticOperator {
     Add,
     Sub,
     Mul,
@@ -190,7 +190,7 @@ pub(crate) enum ArithmeticOperator {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct ArithmeticOperation<'a, T> {
+pub struct ArithmeticOperation<'a, T> {
     pub source: &'a Ast<'a, T>,
     pub operator: ArithmeticOperator,
     pub lhs: Box<Il<'a, T>>,
@@ -198,14 +198,14 @@ pub(crate) struct ArithmeticOperation<'a, T> {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) enum ComparisonOperator {
+pub enum ComparisonOperator {
     Eq,
     Lt,
     Gt,
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct ComparisonOperation<'a, T> {
+pub struct ComparisonOperation<'a, T> {
     source: &'a Ast<'a, T>,
     operator: ComparisonOperator,
     lhs: Box<Il<'a, T>>,
@@ -213,27 +213,27 @@ pub(crate) struct ComparisonOperation<'a, T> {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct Def<'a, T> {
+pub struct Def<'a, T> {
     source: &'a Ast<'a, T>,
     parameter: Parameter<'a, T>,
     body: Box<Il<'a, T>>,
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct Set<'a, T> {
+pub struct Set<'a, T> {
     source: &'a Ast<'a, T>,
     target: VarRef<'a, T>,
     body: Box<Il<'a, T>>,
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct MapCreate<'a, T> {
+pub struct MapCreate<'a, T> {
     source: &'a Ast<'a, T>,
     map: Box<Il<'a, T>>,
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct MapInsert<'a, T> {
+pub struct MapInsert<'a, T> {
     source: &'a Ast<'a, T>,
     map: Box<Il<'a, T>>,
     key: Box<Il<'a, T>>,
@@ -241,18 +241,18 @@ pub(crate) struct MapInsert<'a, T> {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct MapRetrieve<'a, T> {
+pub struct MapRetrieve<'a, T> {
     source: &'a Ast<'a, T>,
     map: Box<Il<'a, T>>,
     key: Box<Il<'a, T>>,
 }
 
-pub(crate) struct Compiler {
+pub struct Compiler {
     environment: Environment,
 }
 
 impl<'a, T> Il<'a, T> {
-    pub(crate) fn source_ast(&self) -> &Ast<'a, T> {
+    pub fn source_ast(&self) -> &Ast<'a, T> {
         match self {
             Self::EvalWhenCompile(EvalWhenCompile { source, .. })
             | Self::DefMacro(DefMacro { source, .. })
@@ -285,7 +285,7 @@ impl<'a, T> Il<'a, T> {
 }
 
 impl Type {
-    pub(crate) fn from_ast(ast: &ast::Type) -> Result<Self, ()> {
+    pub fn from_ast(ast: &ast::Type) -> Result<Self, ()> {
         Ok(match ast {
             ast::Type::Composite(composite) => match composite.as_slice() {
                 [ast::Type::Scalar(t), types @ ..] if t == "union" => Type::Union(
