@@ -23,6 +23,7 @@ static BUILT_INS: &[&str] = &[
     "defmacro",
     "def",
     "set",
+    "eval-when-compile",
 ];
 
 #[derive(Clone, Debug)]
@@ -33,11 +34,13 @@ pub struct Error<'a, T> {
 
 #[derive(Clone, Debug)]
 pub(crate) enum Ast<'a, T> {
+    EvalWhenCompile(EvalWhenCompile<'a, T>),
     DefMacro(DefMacro<'a, T>),
     Lambda(Lambda<'a, T>),
     Def(Def<'a, T>),
     Set(Set<'a, T>),
     If(If<'a, T>),
+    Apply(Apply<'a, T>),
     BinaryArithemticOperation(BinaryArithmeticOperation<'a, T>),
     ComparisonOperation(ComparisonOperation<'a, T>),
     List(List<'a, T>),
@@ -48,6 +51,12 @@ pub(crate) enum Ast<'a, T> {
     Quote(Quote<'a, T>),
     Variable(Variable<'a, T>),
     Constant(Constant<'a, T>),
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct EvalWhenCompile<'a, T> {
+    pub source: &'a Sexpr<'a, T>,
+    pub exprs: Vec<Ast<'a, T>>,
 }
 
 #[derive(Clone, Debug)]
@@ -81,8 +90,8 @@ pub(crate) enum Type {
 
 #[derive(Clone, Debug)]
 pub(crate) struct Variable<'a, T> {
-    source: &'a Sexpr<'a, T>,
-    name: String,
+    pub source: &'a Sexpr<'a, T>,
+    pub name: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -133,6 +142,12 @@ pub(crate) struct If<'a, T> {
     pub predicate: Box<Ast<'a, T>>,
     pub then: Box<Ast<'a, T>>,
     pub r#else: Box<Ast<'a, T>>,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct Apply<'a, T> {
+    pub source: &'a Sexpr<'a, T>,
+    pub exprs: Vec<Ast<'a, T>>,
 }
 
 #[derive(Clone, Debug)]
@@ -211,6 +226,10 @@ impl<'a, T> Ast<'a, T> {
                 && BUILT_INS.iter().any(|b| b == symbol)
             {
                 match list.as_slice() {
+                    [Sexpr::Symbol { symbol, .. }, rest @ ..] if symbol == "eval-when-compile" => {
+                        Ast::EvalWhenCompile(EvalWhenCompile::from_sexpr(sexpr, rest)?)
+                    }
+
                     [Sexpr::Symbol { symbol, .. }, name, parameters, rest @ ..]
                         if symbol == "defmacro" =>
                     {
@@ -232,6 +251,9 @@ impl<'a, T> Ast<'a, T> {
                     }
                     [Sexpr::Symbol { symbol, .. }, predicate, then, r#else] if symbol == "if" => {
                         Ast::If(If::from_sexpr(sexpr, predicate, then, r#else)?)
+                    }
+                    [Sexpr::Symbol { symbol, .. }, rest @ ..] if symbol == "apply" => {
+                        todo!()
                     }
                     [operator @ Sexpr::Symbol { symbol, .. }, lhs, rhs]
                         if matches!(symbol.as_str(), "+" | "-" | "*" | "/") =>
@@ -302,6 +324,32 @@ impl<'a, T> Ast<'a, T> {
                 todo!()
             },
         )
+    }
+
+    pub(crate) fn source_sexpr(&self) -> &Sexpr<T> {
+        match self {
+            Self::EvalWhenCompile(EvalWhenCompile { source, .. })
+            | Self::DefMacro(DefMacro { source, .. })
+            | Self::Lambda(Lambda { source, .. })
+            | Self::Def(Def { source, .. })
+            | Self::Set(Set { source, .. })
+            | Self::If(If { source, .. })
+            | Self::Apply(Apply { source, .. })
+            | Self::BinaryArithemticOperation(BinaryArithmeticOperation { source, .. })
+            | Self::ComparisonOperation(ComparisonOperation { source, .. })
+            | Self::List(List { source, .. })
+            | Self::Cons(Cons { source, .. })
+            | Self::Car(Car { source, .. })
+            | Self::Cdr(Cdr { source, .. })
+            | Self::FnCall(FnCall { source, .. })
+            | Self::Quote(Quote { source, .. })
+            | Self::Variable(Variable { source, .. })
+            | Self::Constant(Constant::String { source, .. })
+            | Self::Constant(Constant::Char { source, .. })
+            | Self::Constant(Constant::Int { source, .. })
+            | Self::Constant(Constant::Bool { source, .. })
+            | Self::Constant(Constant::Nil { source }) => source,
+        }
     }
 }
 
@@ -393,6 +441,21 @@ fn parse_parameters<'a, T>(
     };
 
     Ok(p)
+}
+
+impl<'a, T> EvalWhenCompile<'a, T> {
+    pub(crate) fn from_sexpr(
+        source: &'a Sexpr<'a, T>,
+        exprs: &'a [Sexpr<'a, T>],
+    ) -> Result<Self, Error<'a, T>> {
+        Ok(EvalWhenCompile {
+            source,
+            exprs: exprs
+                .iter()
+                .map(Ast::from_sexpr)
+                .collect::<Result<Vec<_>, _>>()?,
+        })
+    }
 }
 
 impl<'a, T> DefMacro<'a, T> {
@@ -512,6 +575,21 @@ impl<'a, T> If<'a, T> {
             predicate: Box::new(Ast::from_sexpr(predicate)?),
             then: Box::new(Ast::from_sexpr(then)?),
             r#else: Box::new(Ast::from_sexpr(r#else)?),
+        })
+    }
+}
+
+impl<'a, T> Apply<'a, T> {
+    pub(crate) fn from_sexpr(
+        source: &'a Sexpr<'a, T>,
+        exprs: &'a [Sexpr<'a, T>],
+    ) -> Result<Self, Error<'a, T>> {
+        Ok(Self {
+            source,
+            exprs: exprs
+                .iter()
+                .map(Ast::from_sexpr)
+                .collect::<Result<Vec<_>, _>>()?,
         })
     }
 }
