@@ -183,8 +183,8 @@ pub(crate) struct ComparisonOperation<'a, T> {
 
 #[derive(Clone, Debug)]
 pub(crate) struct List<'a, T> {
-    source: &'a Sexpr<'a, T>,
-    exprs: Vec<Ast<'a, T>>,
+    pub source: &'a Sexpr<'a, T>,
+    pub exprs: Vec<Ast<'a, T>>,
 }
 
 #[derive(Clone, Debug)]
