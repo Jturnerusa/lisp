@@ -1,6 +1,6 @@
 use core::fmt;
 use logos::{Lexer, Logos};
-use std::ops::Range;
+use std::{cmp::Ordering, ops::Range};
 use thiserror::Error;
 use unwrap_enum::EnumIs;
 
@@ -129,9 +129,7 @@ impl<T> Context<T> {
     pub fn span(&self, span: Range<usize>) -> &str {
         &self.source[span.start..span.end]
     }
-}
 
-impl<T: fmt::Display> Context<T> {
     pub fn display(&self) -> &T {
         &self.display
     }
@@ -376,4 +374,19 @@ fn expand_macro<'a, T>(
         context,
         span,
     })
+}
+
+impl<'a, T: PartialEq> PartialOrd for Sexpr<'a, T> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        match (self, other) {
+            (Self::List { list: a, .. }, Self::List { list: b, .. }) => a.partial_cmp(b),
+            (Self::Symbol { symbol: a, .. }, Self::Symbol { symbol: b, .. }) => a.partial_cmp(b),
+            (Self::String { string: a, .. }, Self::String { string: b, .. }) => a.partial_cmp(b),
+            (Self::Char { char: a, .. }, Self::Char { char: b, .. }) => a.partial_cmp(b),
+            (Self::Int { int: a, .. }, Self::Int { int: b, .. }) => a.partial_cmp(b),
+            (Self::Bool { bool: a, .. }, Self::Bool { bool: b, .. }) => a.partial_cmp(b),
+            (Self::Nil { .. }, Self::Nil { .. }) => Some(Ordering::Equal),
+            _ => None,
+        }
+    }
 }
