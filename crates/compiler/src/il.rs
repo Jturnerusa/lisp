@@ -1,8 +1,8 @@
 use std::collections::BTreeSet;
-use vm::{Arity, OpCodeTable, UpValue};
+use vm::{Arity, UpValue};
 
 use crate::{
-    ast::{self, Ast},
+    ast::{self, Ast, Quoted},
     environment::{self, Environment, Variable},
 };
 
@@ -35,7 +35,9 @@ pub(crate) enum Il<'a, T> {
     Apply(Apply<'a, T>),
     Def(Def<'a, T>),
     Set(Set<'a, T>),
+    FnCall(FnCall<'a, T>),
     ArithmeticOperation(ArithmeticOperation<'a, T>),
+    ComparisonOperation(ComparisonOperation<'a, T>),
     List(List<'a, T>),
     Cons(Cons<'a, T>),
     Car(Car<'a, T>),
@@ -142,6 +144,13 @@ pub(crate) struct If<'a, T> {
 }
 
 #[derive(Clone, Debug)]
+pub(crate) struct FnCall<'a, T> {
+    pub source: &'a Ast<'a, T>,
+    function: Box<Il<'a, T>>,
+    args: Vec<Il<'a, T>>,
+}
+
+#[derive(Clone, Debug)]
 pub(crate) struct Apply<'a, T> {
     source: &'a Ast<'a, T>,
     exprs: Vec<Il<'a, T>>,
@@ -186,6 +195,21 @@ pub(crate) struct ArithmeticOperation<'a, T> {
     pub operator: ArithmeticOperator,
     pub lhs: Box<Il<'a, T>>,
     pub rhs: Box<Il<'a, T>>,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) enum ComparisonOperator {
+    Eq,
+    Lt,
+    Gt,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct ComparisonOperation<'a, T> {
+    source: &'a Ast<'a, T>,
+    operator: ComparisonOperator,
+    lhs: Box<Il<'a, T>>,
+    rhs: Box<Il<'a, T>>,
 }
 
 #[derive(Clone, Debug)]
@@ -234,9 +258,11 @@ impl<'a, T> Il<'a, T> {
             | Self::DefMacro(DefMacro { source, .. })
             | Self::Lambda(Lambda { source, .. })
             | Self::ArithmeticOperation(ArithmeticOperation { source, .. })
+            | Self::ComparisonOperation(ComparisonOperation { source, .. })
             | Self::Def(Def { source, .. })
             | Self::Set(Set { source, .. })
             | Self::If(If { source, .. })
+            | Self::FnCall(FnCall { source, .. })
             | Self::Apply(Apply { source, .. })
             | Self::List(List { source, .. })
             | Self::Cons(Cons { source, .. })
@@ -335,6 +361,23 @@ impl Compiler {
         ast: &'a Ast<'a, T>,
     ) -> Result<Il<'a, T>, Error<'a, T>> {
         match ast {
+            Ast::EvalWhenCompile(eval_when_compile) => {
+                self.compile_eval_when_compile(ast, eval_when_compile)
+            }
+            Ast::DefMacro(defmacro) => self.compile_defmacro(ast, defmacro),
+            Ast::Lambda(lambda) => self.compile_lambda(ast, lambda),
+            Ast::Def(def) => self.compile_def(ast, def),
+            Ast::Set(set) => self.compile_set(ast, set),
+            Ast::If(r#if) => self.compile_if(ast, r#if),
+            Ast::FnCall(fncall) => self.compile_fncall(ast, fncall),
+            Ast::Apply(apply) => self.compile_apply(ast, apply),
+            Ast::BinaryArithemticOperation(op) => self.compile_arithmetic_operation(ast, op),
+            Ast::ComparisonOperation(op) => self.compile_comparison_operation(ast, op),
+            Ast::List(list) => self.compile_list(ast, list),
+            Ast::Cons(cons) => self.compile_cons(ast, cons),
+            Ast::Car(car) => self.compile_car(ast, car),
+            Ast::Cdr(cdr) => self.compile_cdr(ast, cdr),
+            Ast::Constant(constant) => self.compile_constant(ast, constant),
             Ast::Variable(variable) => self.compile_variable_reference(ast, variable),
             _ => todo!(),
         }
@@ -587,6 +630,92 @@ impl Compiler {
         }))
     }
 
+    fn compile_quote<'a, T: Clone>(
+        &mut self,
+        source: &'a Ast<'a, T>,
+        quote: &'a ast::Quote<'a, T>,
+    ) -> Result<Il<'a, T>, Error<'a, T>> {
+        Ok(match &quote.body {
+            Quoted::List { list, .. } => self.compile_quoted_list(source, list.as_slice())?,
+            Quoted::Symbol { symbol, .. } => Il::Constant(Constant::Symbol {
+                source,
+                symbol: symbol.clone(),
+            }),
+            Quoted::String { string, .. } => Il::Constant(Constant::String {
+                source,
+                string: string.clone(),
+            }),
+            Quoted::Char { char, .. } => Il::Constant(Constant::Char {
+                source,
+                char: *char,
+            }),
+            Quoted::Int { int, .. } => Il::Constant(Constant::Int { source, int: *int }),
+            Quoted::Bool { bool, .. } => Il::Constant(Constant::Bool {
+                source,
+                bool: *bool,
+            }),
+            Quoted::Nil { .. } => Il::Constant(Constant::Nil { source }),
+        })
+    }
+
+    #[allow(clippy::only_used_in_recursion)]
+    fn compile_quoted_list<'a, T: Clone>(
+        &mut self,
+        source: &'a Ast<'a, T>,
+        list: &'a [Quoted<'a, T>],
+    ) -> Result<Il<'a, T>, Error<'a, T>> {
+        Ok(Il::List(List {
+            source,
+            exprs: list
+                .iter()
+                .map(|quoted| {
+                    Ok(match quoted {
+                        Quoted::List { list, .. } => {
+                            self.compile_quoted_list(source, list.as_slice())?
+                        }
+                        Quoted::Symbol { symbol, .. } => Il::Constant(Constant::Symbol {
+                            source,
+                            symbol: symbol.clone(),
+                        }),
+                        Quoted::String { string, .. } => Il::Constant(Constant::String {
+                            source,
+                            string: string.clone(),
+                        }),
+                        Quoted::Char { char, .. } => Il::Constant(Constant::Char {
+                            source,
+                            char: *char,
+                        }),
+                        Quoted::Int { int, .. } => {
+                            Il::Constant(Constant::Int { source, int: *int })
+                        }
+                        Quoted::Bool { bool, .. } => Il::Constant(Constant::Bool {
+                            source,
+                            bool: *bool,
+                        }),
+                        Quoted::Nil { .. } => Il::Constant(Constant::Nil { source }),
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()?,
+        }))
+    }
+
+    fn compile_fncall<'a, T: Clone>(
+        &mut self,
+        source: &'a Ast<'a, T>,
+        fncall: &'a ast::FnCall<'a, T>,
+    ) -> Result<Il<'a, T>, Error<'a, T>> {
+        Ok(Il::FnCall(FnCall {
+            source,
+            function: Box::new(self.compile(fncall.exprs.first().unwrap())?),
+            args: fncall
+                .exprs
+                .iter()
+                .skip(1)
+                .map(|arg| self.compile(arg))
+                .collect::<Result<Vec<_>, _>>()?,
+        }))
+    }
+
     fn compile_apply<'a, T: Clone>(
         &mut self,
         source: &'a Ast<'a, T>,
@@ -599,6 +728,41 @@ impl Compiler {
                 .iter()
                 .map(|expr| self.compile(expr))
                 .collect::<Result<Vec<_>, _>>()?,
+        }))
+    }
+
+    fn compile_arithmetic_operation<'a, T: Clone>(
+        &mut self,
+        source: &'a Ast<'a, T>,
+        op: &'a ast::BinaryArithmeticOperation<'a, T>,
+    ) -> Result<Il<'a, T>, Error<'a, T>> {
+        Ok(Il::ArithmeticOperation(ArithmeticOperation {
+            source,
+            operator: match op.operator {
+                ast::BinaryArithmeticOperator::Add => ArithmeticOperator::Add,
+                ast::BinaryArithmeticOperator::Sub => ArithmeticOperator::Sub,
+                ast::BinaryArithmeticOperator::Mul => ArithmeticOperator::Mul,
+                ast::BinaryArithmeticOperator::Div => ArithmeticOperator::Div,
+            },
+            lhs: Box::new(self.compile(&op.lhs)?),
+            rhs: Box::new(self.compile(&op.rhs)?),
+        }))
+    }
+
+    fn compile_comparison_operation<'a, T: Clone>(
+        &mut self,
+        source: &'a Ast<'a, T>,
+        op: &'a ast::ComparisonOperation<'a, T>,
+    ) -> Result<Il<'a, T>, Error<'a, T>> {
+        Ok(Il::ComparisonOperation(ComparisonOperation {
+            source,
+            operator: match op.operator {
+                ast::ComparisonOperator::Eq => ComparisonOperator::Eq,
+                ast::ComparisonOperator::Lt => ComparisonOperator::Lt,
+                ast::ComparisonOperator::Gt => ComparisonOperator::Gt,
+            },
+            lhs: Box::new(self.compile(&op.lhs)?),
+            rhs: Box::new(self.compile(&op.rhs)?),
         }))
     }
 
