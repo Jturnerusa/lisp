@@ -186,6 +186,18 @@ impl<'a, T> Sexpr<'a, T> {
             _ => None,
         }
     }
+
+    pub fn context(&self) -> &Context<T> {
+        match self {
+            Self::List { context, .. }
+            | Self::Symbol { context, .. }
+            | Self::String { context, .. }
+            | Self::Char { context, .. }
+            | Self::Int { context, .. }
+            | Self::Bool { context, .. }
+            | Self::Nil { context, .. } => context,
+        }
+    }
 }
 
 impl<'a, T> Iterator for Reader<'a, T> {
