@@ -17,9 +17,8 @@ pub enum Type {
     Symbol,
     Int,
     Char,
-    True,
+    Bool,
     Nil,
-    Predicate,
 }
 
 #[derive(Clone, Debug, EnumAs, EnumIs, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -28,7 +27,7 @@ pub enum HashMapKey {
     Symbol(Gc<String>),
     Int(i64),
     Char(char),
-    True,
+    Bool(bool),
     Nil,
 }
 
@@ -42,7 +41,7 @@ pub enum Object<D: 'static> {
     Symbol(Gc<String>),
     Int(i64),
     Char(char),
-    True,
+    Bool(bool),
     Nil,
 }
 
@@ -121,7 +120,7 @@ impl<D> From<&Object<D>> for Type {
             Object::Symbol(_) => Type::Symbol,
             Object::Int(_) => Type::Int,
             Object::Char(_) => Type::Char,
-            Object::True => Type::True,
+            Object::Bool(_) => Type::Bool,
             Object::Nil => Type::Nil,
         }
     }
@@ -137,9 +136,8 @@ impl fmt::Display for Type {
             Self::String => write!(f, "string"),
             Self::Int => write!(f, "int"),
             Self::Char => write!(f, "char"),
-            Self::True => write!(f, "true"),
+            Self::Bool => write!(f, "bool"),
             Self::Nil => write!(f, "nil"),
-            Self::Predicate => write!(f, "predicate"),
         }
     }
 }
@@ -151,7 +149,7 @@ impl<D: PartialEq> PartialEq for Object<D> {
             (Object::String(a), Object::String(b)) => a == b,
             (Object::Symbol(a), Object::Symbol(b)) => a == b,
             (Object::Int(a), Object::Int(b)) => a == b,
-            (Object::True, Object::True) => true,
+            (Object::Bool(a), Object::Bool(b)) => a == b,
             (Object::Nil, Object::Nil) => true,
             _ => false,
         }
@@ -164,7 +162,7 @@ impl<D: PartialOrd> PartialOrd for Object<D> {
             (Object::Symbol(a), Object::Symbol(b)) => a.cmp(b),
             (Object::String(a), Object::String(b)) => a.cmp(b),
             (Object::Int(a), Object::Int(b)) => a.cmp(b),
-            (Object::True, Object::True) => Ordering::Equal,
+            (Object::Bool(a), Object::Bool(b)) => a.cmp(b),
             (Object::Nil, Object::Nil) => Ordering::Equal,
             _ => return None,
         })
@@ -209,7 +207,8 @@ impl<D: Clone> Display for Object<D> {
             Self::String(string) => write!(f, r#""{string}""#),
             Self::Int(i) => write!(f, "{i}"),
             Self::Char(c) => write!(f, r#"'{c}'"#),
-            Self::True => write!(f, "true"),
+            Self::Bool(true) => write!(f, "true"),
+            Self::Bool(false) => write!(f, "false"),
             Self::Nil => write!(f, "nil"),
         }
     }
@@ -222,7 +221,8 @@ impl Display for HashMapKey {
             Self::Symbol(symbol) => write!(f, "'{symbol}"),
             Self::Char(c) => write!(f, "'{c}'"),
             Self::Int(i) => write!(f, "{i}"),
-            Self::True => write!(f, "true"),
+            Self::Bool(true) => write!(f, "true"),
+            Self::Bool(false) => write!!(f, "false"),
             Self::Nil => write!(f, "nil"),
         }
     }
@@ -260,7 +260,7 @@ impl<D> TryFrom<&Object<D>> for HashMapKey {
             Object::String(string) => Self::String(string.clone()),
             Object::Char(c) => Self::Char(*c),
             Object::Int(i) => Self::Int(*i),
-            Object::True => Self::True,
+            Object::Bool(b) => Self::Bool(*b),
             Object::Nil => Self::Nil,
             _ => return Err(()),
         })

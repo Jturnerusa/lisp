@@ -71,7 +71,7 @@ pub enum OpCode {
     PushInt(i64),
     PushChar(char),
     PushString(u64),
-    PushTrue,
+    PushBool(bool),
     PushNil,
     Pop,
     Add,
@@ -231,7 +231,7 @@ impl<D: Clone + PartialEq + PartialOrd + Hash> Vm<D> {
             }
             OpCode::PushInt(i) => self.stack.push(Local::Value(Object::Int(i))),
             OpCode::PushChar(c) => self.stack.push(Local::Value(Object::Char(c))),
-            OpCode::PushTrue => self.stack.push(Local::Value(Object::True)),
+            OpCode::PushBool(b) => self.stack.push(Local::Value(Object::Bool(b))),
             OpCode::PushNil => self.stack.push(Local::Value(Object::Nil)),
             OpCode::Pop => {
                 self.stack.pop().unwrap();
@@ -686,13 +686,13 @@ impl<D: Clone + PartialEq + PartialOrd + Hash> Vm<D> {
         let p = self.stack.pop().unwrap();
 
         match p.into_object() {
-            Object::True => (),
-            Object::Nil => {
+            Object::Bool(true) => (),
+            Object::Bool(false) => {
                 self.pc += i;
             }
             object => {
                 return Err(Error::Type {
-                    expected: Type::Predicate,
+                    expected: Type::Bool,
                     recieved: Type::from(&object),
                 });
             }
@@ -704,9 +704,9 @@ impl<D: Clone + PartialEq + PartialOrd + Hash> Vm<D> {
     pub fn is_type(&mut self, ty: Type) -> Result<(), Error> {
         self.stack.push(
             if Type::from(&self.stack.last().unwrap().clone().into_object()) == ty {
-                Local::Value(Object::True)
+                Local::Value(Object::Bool(true))
             } else {
-                Local::Value(Object::Nil)
+                Local::Value(Object::Bool(false))
             },
         );
         Ok(())
@@ -714,7 +714,7 @@ impl<D: Clone + PartialEq + PartialOrd + Hash> Vm<D> {
 
     pub fn assert(&mut self) -> Result<(), Error> {
         match self.stack.pop().unwrap().into_object() {
-            Object::True => Ok(()),
+            Object::Bool(true) => Ok(()),
             _ => Err(Error::Assert("assertion failed".to_string())),
         }
     }
@@ -724,9 +724,9 @@ impl<D: Clone + PartialEq + PartialOrd + Hash> Vm<D> {
         let lhs = self.stack.pop().unwrap();
 
         self.stack.push(if lhs.into_object() == rhs.into_object() {
-            Local::Value(Object::True)
+            Local::Value(Object::Bool(true))
         } else {
-            Local::Value(Object::Nil)
+            Local::Value(Object::Bool(false))
         });
 
         Ok(())
@@ -742,8 +742,8 @@ impl<D: Clone + PartialEq + PartialOrd + Hash> Vm<D> {
                 .into_object()
                 .partial_cmp(&rhs.clone().into_object())
             {
-                Some(Ordering::Less) => Local::Value(Object::True),
-                Some(_) => Local::Value(Object::Nil),
+                Some(Ordering::Less) => Local::Value(Object::Bool(true)),
+                Some(_) => Local::Value(Object::Bool(false)),
                 None => {
                     return Err(Error::Cmp(
                         Type::from(&lhs.into_object()),
@@ -766,8 +766,8 @@ impl<D: Clone + PartialEq + PartialOrd + Hash> Vm<D> {
                 .into_object()
                 .partial_cmp(&rhs.clone().into_object())
             {
-                Some(Ordering::Greater) => Local::Value(Object::True),
-                Some(_) => Local::Value(Object::Nil),
+                Some(Ordering::Greater) => Local::Value(Object::Bool(true)),
+                Some(_) => Local::Value(Object::Bool(false)),
                 None => {
                     return Err(Error::Cmp(
                         Type::from(&lhs.into_object()),
