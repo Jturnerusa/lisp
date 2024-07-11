@@ -112,8 +112,8 @@ pub enum Parameters<'a, T> {
 
 #[derive(Clone, Debug)]
 pub struct EvalWhenCompile<'a, T> {
-    source: &'a Ast<'a, T>,
-    exprs: Vec<Il<'a, T>>,
+    pub source: &'a Ast<'a, T>,
+    pub exprs: Vec<Il<'a, T>>,
 }
 
 #[derive(Clone, Debug)]
@@ -146,39 +146,39 @@ pub struct If<'a, T> {
 #[derive(Clone, Debug)]
 pub struct FnCall<'a, T> {
     pub source: &'a Ast<'a, T>,
-    function: Box<Il<'a, T>>,
-    args: Vec<Il<'a, T>>,
+    pub function: Box<Il<'a, T>>,
+    pub args: Vec<Il<'a, T>>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Apply<'a, T> {
-    source: &'a Ast<'a, T>,
-    exprs: Vec<Il<'a, T>>,
+    pub source: &'a Ast<'a, T>,
+    pub exprs: Vec<Il<'a, T>>,
 }
 
 #[derive(Clone, Debug)]
 pub struct List<'a, T> {
-    source: &'a Ast<'a, T>,
-    exprs: Vec<Il<'a, T>>,
+    pub source: &'a Ast<'a, T>,
+    pub exprs: Vec<Il<'a, T>>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Cons<'a, T> {
-    source: &'a Ast<'a, T>,
-    lhs: Box<Il<'a, T>>,
-    rhs: Box<Il<'a, T>>,
+    pub source: &'a Ast<'a, T>,
+    pub lhs: Box<Il<'a, T>>,
+    pub rhs: Box<Il<'a, T>>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Car<'a, T> {
-    source: &'a Ast<'a, T>,
-    body: Box<Il<'a, T>>,
+    pub source: &'a Ast<'a, T>,
+    pub body: Box<Il<'a, T>>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Cdr<'a, T> {
-    source: &'a Ast<'a, T>,
-    body: Box<Il<'a, T>>,
+    pub source: &'a Ast<'a, T>,
+    pub body: Box<Il<'a, T>>,
 }
 
 #[derive(Clone, Debug)]
@@ -206,45 +206,45 @@ pub enum ComparisonOperator {
 
 #[derive(Clone, Debug)]
 pub struct ComparisonOperation<'a, T> {
-    source: &'a Ast<'a, T>,
-    operator: ComparisonOperator,
-    lhs: Box<Il<'a, T>>,
-    rhs: Box<Il<'a, T>>,
+    pub source: &'a Ast<'a, T>,
+    pub operator: ComparisonOperator,
+    pub lhs: Box<Il<'a, T>>,
+    pub rhs: Box<Il<'a, T>>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Def<'a, T> {
-    source: &'a Ast<'a, T>,
-    parameter: Parameter<'a, T>,
-    body: Box<Il<'a, T>>,
+    pub source: &'a Ast<'a, T>,
+    pub parameter: Parameter<'a, T>,
+    pub body: Box<Il<'a, T>>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Set<'a, T> {
-    source: &'a Ast<'a, T>,
-    target: VarRef<'a, T>,
-    body: Box<Il<'a, T>>,
+    pub source: &'a Ast<'a, T>,
+    pub target: VarRef<'a, T>,
+    pub body: Box<Il<'a, T>>,
 }
 
 #[derive(Clone, Debug)]
 pub struct MapCreate<'a, T> {
-    source: &'a Ast<'a, T>,
-    map: Box<Il<'a, T>>,
+    pub source: &'a Ast<'a, T>,
+    pub map: Box<Il<'a, T>>,
 }
 
 #[derive(Clone, Debug)]
 pub struct MapInsert<'a, T> {
-    source: &'a Ast<'a, T>,
-    map: Box<Il<'a, T>>,
-    key: Box<Il<'a, T>>,
-    value: Box<Il<'a, T>>,
+    pub source: &'a Ast<'a, T>,
+    pub map: Box<Il<'a, T>>,
+    pub key: Box<Il<'a, T>>,
+    pub value: Box<Il<'a, T>>,
 }
 
 #[derive(Clone, Debug)]
 pub struct MapRetrieve<'a, T> {
-    source: &'a Ast<'a, T>,
-    map: Box<Il<'a, T>>,
-    key: Box<Il<'a, T>>,
+    pub source: &'a Ast<'a, T>,
+    pub map: Box<Il<'a, T>>,
+    pub key: Box<Il<'a, T>>,
 }
 
 pub struct Compiler {
