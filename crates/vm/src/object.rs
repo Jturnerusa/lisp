@@ -2,12 +2,12 @@ use crate::{Arity, Error, OpCodeTable};
 use gc::{Gc, GcCell, Trace};
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::fmt::Write;
 use std::fmt::{self, Debug, Display};
 use std::ops::Deref;
 use std::ptr::NonNull;
 use std::rc::Rc;
 use unwrap_enum::{EnumAs, EnumIs};
-use std::fmt::Write;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Type {
@@ -223,7 +223,7 @@ impl Display for HashMapKey {
             Self::Char(c) => write!(f, "'{c}'"),
             Self::Int(i) => write!(f, "{i}"),
             Self::Bool(true) => write!(f, "true"),
-            Self::Bool(false) => write!!(f, "false"),
+            Self::Bool(false) => write!(f, "false"),
             Self::Nil => write!(f, "nil"),
         }
     }
@@ -370,7 +370,7 @@ impl<D> Object<D> {
             Self::Bool(true) => write!(buffer, " true ").map_err(|_| ())?,
             Self::Bool(false) => write!(buffer, " false ").map_err(|_| ())?,
             Self::Nil => write!(buffer, " nil ").map_err(|_| ())?,
-            _ => return Err(())
+            _ => return Err(()),
         }
 
         Ok(())
@@ -386,7 +386,7 @@ impl<D: Clone> Cons<D> {
         }
 
         write!(buffer, " ) ").map_err(|_| ())?;
-        
+
         Ok(())
     }
 }
