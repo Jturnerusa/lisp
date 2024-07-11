@@ -7,6 +7,7 @@ use std::ops::Deref;
 use std::ptr::NonNull;
 use std::rc::Rc;
 use unwrap_enum::{EnumAs, EnumIs};
+use std::fmt::Write;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Type {
@@ -356,6 +357,37 @@ unsafe impl<D> Trace for Cons<D> {
     unsafe fn trace(&self, tracer: &mut dyn FnMut(NonNull<gc::Inner<dyn Trace>>) -> bool) {
         self.0.trace(tracer);
         self.1.trace(tracer);
+    }
+}
+
+impl<D> Object<D> {
+    pub fn print(&self, buffer: &mut String) -> Result<(), ()> {
+        match self {
+            Self::Symbol(symbol) => write!(buffer, " {symbol} ").map_err(|_| ())?,
+            Self::String(string) => write!(buffer, r#" "{string}" "#).map_err(|_| ())?,
+            Self::Char(char) => write!(buffer, r#" '{char}' "#).map_err(|_| ())?,
+            Self::Int(int) => write!(buffer, " {int} ").map_err(|_| ())?,
+            Self::Bool(true) => write!(buffer, " true ").map_err(|_| ())?,
+            Self::Bool(false) => write!(buffer, " false ").map_err(|_| ())?,
+            Self::Nil => write!(buffer, " nil ").map_err(|_| ())?,
+            _ => return Err(())
+        }
+
+        Ok(())
+    }
+}
+
+impl<D: Clone> Cons<D> {
+    pub fn print(&self, buffer: &mut String) -> Result<(), ()> {
+        write!(buffer, " ( ").map_err(|_| ())?;
+
+        for e in self.iter_cars() {
+            write!(buffer, " {e} ").map_err(|_| ())?;
+        }
+
+        write!(buffer, " ) ").map_err(|_| ())?;
+        
+        Ok(())
     }
 }
 
