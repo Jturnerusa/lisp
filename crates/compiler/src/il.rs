@@ -7,8 +7,8 @@ use crate::{
 };
 
 #[derive(Clone, Debug)]
-pub struct Error<'a, T> {
-    source: &'a Ast<'a, T>,
+pub struct Error<'a> {
+    source: &'a Ast<'a>,
     message: String,
 }
 
@@ -27,158 +27,141 @@ pub enum Type {
 }
 
 #[derive(Clone, Debug)]
-pub enum Il<'a, T> {
-    EvalWhenCompile(EvalWhenCompile<'a, T>),
-    DefMacro(DefMacro<'a, T>),
-    Lambda(Lambda<'a, T>),
-    If(If<'a, T>),
-    Apply(Apply<'a, T>),
-    Def(Def<'a, T>),
-    Set(Set<'a, T>),
-    FnCall(FnCall<'a, T>),
-    ArithmeticOperation(ArithmeticOperation<'a, T>),
-    ComparisonOperation(ComparisonOperation<'a, T>),
-    List(List<'a, T>),
-    Cons(Cons<'a, T>),
-    Car(Car<'a, T>),
-    Cdr(Cdr<'a, T>),
-    MapCreate(MapCreate<'a, T>),
-    MapInsert(MapInsert<'a, T>),
-    MapRetrieve(MapRetrieve<'a, T>),
-    VarRef(VarRef<'a, T>),
-    Constant(Constant<'a, T>),
+pub enum Il<'a> {
+    EvalWhenCompile(EvalWhenCompile<'a>),
+    DefMacro(DefMacro<'a>),
+    Lambda(Lambda<'a>),
+    If(If<'a>),
+    Apply(Apply<'a>),
+    Def(Def<'a>),
+    Set(Set<'a>),
+    FnCall(FnCall<'a>),
+    ArithmeticOperation(ArithmeticOperation<'a>),
+    ComparisonOperation(ComparisonOperation<'a>),
+    List(List<'a>),
+    Cons(Cons<'a>),
+    Car(Car<'a>),
+    Cdr(Cdr<'a>),
+    MapCreate(MapCreate<'a>),
+    MapInsert(MapInsert<'a>),
+    MapRetrieve(MapRetrieve<'a>),
+    VarRef(VarRef<'a>),
+    Constant(Constant<'a>),
 }
 
 #[derive(Clone, Debug)]
-pub enum Constant<'a, T> {
-    Symbol {
-        source: &'a Ast<'a, T>,
-        symbol: String,
-    },
-    String {
-        source: &'a Ast<'a, T>,
-        string: String,
-    },
-    Char {
-        source: &'a Ast<'a, T>,
-        char: char,
-    },
-    Int {
-        source: &'a Ast<'a, T>,
-        int: i64,
-    },
-    Bool {
-        source: &'a Ast<'a, T>,
-        bool: bool,
-    },
-    Nil {
-        source: &'a Ast<'a, T>,
-    },
+pub enum Constant<'a> {
+    Symbol { source: &'a Ast<'a>, symbol: String },
+    String { source: &'a Ast<'a>, string: String },
+    Char { source: &'a Ast<'a>, char: char },
+    Int { source: &'a Ast<'a>, int: i64 },
+    Bool { source: &'a Ast<'a>, bool: bool },
+    Nil { source: &'a Ast<'a> },
 }
 
 #[derive(Clone, Debug)]
-pub enum VarRef<'a, T> {
+pub enum VarRef<'a> {
     Local {
-        source: &'a Ast<'a, T>,
+        source: &'a Ast<'a>,
         name: String,
         index: usize,
         r#type: Option<Type>,
     },
     UpValue {
-        source: &'a Ast<'a, T>,
+        source: &'a Ast<'a>,
         name: String,
         index: usize,
         r#type: Option<Type>,
     },
     Global {
-        source: &'a Ast<'a, T>,
+        source: &'a Ast<'a>,
         name: String,
         r#type: Option<Type>,
     },
 }
 
 #[derive(Clone, Debug)]
-pub struct Parameter<'a, T> {
-    pub source: &'a Ast<'a, T>,
+pub struct Parameter<'a> {
+    pub source: &'a Ast<'a>,
     pub name: String,
     pub r#type: Option<Type>,
 }
 
 #[derive(Clone, Debug)]
-pub enum Parameters<'a, T> {
-    Nary(Vec<Parameter<'a, T>>),
-    Variadic(Vec<Parameter<'a, T>>),
+pub enum Parameters<'a> {
+    Nary(Vec<Parameter<'a>>),
+    Variadic(Vec<Parameter<'a>>),
 }
 
 #[derive(Clone, Debug)]
-pub struct EvalWhenCompile<'a, T> {
-    pub source: &'a Ast<'a, T>,
-    pub exprs: Vec<Il<'a, T>>,
+pub struct EvalWhenCompile<'a> {
+    pub source: &'a Ast<'a>,
+    pub exprs: Vec<Il<'a>>,
 }
 
 #[derive(Clone, Debug)]
-pub struct DefMacro<'a, T> {
-    pub source: &'a Ast<'a, T>,
+pub struct DefMacro<'a> {
+    pub source: &'a Ast<'a>,
     pub name: String,
-    pub parameters: Parameters<'a, T>,
+    pub parameters: Parameters<'a>,
     pub arity: Arity,
-    pub body: Vec<Il<'a, T>>,
+    pub body: Vec<Il<'a>>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Lambda<'a, T> {
-    pub source: &'a Ast<'a, T>,
-    pub parameters: Parameters<'a, T>,
+pub struct Lambda<'a> {
+    pub source: &'a Ast<'a>,
+    pub parameters: Parameters<'a>,
     pub r#type: Option<Type>,
     pub arity: Arity,
     pub upvalues: Vec<UpValue>,
-    pub body: Vec<Il<'a, T>>,
+    pub body: Vec<Il<'a>>,
 }
 
 #[derive(Clone, Debug)]
-pub struct If<'a, T> {
-    pub source: &'a Ast<'a, T>,
-    pub predicate: Box<Il<'a, T>>,
-    pub then: Box<Il<'a, T>>,
-    pub r#else: Box<Il<'a, T>>,
+pub struct If<'a> {
+    pub source: &'a Ast<'a>,
+    pub predicate: Box<Il<'a>>,
+    pub then: Box<Il<'a>>,
+    pub r#else: Box<Il<'a>>,
 }
 
 #[derive(Clone, Debug)]
-pub struct FnCall<'a, T> {
-    pub source: &'a Ast<'a, T>,
-    pub function: Box<Il<'a, T>>,
-    pub args: Vec<Il<'a, T>>,
+pub struct FnCall<'a> {
+    pub source: &'a Ast<'a>,
+    pub function: Box<Il<'a>>,
+    pub args: Vec<Il<'a>>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Apply<'a, T> {
-    pub source: &'a Ast<'a, T>,
-    pub exprs: Vec<Il<'a, T>>,
+pub struct Apply<'a> {
+    pub source: &'a Ast<'a>,
+    pub exprs: Vec<Il<'a>>,
 }
 
 #[derive(Clone, Debug)]
-pub struct List<'a, T> {
-    pub source: &'a Ast<'a, T>,
-    pub exprs: Vec<Il<'a, T>>,
+pub struct List<'a> {
+    pub source: &'a Ast<'a>,
+    pub exprs: Vec<Il<'a>>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Cons<'a, T> {
-    pub source: &'a Ast<'a, T>,
-    pub lhs: Box<Il<'a, T>>,
-    pub rhs: Box<Il<'a, T>>,
+pub struct Cons<'a> {
+    pub source: &'a Ast<'a>,
+    pub lhs: Box<Il<'a>>,
+    pub rhs: Box<Il<'a>>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Car<'a, T> {
-    pub source: &'a Ast<'a, T>,
-    pub body: Box<Il<'a, T>>,
+pub struct Car<'a> {
+    pub source: &'a Ast<'a>,
+    pub body: Box<Il<'a>>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Cdr<'a, T> {
-    pub source: &'a Ast<'a, T>,
-    pub body: Box<Il<'a, T>>,
+pub struct Cdr<'a> {
+    pub source: &'a Ast<'a>,
+    pub body: Box<Il<'a>>,
 }
 
 #[derive(Clone, Debug)]
@@ -190,11 +173,11 @@ pub enum ArithmeticOperator {
 }
 
 #[derive(Clone, Debug)]
-pub struct ArithmeticOperation<'a, T> {
-    pub source: &'a Ast<'a, T>,
+pub struct ArithmeticOperation<'a> {
+    pub source: &'a Ast<'a>,
     pub operator: ArithmeticOperator,
-    pub lhs: Box<Il<'a, T>>,
-    pub rhs: Box<Il<'a, T>>,
+    pub lhs: Box<Il<'a>>,
+    pub rhs: Box<Il<'a>>,
 }
 
 #[derive(Clone, Debug)]
@@ -205,54 +188,54 @@ pub enum ComparisonOperator {
 }
 
 #[derive(Clone, Debug)]
-pub struct ComparisonOperation<'a, T> {
-    pub source: &'a Ast<'a, T>,
+pub struct ComparisonOperation<'a> {
+    pub source: &'a Ast<'a>,
     pub operator: ComparisonOperator,
-    pub lhs: Box<Il<'a, T>>,
-    pub rhs: Box<Il<'a, T>>,
+    pub lhs: Box<Il<'a>>,
+    pub rhs: Box<Il<'a>>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Def<'a, T> {
-    pub source: &'a Ast<'a, T>,
-    pub parameter: Parameter<'a, T>,
-    pub body: Box<Il<'a, T>>,
+pub struct Def<'a> {
+    pub source: &'a Ast<'a>,
+    pub parameter: Parameter<'a>,
+    pub body: Box<Il<'a>>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Set<'a, T> {
-    pub source: &'a Ast<'a, T>,
-    pub target: VarRef<'a, T>,
-    pub body: Box<Il<'a, T>>,
+pub struct Set<'a> {
+    pub source: &'a Ast<'a>,
+    pub target: VarRef<'a>,
+    pub body: Box<Il<'a>>,
 }
 
 #[derive(Clone, Debug)]
-pub struct MapCreate<'a, T> {
-    pub source: &'a Ast<'a, T>,
-    pub map: Box<Il<'a, T>>,
+pub struct MapCreate<'a> {
+    pub source: &'a Ast<'a>,
+    pub map: Box<Il<'a>>,
 }
 
 #[derive(Clone, Debug)]
-pub struct MapInsert<'a, T> {
-    pub source: &'a Ast<'a, T>,
-    pub map: Box<Il<'a, T>>,
-    pub key: Box<Il<'a, T>>,
-    pub value: Box<Il<'a, T>>,
+pub struct MapInsert<'a> {
+    pub source: &'a Ast<'a>,
+    pub map: Box<Il<'a>>,
+    pub key: Box<Il<'a>>,
+    pub value: Box<Il<'a>>,
 }
 
 #[derive(Clone, Debug)]
-pub struct MapRetrieve<'a, T> {
-    pub source: &'a Ast<'a, T>,
-    pub map: Box<Il<'a, T>>,
-    pub key: Box<Il<'a, T>>,
+pub struct MapRetrieve<'a> {
+    pub source: &'a Ast<'a>,
+    pub map: Box<Il<'a>>,
+    pub key: Box<Il<'a>>,
 }
 
 pub struct Compiler {
     environment: Environment,
 }
 
-impl<'a, T> Il<'a, T> {
-    pub fn source_ast(&self) -> &Ast<'a, T> {
+impl<'a> Il<'a> {
+    pub fn source_ast(&self) -> &Ast<'a> {
         match self {
             Self::EvalWhenCompile(EvalWhenCompile { source, .. })
             | Self::DefMacro(DefMacro { source, .. })
@@ -311,8 +294,8 @@ impl Type {
     }
 }
 
-impl<'a, T> Parameter<'a, T> {
-    pub fn from_ast(source: &'a Ast<'a, T>, parameter: &'a ast::Parameter) -> Result<Self, ()> {
+impl<'a> Parameter<'a> {
+    pub fn from_ast(source: &'a Ast<'a>, parameter: &'a ast::Parameter) -> Result<Self, ()> {
         Ok(Self {
             source,
             name: parameter.name.clone(),
@@ -325,26 +308,26 @@ impl<'a, T> Parameter<'a, T> {
     }
 }
 
-impl<'a, T: Clone> Parameters<'a, T> {
-    pub fn from_ast(source: &'a Ast<'a, T>, parameters: &'a ast::Parameters) -> Result<Self, ()> {
+impl<'a> Parameters<'a> {
+    pub fn from_ast(source: &'a Ast<'a>, parameters: &'a ast::Parameters) -> Result<Self, ()> {
         Ok(match parameters {
             ast::Parameters::Normal(params) => Parameters::Nary(
                 params
                     .iter()
                     .map(|param| Parameter::from_ast(source, param))
-                    .collect::<Result<Vec<Parameter<_>>, ()>>()?,
+                    .collect::<Result<Vec<Parameter>, ()>>()?,
             ),
             ast::Parameters::Rest(params, rest) => Parameters::Variadic(
                 params
                     .iter()
                     .chain(std::iter::once(rest))
                     .map(|param| Parameter::from_ast(source, param))
-                    .collect::<Result<Vec<Parameter<_>>, _>>()?,
+                    .collect::<Result<Vec<Parameter>, _>>()?,
             ),
         })
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = Parameter<T>> + '_ {
+    pub fn iter(&self) -> impl Iterator<Item = Parameter> + '_ {
         self.into_iter()
     }
 }
@@ -356,10 +339,7 @@ impl Compiler {
         }
     }
 
-    pub fn compile<'a, T: Clone>(
-        &mut self,
-        ast: &'a Ast<'a, T>,
-    ) -> Result<Il<'a, T>, Error<'a, T>> {
+    pub fn compile<'a>(&mut self, ast: &'a Ast<'a>) -> Result<Il<'a>, Error<'a>> {
         match ast {
             Ast::EvalWhenCompile(eval_when_compile) => {
                 self.compile_eval_when_compile(ast, eval_when_compile)
@@ -383,11 +363,11 @@ impl Compiler {
         }
     }
 
-    fn compile_constant<'a, T>(
+    fn compile_constant<'a>(
         &mut self,
-        source: &'a Ast<'a, T>,
-        constant: &'a ast::Constant<'a, T>,
-    ) -> Result<Il<'a, T>, Error<'a, T>> {
+        source: &'a Ast<'a>,
+        constant: &'a ast::Constant<'a>,
+    ) -> Result<Il<'a>, Error<'a>> {
         Ok(match constant {
             ast::Constant::String { string, .. } => Il::Constant(Constant::String {
                 source,
@@ -406,11 +386,11 @@ impl Compiler {
         })
     }
 
-    fn compile_variable_reference<'a, T: Clone>(
+    fn compile_variable_reference<'a>(
         &mut self,
-        source: &'a Ast<'a, T>,
-        variable: &ast::Variable<'a, T>,
-    ) -> Result<Il<'a, T>, Error<'a, T>> {
+        source: &'a Ast<'a>,
+        variable: &ast::Variable<'a>,
+    ) -> Result<Il<'a>, Error<'a>> {
         Ok(match self.environment.resolve(variable.name.as_str()) {
             Some(environment::Variable::Local(index, r#type)) => Il::VarRef(VarRef::Local {
                 source,
@@ -438,11 +418,11 @@ impl Compiler {
         })
     }
 
-    fn compile_eval_when_compile<'a, T: Clone>(
+    fn compile_eval_when_compile<'a>(
         &mut self,
-        source: &'a Ast<'a, T>,
-        eval_when_compile: &'a ast::EvalWhenCompile<'a, T>,
-    ) -> Result<Il<'a, T>, Error<'a, T>> {
+        source: &'a Ast<'a>,
+        eval_when_compile: &'a ast::EvalWhenCompile<'a>,
+    ) -> Result<Il<'a>, Error<'a>> {
         if !self.environment.is_global_scope() {
             return Err(Error {
                 source,
@@ -459,11 +439,11 @@ impl Compiler {
         Ok(Il::EvalWhenCompile(EvalWhenCompile { source, exprs }))
     }
 
-    fn compile_defmacro<'a, T: Clone>(
+    fn compile_defmacro<'a>(
         &mut self,
-        source: &'a Ast<'a, T>,
-        defmacro: &'a ast::DefMacro<'a, T>,
-    ) -> Result<Il<'a, T>, Error<'a, T>> {
+        source: &'a Ast<'a>,
+        defmacro: &'a ast::DefMacro<'a>,
+    ) -> Result<Il<'a>, Error<'a>> {
         if !self.environment.is_global_scope() {
             return Err(Error {
                 source,
@@ -489,7 +469,7 @@ impl Compiler {
             .body
             .iter()
             .map(|ast| self.compile(ast))
-            .collect::<Result<Vec<Il<_>>, Error<_>>>()?;
+            .collect::<Result<Vec<Il>, Error>>()?;
 
         self.environment.pop_scope();
 
@@ -502,11 +482,11 @@ impl Compiler {
         }))
     }
 
-    fn compile_lambda<'a, T: Clone>(
+    fn compile_lambda<'a>(
         &mut self,
-        source: &'a Ast<'a, T>,
-        lambda: &'a ast::Lambda<'a, T>,
-    ) -> Result<Il<'a, T>, Error<'a, T>> {
+        source: &'a Ast<'a>,
+        lambda: &'a ast::Lambda<'a>,
+    ) -> Result<Il<'a>, Error<'a>> {
         let arity = match &lambda.parameters {
             ast::Parameters::Normal(_) if lambda.parameters.len() == 0 => Arity::Nullary,
             ast::Parameters::Normal(_) => Arity::Nary(lambda.parameters.len()),
@@ -525,7 +505,7 @@ impl Compiler {
             .body
             .iter()
             .map(|ast| self.compile(ast))
-            .collect::<Result<Vec<Il<_>>, Error<_>>>()?;
+            .collect::<Result<Vec<Il>, Error>>()?;
 
         let upvalues = self.environment.upvalues().collect::<Vec<UpValue>>();
 
@@ -552,11 +532,11 @@ impl Compiler {
         }))
     }
 
-    fn compile_if<'a, T: Clone>(
+    fn compile_if<'a>(
         &mut self,
-        source: &'a Ast<'a, T>,
-        r#if: &'a ast::If<'a, T>,
-    ) -> Result<Il<'a, T>, Error<'a, T>> {
+        source: &'a Ast<'a>,
+        r#if: &'a ast::If<'a>,
+    ) -> Result<Il<'a>, Error<'a>> {
         Ok(Il::If(If {
             source,
             predicate: Box::new(self.compile(&r#if.predicate)?),
@@ -565,11 +545,11 @@ impl Compiler {
         }))
     }
 
-    fn compile_def<'a, T: Clone>(
+    fn compile_def<'a>(
         &mut self,
-        source: &'a Ast<'a, T>,
-        def: &'a ast::Def<'a, T>,
-    ) -> Result<Il<'a, T>, Error<'a, T>> {
+        source: &'a Ast<'a>,
+        def: &'a ast::Def<'a>,
+    ) -> Result<Il<'a>, Error<'a>> {
         self.environment.insert_global(
             def.parameter.name.as_str(),
             match def.parameter.r#type.as_ref().map(Type::from_ast) {
@@ -594,11 +574,11 @@ impl Compiler {
         }))
     }
 
-    fn compile_set<'a, T: Clone>(
+    fn compile_set<'a>(
         &mut self,
-        source: &'a Ast<'a, T>,
-        set: &'a ast::Set<'a, T>,
-    ) -> Result<Il<'a, T>, Error<'a, T>> {
+        source: &'a Ast<'a>,
+        set: &'a ast::Set<'a>,
+    ) -> Result<Il<'a>, Error<'a>> {
         Ok(Il::Set(Set {
             source,
             target: match self.environment.resolve(set.variable.as_str()) {
@@ -630,11 +610,11 @@ impl Compiler {
         }))
     }
 
-    fn compile_quote<'a, T: Clone>(
+    fn compile_quote<'a>(
         &mut self,
-        source: &'a Ast<'a, T>,
-        quote: &'a ast::Quote<'a, T>,
-    ) -> Result<Il<'a, T>, Error<'a, T>> {
+        source: &'a Ast<'a>,
+        quote: &'a ast::Quote<'a>,
+    ) -> Result<Il<'a>, Error<'a>> {
         Ok(match &quote.body {
             Quoted::List { list, .. } => self.compile_quoted_list(source, list.as_slice())?,
             Quoted::Symbol { symbol, .. } => Il::Constant(Constant::Symbol {
@@ -659,11 +639,11 @@ impl Compiler {
     }
 
     #[allow(clippy::only_used_in_recursion)]
-    fn compile_quoted_list<'a, T: Clone>(
+    fn compile_quoted_list<'a>(
         &mut self,
-        source: &'a Ast<'a, T>,
-        list: &'a [Quoted<'a, T>],
-    ) -> Result<Il<'a, T>, Error<'a, T>> {
+        source: &'a Ast<'a>,
+        list: &'a [Quoted<'a>],
+    ) -> Result<Il<'a>, Error<'a>> {
         Ok(Il::List(List {
             source,
             exprs: list
@@ -699,11 +679,11 @@ impl Compiler {
         }))
     }
 
-    fn compile_fncall<'a, T: Clone>(
+    fn compile_fncall<'a>(
         &mut self,
-        source: &'a Ast<'a, T>,
-        fncall: &'a ast::FnCall<'a, T>,
-    ) -> Result<Il<'a, T>, Error<'a, T>> {
+        source: &'a Ast<'a>,
+        fncall: &'a ast::FnCall<'a>,
+    ) -> Result<Il<'a>, Error<'a>> {
         Ok(Il::FnCall(FnCall {
             source,
             function: Box::new(self.compile(fncall.exprs.first().unwrap())?),
@@ -716,11 +696,11 @@ impl Compiler {
         }))
     }
 
-    fn compile_apply<'a, T: Clone>(
+    fn compile_apply<'a>(
         &mut self,
-        source: &'a Ast<'a, T>,
-        apply: &'a ast::Apply<'a, T>,
-    ) -> Result<Il<'a, T>, Error<'a, T>> {
+        source: &'a Ast<'a>,
+        apply: &'a ast::Apply<'a>,
+    ) -> Result<Il<'a>, Error<'a>> {
         Ok(Il::Apply(Apply {
             source,
             exprs: apply
@@ -731,11 +711,11 @@ impl Compiler {
         }))
     }
 
-    fn compile_arithmetic_operation<'a, T: Clone>(
+    fn compile_arithmetic_operation<'a>(
         &mut self,
-        source: &'a Ast<'a, T>,
-        op: &'a ast::BinaryArithmeticOperation<'a, T>,
-    ) -> Result<Il<'a, T>, Error<'a, T>> {
+        source: &'a Ast<'a>,
+        op: &'a ast::BinaryArithmeticOperation<'a>,
+    ) -> Result<Il<'a>, Error<'a>> {
         Ok(Il::ArithmeticOperation(ArithmeticOperation {
             source,
             operator: match op.operator {
@@ -749,11 +729,11 @@ impl Compiler {
         }))
     }
 
-    fn compile_comparison_operation<'a, T: Clone>(
+    fn compile_comparison_operation<'a>(
         &mut self,
-        source: &'a Ast<'a, T>,
-        op: &'a ast::ComparisonOperation<'a, T>,
-    ) -> Result<Il<'a, T>, Error<'a, T>> {
+        source: &'a Ast<'a>,
+        op: &'a ast::ComparisonOperation<'a>,
+    ) -> Result<Il<'a>, Error<'a>> {
         Ok(Il::ComparisonOperation(ComparisonOperation {
             source,
             operator: match op.operator {
@@ -766,11 +746,11 @@ impl Compiler {
         }))
     }
 
-    fn compile_list<'a, T: Clone>(
+    fn compile_list<'a>(
         &mut self,
-        source: &'a Ast<'a, T>,
-        list: &'a ast::List<'a, T>,
-    ) -> Result<Il<'a, T>, Error<'a, T>> {
+        source: &'a Ast<'a>,
+        list: &'a ast::List<'a>,
+    ) -> Result<Il<'a>, Error<'a>> {
         Ok(Il::List(List {
             source,
             exprs: list
@@ -781,11 +761,11 @@ impl Compiler {
         }))
     }
 
-    fn compile_cons<'a, T: Clone>(
+    fn compile_cons<'a>(
         &mut self,
-        source: &'a Ast<'a, T>,
-        cons: &'a ast::Cons<'a, T>,
-    ) -> Result<Il<'a, T>, Error<'a, T>> {
+        source: &'a Ast<'a>,
+        cons: &'a ast::Cons<'a>,
+    ) -> Result<Il<'a>, Error<'a>> {
         Ok(Il::Cons(Cons {
             source,
             lhs: Box::new(self.compile(&cons.lhs)?),
@@ -793,22 +773,22 @@ impl Compiler {
         }))
     }
 
-    fn compile_car<'a, T: Clone>(
+    fn compile_car<'a>(
         &mut self,
-        source: &'a Ast<'a, T>,
-        car: &'a ast::Car<'a, T>,
-    ) -> Result<Il<'a, T>, Error<'a, T>> {
+        source: &'a Ast<'a>,
+        car: &'a ast::Car<'a>,
+    ) -> Result<Il<'a>, Error<'a>> {
         Ok(Il::Car(Car {
             source,
             body: Box::new(self.compile(&car.body)?),
         }))
     }
 
-    fn compile_cdr<'a, T: Clone>(
+    fn compile_cdr<'a>(
         &mut self,
-        source: &'a Ast<'a, T>,
-        cdr: &'a ast::Cdr<'a, T>,
-    ) -> Result<Il<'a, T>, Error<'a, T>> {
+        source: &'a Ast<'a>,
+        cdr: &'a ast::Cdr<'a>,
+    ) -> Result<Il<'a>, Error<'a>> {
         Ok(Il::Cdr(Cdr {
             source,
             body: Box::new(self.compile(&cdr.body)?),
@@ -816,8 +796,8 @@ impl Compiler {
     }
 }
 
-impl<'a, T: Clone> IntoIterator for &'a Parameters<'a, T> {
-    type Item = Parameter<'a, T>;
+impl<'a> IntoIterator for &'a Parameters<'a> {
+    type Item = Parameter<'a>;
     type IntoIter = impl Iterator<Item = Self::Item>;
 
     fn into_iter(self) -> Self::IntoIter {
