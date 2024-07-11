@@ -1,3 +1,4 @@
+use core::fmt;
 use std::collections::BTreeSet;
 use vm::{Arity, UpValue};
 
@@ -6,9 +7,9 @@ use crate::{
     environment::{self, Environment, Variable},
 };
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, thiserror::Error)]
 pub struct Error<'a> {
-    source: &'a Ast<'a>,
+    ast: &'a Ast<'a>,
     message: String,
 }
 
@@ -234,6 +235,12 @@ pub struct Compiler {
     environment: Environment,
 }
 
+impl<'a> fmt::Display for Error<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "error: {}", self.message)
+    }
+}
+
 impl<'a> Il<'a> {
     pub fn source_ast(&self) -> &Ast<'a> {
         match self {
@@ -411,7 +418,7 @@ impl Compiler {
             }),
             None => {
                 return Err(Error {
-                    source,
+                    ast: source,
                     message: format!("unknown variable referenced: {}", variable.name),
                 })
             }
@@ -425,7 +432,7 @@ impl Compiler {
     ) -> Result<Il<'a>, Error<'a>> {
         if !self.environment.is_global_scope() {
             return Err(Error {
-                source,
+                ast: source,
                 message: "eval-when-compile must exist at global scope".to_string(),
             });
         }
@@ -446,7 +453,7 @@ impl Compiler {
     ) -> Result<Il<'a>, Error<'a>> {
         if !self.environment.is_global_scope() {
             return Err(Error {
-                source,
+                ast: source,
                 message: "defmacro must exist at global scope".to_string(),
             });
         }
@@ -458,7 +465,7 @@ impl Compiler {
         };
 
         let parameters = Parameters::from_ast(source, &defmacro.parameters).map_err(|_| Error {
-            source,
+            ast: source,
             message: "failed to compile parameters".to_string(),
         })?;
 
@@ -494,7 +501,7 @@ impl Compiler {
         };
 
         let parameters = Parameters::from_ast(source, &lambda.parameters).map_err(|_| Error {
-            source,
+            ast: source,
             message: "failed to compile parameters".to_string(),
         })?;
 
@@ -513,7 +520,7 @@ impl Compiler {
             Some(Ok(t)) => Some(t),
             Some(Err(_)) => {
                 return Err(Error {
-                    source,
+                    ast: source,
                     message: "failed to compile type".to_string(),
                 })
             }
@@ -556,7 +563,7 @@ impl Compiler {
                 Some(Ok(t)) => Some(t),
                 Some(Err(_)) => {
                     return Err(Error {
-                        source,
+                        ast: source,
                         message: "failed to parse type".to_string(),
                     })
                 }
@@ -567,7 +574,7 @@ impl Compiler {
         Ok(Il::Def(Def {
             source,
             parameter: Parameter::from_ast(source, &def.parameter).map_err(|_| Error {
-                source,
+                ast: source,
                 message: "failed to parse parameter".to_string(),
             })?,
             body: Box::new(self.compile(&def.body)?),
@@ -601,7 +608,7 @@ impl Compiler {
                 },
                 None => {
                     return Err(Error {
-                        source,
+                        ast: source,
                         message: "unknown variable".to_string(),
                     })
                 }
