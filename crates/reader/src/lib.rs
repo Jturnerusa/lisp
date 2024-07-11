@@ -201,6 +201,34 @@ impl<'a, T> Sexpr<'a, T> {
             | Self::Nil { context, .. } => context,
         }
     }
+
+    pub fn span(&self) -> Range<usize> {
+        match self {
+            Self::List { span, .. }
+            | Self::Symbol { span, .. }
+            | Self::String { span, .. }
+            | Self::Char { span, .. }
+            | Self::Int { span, .. }
+            | Self::Bool { span, .. }
+            | Self::Nil { span, .. } => span.clone(),
+        }
+    }
+}
+
+impl<'a, T: Clone> Sexpr<'a, T> {
+    pub fn quote(&'a self) -> Sexpr<'a, T> {
+        let quote = Sexpr::Symbol {
+            symbol: "quote".to_string(),
+            context: self.context(),
+            span: self.span(),
+        };
+
+        Sexpr::List {
+            list: vec![quote, self.clone()],
+            context: self.context(),
+            span: self.span(),
+        }
+    }
 }
 
 impl<'a, T> Iterator for Reader<'a, T> {
