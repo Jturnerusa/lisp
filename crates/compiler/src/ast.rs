@@ -1,3 +1,5 @@
+use core::fmt;
+
 use reader::Sexpr;
 use unwrap_enum::{EnumAs, EnumIs};
 
@@ -26,9 +28,9 @@ static BUILT_INS: &[&str] = &[
     "eval-when-compile",
 ];
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, thiserror::Error)]
 pub struct Error<'a> {
-    source: &'a Sexpr<'a>,
+    sexpr: &'a Sexpr<'a>,
     message: String,
 }
 
@@ -249,6 +251,12 @@ pub enum Quoted<'a> {
     },
 }
 
+impl<'a> fmt::Display for Error<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "error: {}\n{}", self.message, self.sexpr)
+    }
+}
+
 impl<'a> Ast<'a> {
     pub fn from_sexpr(sexpr: &'a Sexpr<'a>) -> Result<Self, Error<'a>> {
         Ok(
@@ -317,7 +325,7 @@ impl<'a> Ast<'a> {
                     }
                     _ => {
                         return Err(Error {
-                            source: sexpr,
+                            sexpr,
                             message: "invalid expression".to_string(),
                         })
                     }
@@ -439,7 +447,7 @@ fn parse_parameters<'a>(
         .map(Parameter::from_sexpr)
         .collect::<Result<Vec<_>, ()>>()
         .map_err(|_| Error {
-            source,
+            sexpr: source,
             message: "failed to parse parameter".to_string(),
         })?;
 
@@ -465,7 +473,7 @@ fn parse_parameters<'a>(
         Ok((_, p)) => p,
         Err(_) => {
             return Err(Error {
-                source,
+                sexpr: source,
                 message: "failed to parse parameters".to_string(),
             })
         }
@@ -498,7 +506,7 @@ impl<'a> DefMacro<'a> {
             name: name
                 .as_symbol()
                 .ok_or(Error {
-                    source,
+                    sexpr: source,
                     message: "expected symbol as identifer".to_string(),
                 })?
                 .to_string(),
@@ -507,7 +515,7 @@ impl<'a> DefMacro<'a> {
                 Sexpr::Nil { .. } => Parameters::Normal(Vec::new()),
                 _ => {
                     return Err(Error {
-                        source,
+                        sexpr: source,
                         message: "expected list for parameters".to_string(),
                     })
                 }
@@ -534,14 +542,14 @@ impl<'a> Lambda<'a> {
                 Sexpr::Nil { .. } => Parameters::Normal(Vec::new()),
                 _ => {
                     return Err(Error {
-                        source,
+                        sexpr: source,
                         message: "expected list for parameters".to_string(),
                     })
                 }
             },
             r#type: match r#type {
                 Some(r#type) => Some(Type::from_sexpr(r#type).map_err(|_| Error {
-                    source,
+                    sexpr: source,
                     message: "failed to parse type parameter".to_string(),
                 })?),
                 None => None,
@@ -563,7 +571,7 @@ impl<'a> Def<'a> {
         Ok(Def {
             source,
             parameter: Parameter::from_sexpr(parameter).map_err(|_| Error {
-                source,
+                sexpr: source,
                 message: "failed to parse parameter".to_string(),
             })?,
             body: Box::new(Ast::from_sexpr(body)?),
@@ -582,7 +590,7 @@ impl<'a> Set<'a> {
             variable: variable
                 .as_symbol()
                 .ok_or(Error {
-                    source,
+                    sexpr: source,
                     message: "expected symbol as indentifiter".to_string(),
                 })?
                 .to_string(),
@@ -635,13 +643,13 @@ impl<'a> BinaryArithmeticOperation<'a> {
                 Sexpr::Symbol { symbol, .. } if symbol == "/" => BinaryArithmeticOperator::Div,
                 Sexpr::Symbol { symbol, .. } => {
                     return Err(Error {
-                        source,
+                        sexpr: source,
                         message: format!("unknown operator: {symbol}"),
                     })
                 }
                 _ => {
                     return Err(Error {
-                        source,
+                        sexpr: source,
                         message: "expected symbol as operator".to_string(),
                     })
                 }
@@ -667,13 +675,13 @@ impl<'a> ComparisonOperation<'a> {
                 Sexpr::Symbol { symbol, .. } if symbol == "<" => ComparisonOperator::Lt,
                 Sexpr::Symbol { .. } => {
                     return Err(Error {
-                        source,
+                        sexpr: source,
                         message: "invalid comparison operator".to_string(),
                     })
                 }
                 _ => {
                     return Err(Error {
-                        source,
+                        sexpr: source,
                         message: "expected symbol as operator".to_string(),
                     })
                 }
