@@ -43,6 +43,9 @@ enum Token {
     #[token("false")]
     False,
 
+    #[token("nil")]
+    Nil,
+
     #[regex(r#"[a-zA-Z+_*/?@^=-][a-zA-Z0-9+_*/?@^=-]*"#)]
     Symbol,
 
@@ -288,6 +291,10 @@ fn read<'a, T>(
             context,
             span: lexer.span(),
         },
+        Ok(Token::Nil) => Sexpr::Nil {
+            context,
+            span: lexer.span(),
+        },
         Err(_) => return Some(Err(Error::Lexer(lexer.remainder()))),
     }))
 }
@@ -347,6 +354,10 @@ fn read_list<'a, T>(
             }),
             Some(Ok(Token::False)) => list.push(Sexpr::Bool {
                 bool: false,
+                context,
+                span: lexer.span(),
+            }),
+            Some(Ok(Token::Nil)) => list.push(Sexpr::Nil {
                 context,
                 span: lexer.span(),
             }),
