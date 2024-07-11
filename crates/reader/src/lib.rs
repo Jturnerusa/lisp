@@ -68,59 +68,59 @@ enum Macro {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, EnumIs)]
-pub enum Sexpr<'a, T> {
+pub enum Sexpr<'a> {
     List {
-        list: Vec<Sexpr<'a, T>>,
-        context: &'a Context<T>,
+        list: Vec<Sexpr<'a>>,
+        context: &'a Context,
         span: Range<usize>,
     },
     Symbol {
         symbol: String,
-        context: &'a Context<T>,
+        context: &'a Context,
         span: Range<usize>,
     },
     String {
         string: String,
-        context: &'a Context<T>,
+        context: &'a Context,
         span: Range<usize>,
     },
     Char {
         char: char,
-        context: &'a Context<T>,
+        context: &'a Context,
         span: Range<usize>,
     },
     Int {
         int: i64,
-        context: &'a Context<T>,
+        context: &'a Context,
         span: Range<usize>,
     },
     Bool {
         bool: bool,
-        context: &'a Context<T>,
+        context: &'a Context,
         span: Range<usize>,
     },
     Nil {
-        context: &'a Context<T>,
+        context: &'a Context,
         span: Range<usize>,
     },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Context<T> {
-    display: T,
+pub struct Context {
+    display: String,
     source: String,
 }
 
 #[derive(Clone, Debug)]
-pub struct Reader<'a, T> {
+pub struct Reader<'a> {
     lexer: Lexer<'a, Token>,
-    context: &'a Context<T>,
+    context: &'a Context,
 }
 
-impl<T> Context<T> {
-    pub fn new(source: &str, display: T) -> Self {
+impl Context {
+    pub fn new(source: &str, display: &str) -> Self {
         Self {
-            display,
+            display: display.to_string(),
             source: source.to_string(),
         }
     }
@@ -133,13 +133,13 @@ impl<T> Context<T> {
         &self.source[span.start..span.end]
     }
 
-    pub fn display(&self) -> &T {
+    pub fn display(&self) -> &str {
         &self.display
     }
 }
 
-impl<'a, T> Reader<'a, T> {
-    pub fn new(context: &'a Context<T>) -> Self {
+impl<'a> Reader<'a> {
+    pub fn new(context: &'a Context) -> Self {
         Self {
             lexer: Lexer::new(context.source()),
             context,
@@ -147,8 +147,8 @@ impl<'a, T> Reader<'a, T> {
     }
 }
 
-impl<'a, T> Sexpr<'a, T> {
-    pub fn as_list(&self) -> Option<&[Sexpr<T>]> {
+impl<'a> Sexpr<'a> {
+    pub fn as_list(&self) -> Option<&[Sexpr]> {
         match self {
             Self::List { list, .. } => Some(list.as_slice()),
             _ => None,
@@ -190,7 +190,7 @@ impl<'a, T> Sexpr<'a, T> {
         }
     }
 
-    pub fn context(&self) -> &Context<T> {
+    pub fn context(&self) -> &Context {
         match self {
             Self::List { context, .. }
             | Self::Symbol { context, .. }
@@ -215,8 +215,8 @@ impl<'a, T> Sexpr<'a, T> {
     }
 }
 
-impl<'a, T: Clone> Sexpr<'a, T> {
-    pub fn quote(&'a self) -> Sexpr<'a, T> {
+impl<'a> Sexpr<'a> {
+    pub fn quote(&'a self) -> Sexpr<'a> {
         let quote = Sexpr::Symbol {
             symbol: "quote".to_string(),
             context: self.context(),
@@ -231,14 +231,14 @@ impl<'a, T: Clone> Sexpr<'a, T> {
     }
 }
 
-impl<'a, T> Iterator for Reader<'a, T> {
-    type Item = Result<Sexpr<'a, T>, Error<'a>>;
+impl<'a> Iterator for Reader<'a> {
+    type Item = Result<Sexpr<'a>, Error<'a>>;
     fn next(&mut self) -> Option<Self::Item> {
         read(&mut self.lexer, self.context)
     }
 }
 
-impl<'a, T> fmt::Display for Sexpr<'a, T> {
+impl<'a> fmt::Display for Sexpr<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Sexpr::List { list, .. } => {
@@ -263,10 +263,10 @@ impl<'a, T> fmt::Display for Sexpr<'a, T> {
     }
 }
 
-fn read<'a, T>(
+fn read<'a>(
     lexer: &mut Lexer<'a, Token>,
-    context: &'a Context<T>,
-) -> Option<Result<Sexpr<'a, T>, Error<'a>>> {
+    context: &'a Context,
+) -> Option<Result<Sexpr<'a>, Error<'a>>> {
     Some(Ok(match lexer.next()? {
         Ok(Token::LeftParen) => match read_list(lexer, context) {
             Ok(sexpr) => sexpr,
@@ -327,10 +327,10 @@ fn read<'a, T>(
     }))
 }
 
-fn read_list<'a, T>(
+fn read_list<'a>(
     lexer: &mut Lexer<'a, Token>,
-    context: &'a Context<T>,
-) -> Result<Sexpr<'a, T>, Error<'a>> {
+    context: &'a Context,
+) -> Result<Sexpr<'a>, Error<'a>> {
     let mut list = Vec::new();
 
     loop {
@@ -395,11 +395,11 @@ fn read_list<'a, T>(
     }
 }
 
-fn expand_macro<'a, T>(
+fn expand_macro<'a>(
     lexer: &mut Lexer<'a, Token>,
-    context: &'a Context<T>,
+    context: &'a Context,
     r#macro: Macro,
-) -> Result<Sexpr<'a, T>, Error<'a>> {
+) -> Result<Sexpr<'a>, Error<'a>> {
     let span = lexer.span();
 
     let symbol = Sexpr::Symbol {
@@ -427,7 +427,7 @@ fn expand_macro<'a, T>(
     })
 }
 
-impl<'a, T: PartialEq> PartialOrd for Sexpr<'a, T> {
+impl<'a> PartialOrd for Sexpr<'a> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match (self, other) {
             (Self::List { list: a, .. }, Self::List { list: b, .. }) => a.partial_cmp(b),
