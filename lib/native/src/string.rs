@@ -78,9 +78,9 @@ pub fn is_digit<D: Clone>(objects: &mut [Local<D>]) -> Result<Object<D>, Error> 
     let c = check_type!(objects[0], Char);
 
     if c.is_ascii_digit() {
-        Ok(Object::True)
+        Ok(Object::Bool(true))
     } else {
-        Ok(Object::Nil)
+        Ok(Object::Bool(false))
     }
 }
 
