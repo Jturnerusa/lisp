@@ -177,10 +177,10 @@ impl<D: Clone + PartialEq + PartialOrd + Hash> Vm<D> {
                 return Ok(ret);
             };
 
+            self.pc += 1;
+
             match self.dispatch(opcode) {
-                Ok(_) => {
-                    self.pc += 1;
-                }
+                Ok(_) => continue,
                 Err(e) => {
                     let debug = if let Some(function) = &self.current_function {
                         function.borrow().opcodes.debug[self.pc].clone()
