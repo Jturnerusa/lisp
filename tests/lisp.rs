@@ -1,51 +1,55 @@
-use std::collections::HashMap;
-
-use compiler::Compiler;
+use compiler::{ast::Ast, il::Il};
 use identity_hasher::IdentityHasher;
-use reader::Reader;
-use vm::Vm;
+use reader::{Reader, Sexpr};
+use vm::{OpCodeTable, Vm};
 
 macro_rules! deftest {
     ($name:tt, $input:literal) => {
         #[test]
         fn $name() {
             let input = include_str!($input);
-            assert!(eval(input).is_ok());
+            assert!(eval_with_bootstrap(input).is_ok());
             gc::collect();
         }
+    };
+}
+
+macro_rules! leak {
+    ($e:expr) => {
+        Box::leak(Box::new($e))
     };
 }
 
 static BOOTSTRAP_SOURCE: &str = include_str!("../lib/lisp/bootstrap.lisp");
 static LIST_UTILS_SOURCE: &str = include_str!("../lib/lisp/list.lisp");
 
-fn eval(input: &str) -> Result<Option<vm::Object>, Box<dyn std::error::Error>> {
-    let mut compiler = Compiler::new();
+fn eval_with_bootstrap(
+    input: &str,
+) -> Result<Option<vm::Object<&'static Sexpr>>, Box<dyn std::error::Error>> {
+    todo!()
+}
+
+fn eval(input: &'static str) -> Result<Option<vm::Object<&Sexpr>>, Box<dyn std::error::Error>> {
+    let context: &'static reader::Context = leak!(reader::Context::new(input, "test input"));
+    let mut reader = Reader::new(context);
+    let sexpr: &'static Sexpr = leak!(reader.next().unwrap().unwrap());
+    let ast: &'static Ast = leak!(compiler::ast::Ast::from_sexpr(sexpr).unwrap());
+    let mut il_compiler = compiler::il::Compiler::new();
+    let il: &'static Il = leak!(il_compiler.compile(ast).unwrap());
+    let mut opcodes = OpCodeTable::new();
+    let mut constants = identity_hasher::IdentityMap::with_hasher(IdentityHasher::new());
+    let mut bytecode_compiler = compiler::bytecode::Compiler::new();
     let mut vm = Vm::new();
-    let mut opcodes = Vec::new();
-    let mut constants = HashMap::with_hasher(IdentityHasher::new());
 
-    native_functions::load_module(&mut vm);
+    bytecode_compiler
+        .compile(il, &mut opcodes, &mut constants, &mut vm)
+        .unwrap();
 
-    for read in Reader::new(BOOTSTRAP_SOURCE) {
-        let value = read?;
-        compiler.compile(&value, &mut opcodes, &mut constants)?;
+    match vm.eval(&opcodes) {
+        Ok(Some(object)) => Ok(Some(object.into_object())),
+        Ok(None) => Ok(None),
+        Err((e, sexpr)) => Err(format!("error {e} in {}", sexpr.context().display()).into()),
     }
-
-    for read in Reader::new(LIST_UTILS_SOURCE) {
-        let value = read?;
-        compiler.compile(&value, &mut opcodes, &mut constants)?;
-    }
-
-    for read in Reader::new(input) {
-        let value = read?;
-        compiler.compile(&value, &mut opcodes, &mut constants)?;
-    }
-
-    vm.load_constants(constants.values().cloned());
-    let ret = vm.eval(opcodes.as_slice())?;
-
-    Ok(ret.map(|value| value.into_object()))
 }
 
 #[test]
@@ -134,7 +138,10 @@ fn test_get_upvalue() {
 #[test]
 fn test_is_type() {
     let input = "(int? 1)";
-    assert!(matches!(eval(input).unwrap().unwrap(), vm::Object::True));
+    assert!(matches!(
+        eval(input).unwrap().unwrap(),
+        vm::Object::Bool(true)
+    ));
     gc::collect();
 }
 
@@ -167,21 +174,30 @@ fn test_assert() {
 #[test]
 fn test_lt() {
     let input = "(< 1 2)";
-    assert!(matches!(eval(input).unwrap().unwrap(), vm::Object::True));
+    assert!(matches!(
+        eval(input).unwrap().unwrap(),
+        vm::Object::Bool(true)
+    ));
     gc::collect();
 }
 
 #[test]
 fn test_gt() {
     let input = "(> 2 1)";
-    assert!(matches!(eval(input).unwrap().unwrap(), vm::Object::True));
+    assert!(matches!(
+        eval(input).unwrap().unwrap(),
+        vm::Object::Bool(true)
+    ));
     gc::collect();
 }
 
 #[test]
 fn test_eq() {
     let input = "(= 1 1)";
-    assert!(matches!(eval(input).unwrap().unwrap(), vm::Object::True));
+    assert!(matches!(
+        eval(input).unwrap().unwrap(),
+        vm::Object::Bool(true)
+    ));
     gc::collect();
 }
 
@@ -226,35 +242,38 @@ fn test_let() {
 #[test]
 fn test_eq_list() {
     let input = "(= (list 1 2 3) (list 1 2 3))";
-    assert!(matches!(eval(input).unwrap().unwrap(), vm::Object::True));
+    assert!(matches!(
+        eval(input).unwrap().unwrap(),
+        vm::Object::Bool(true)
+    ));
     gc::collect();
 }
 
 #[test]
 fn test_map() {
     let input = include_str!("lisp/map.lisp");
-    assert!(eval(input).unwrap().unwrap().is_true());
+    assert!(eval(input).unwrap().unwrap().as_bool().unwrap());
     gc::collect();
 }
 
 #[test]
 fn test_fold() {
     let input = include_str!("lisp/fold.lisp");
-    assert!(eval(input).unwrap().unwrap().is_true());
+    assert!(eval(input).unwrap().unwrap().as_bool().unwrap());
     gc::collect();
 }
 
 #[test]
 fn test_filter() {
     let input = include_str!("lisp/filter.lisp");
-    assert!(eval(input).unwrap().unwrap().is_true());
+    assert!(eval(input).unwrap().unwrap().as_bool().unwrap());
     gc::collect();
 }
 
 #[test]
 fn test_upvalues() {
     let input = include_str!("lisp/upvalues.lisp");
-    assert!(eval(input).unwrap().unwrap().is_true());
+    assert!(eval(input).unwrap().unwrap().as_bool().unwrap());
     gc::collect();
 }
 
