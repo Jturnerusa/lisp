@@ -24,7 +24,7 @@ static BUILT_INS: &[&str] = &[
     "lambda",
     "defmacro",
     "def",
-    "set",
+    "set!",
     "eval-when-compile",
 ];
 
