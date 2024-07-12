@@ -46,14 +46,14 @@ fn disasm<D>(
 }
 
 fn eval_with_bootstrap(
-    input: &str,
+    _: &str,
 ) -> Result<Option<vm::Object<&'static Sexpr>>, Box<dyn std::error::Error>> {
     todo!()
 }
 
 fn eval(input: &'static str) -> Result<Option<vm::Object<&Sexpr>>, Box<dyn std::error::Error>> {
     let context: &'static reader::Context = leak!(reader::Context::new(input, "test input"));
-    let mut reader = Reader::new(context);
+    let reader = Reader::new(context);
     let mut il_compiler = il::Compiler::new();
     let mut bytecode_compiler = bytecode::Compiler::new();
     let mut opcode_table = OpCodeTable::new();
