@@ -27,6 +27,24 @@ macro_rules! leak {
 static BOOTSTRAP_SOURCE: &str = include_str!("../lib/lisp/bootstrap.lisp");
 static LIST_UTILS_SOURCE: &str = include_str!("../lib/lisp/list.lisp");
 
+fn disasm<D>(
+    opcode_table: &OpCodeTable<D>,
+    constants: &IdentityMap<u64, vm::Constant<D>>,
+    depth: usize,
+) {
+    let indent = "  ".repeat(depth);
+    for opcode in opcode_table.opcodes() {
+        println!("{indent}{opcode:?}");
+        if let OpCode::Lambda { body, .. } = opcode {
+            disasm(
+                constants.get(body).unwrap().as_opcodes().unwrap(),
+                constants,
+                depth + 1,
+            );
+        }
+    }
+}
+
 fn eval_with_bootstrap(
     input: &str,
 ) -> Result<Option<vm::Object<&'static Sexpr>>, Box<dyn std::error::Error>> {
