@@ -5,7 +5,7 @@ use compiler::{
 };
 use identity_hasher::{IdentityHasher, IdentityMap};
 use reader::{Reader, Sexpr};
-use vm::{OpCodeTable, Vm};
+use vm::{OpCode, OpCodeTable, Vm};
 
 macro_rules! deftest {
     ($name:tt, $input:literal) => {
