@@ -78,10 +78,7 @@ fn test_nested_add() {
 #[test]
 fn test_def_global() {
     let input = "(def x 1) x";
-    assert!(matches!(
-        dbg!(eval(input).unwrap().unwrap()),
-        vm::Object::Int(1)
-    ));
+    assert!(matches!(eval(input).unwrap().unwrap(), vm::Object::Int(1)));
     gc::collect();
 }
 
