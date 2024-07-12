@@ -1,5 +1,9 @@
-use compiler::{ast::Ast, il::Il};
-use identity_hasher::IdentityHasher;
+use compiler::{
+    ast::Ast,
+    bytecode,
+    il::{self, Il},
+};
+use identity_hasher::{IdentityHasher, IdentityMap};
 use reader::{Reader, Sexpr};
 use vm::{OpCodeTable, Vm};
 
@@ -32,23 +36,28 @@ fn eval_with_bootstrap(
 fn eval(input: &'static str) -> Result<Option<vm::Object<&Sexpr>>, Box<dyn std::error::Error>> {
     let context: &'static reader::Context = leak!(reader::Context::new(input, "test input"));
     let mut reader = Reader::new(context);
-    let sexpr: &'static Sexpr = leak!(reader.next().unwrap().unwrap());
-    let ast: &'static Ast = leak!(compiler::ast::Ast::from_sexpr(sexpr).unwrap());
-    let mut il_compiler = compiler::il::Compiler::new();
-    let il: &'static Il = leak!(il_compiler.compile(ast).unwrap());
-    let mut opcodes = OpCodeTable::new();
-    let mut constants = identity_hasher::IdentityMap::with_hasher(IdentityHasher::new());
-    let mut bytecode_compiler = compiler::bytecode::Compiler::new();
+    let mut il_compiler = il::Compiler::new();
+    let mut bytecode_compiler = bytecode::Compiler::new();
+    let mut opcode_table = OpCodeTable::new();
+    let mut constants = IdentityMap::with_hasher(IdentityHasher::new());
     let mut vm = Vm::new();
 
-    bytecode_compiler
-        .compile(il, &mut opcodes, &mut constants, &mut vm)
-        .unwrap();
+    for sexpr in reader {
+        let sexpr: &'static _ = Box::leak(Box::new(sexpr.unwrap()));
+        let ast: &'static _ = Box::leak(Box::new(Ast::from_sexpr(sexpr).unwrap()));
+        let il: &'static _ = Box::leak(Box::new(il_compiler.compile(ast).unwrap()));
 
-    match vm.eval(&opcodes) {
-        Ok(Some(object)) => Ok(Some(object.into_object())),
-        Ok(None) => Ok(None),
-        Err((e, sexpr)) => Err(format!("error {e} in {}", sexpr.context().display()).into()),
+        bytecode_compiler
+            .compile(il, &mut opcode_table, &mut constants, &mut vm)
+            .unwrap();
+    }
+
+    vm.load_constants(constants.into_values());
+
+    match vm.eval(&opcode_table) {
+        Ok(Some(local)) => Ok(Some(local.into_object())),
+        Ok(None) => panic!(),
+        Err((e, _)) => Err(Box::new(e)),
     }
 }
 
@@ -69,7 +78,10 @@ fn test_nested_add() {
 #[test]
 fn test_def_global() {
     let input = "(def x 1) x";
-    assert!(matches!(eval(input).unwrap().unwrap(), vm::Object::Int(1)));
+    assert!(matches!(
+        dbg!(eval(input).unwrap().unwrap()),
+        vm::Object::Int(1)
+    ));
     gc::collect();
 }
 
