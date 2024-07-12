@@ -894,4 +894,12 @@ impl<T> OpCodeTable<T> {
         self.opcodes.push(opcode);
         self.debug.push(debug);
     }
+
+    pub fn opcodes(&self) -> &[OpCode] {
+        self.opcodes.as_slice()
+    }
+
+    pub fn debug(&self) -> &[T] {
+        self.debug.as_slice()
+    }
 }
