@@ -35,16 +35,19 @@ impl Scope {
             })
     }
 
-    fn get_upvalue(&self, name: &str) -> Option<usize> {
-        self.upvalues.iter().enumerate().find_map(
-            |(i, (upvalue, _))| {
-                if name == upvalue {
-                    Some(i)
-                } else {
-                    None
-                }
-            },
-        )
+    fn get_upvalue(&self, name: &str) -> Option<(usize, UpValue)> {
+        self.upvalues
+            .iter()
+            .enumerate()
+            .find_map(
+                |(i, (n, upvalue))| {
+                    if n == name {
+                        Some((i, *upvalue))
+                    } else {
+                        None
+                    }
+                },
+            )
     }
 }
 
@@ -73,14 +76,14 @@ impl Environment {
 
     #[allow(clippy::manual_map)]
     pub(crate) fn resolve(&mut self, name: &str) -> Option<Variable> {
-        if let Some((i, r#type)) = self.scopes.last().unwrap().get_local(name) {
+        if let Some(scope) = self.scopes.last()
+            && let Some((i, r#type)) = scope.get_local(name)
+        {
             Some(Variable::Local(i, r#type))
-        } else if let Some(i) = self.scopes.last().unwrap().get_upvalue(name) {
-            let r#type = search_upvalue_type(
-                self.scopes.last().unwrap().upvalues[i].1,
-                self.scopes.iter(),
-            );
-
+        } else if let Some(scope) = self.scopes.last()
+            && let Some((i, upvalue)) = scope.get_upvalue(name)
+        {
+            let r#type = search_upvalue_type(upvalue, self.scopes.iter());
             Some(Variable::Upvalue(i, r#type))
         } else if let Some(upvalue) = search_for_upvalue(name, self.scopes.iter_mut()) {
             self.scopes
@@ -90,7 +93,7 @@ impl Environment {
                 .push((name.to_string(), upvalue));
 
             let r#type = search_upvalue_type(upvalue, self.scopes.iter());
-            let i = self.scopes.last().unwrap().get_upvalue(name).unwrap();
+            let i = self.scopes.last().unwrap().upvalues.len() - 1;
 
             Some(Variable::Upvalue(i, r#type))
         } else if let Some(r#type) = self.globals.get(name) {
