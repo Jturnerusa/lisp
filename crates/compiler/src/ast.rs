@@ -212,6 +212,7 @@ pub struct Cdr<'a> {
 #[derive(Clone, Debug)]
 pub struct FnCall<'a> {
     pub source: &'a Sexpr<'a>,
+    pub function: Box<Ast<'a>>,
     pub exprs: Vec<Ast<'a>>,
 }
 
@@ -741,8 +742,10 @@ impl<'a> FnCall<'a> {
     pub fn from_sexpr(source: &'a Sexpr<'a>, exprs: &'a [Sexpr<'a>]) -> Result<Self, Error<'a>> {
         Ok(Self {
             source,
+            function: Box::new(exprs.first().map(Ast::from_sexpr).unwrap()?),
             exprs: exprs
                 .iter()
+                .skip(1)
                 .map(Ast::from_sexpr)
                 .collect::<Result<Vec<_>, Error>>()?,
         })
