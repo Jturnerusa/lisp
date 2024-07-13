@@ -180,9 +180,9 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
                 Ok(_) => continue,
                 Err(e) => {
                     let debug = if let Some(function) = &self.current_function {
-                        function.borrow().opcodes.debug[self.pc].clone()
+                        function.borrow().opcodes.debug[self.pc - 1].clone()
                     } else {
-                        opcode_table.debug[self.pc].clone()
+                        opcode_table.debug[self.pc - 1].clone()
                     };
                     return Err((e, debug));
                 }
