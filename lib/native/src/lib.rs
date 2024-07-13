@@ -1,7 +1,7 @@
 mod io;
 mod string;
 
-use std::hash::Hash;
+use std::{fmt::Debug, hash::Hash};
 
 use vm::Vm;
 
