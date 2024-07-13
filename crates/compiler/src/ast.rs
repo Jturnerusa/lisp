@@ -35,7 +35,7 @@ pub struct Error<'a> {
     message: String,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, EnumAs, EnumIs)]
 pub enum Ast<'a> {
     EvalWhenCompile(EvalWhenCompile<'a>),
     DefMacro(DefMacro<'a>),
