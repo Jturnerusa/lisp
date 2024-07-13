@@ -132,7 +132,7 @@ pub struct Vm<D: 'static> {
 }
 
 #[allow(clippy::new_without_default)]
-impl<D: Clone + PartialEq + PartialOrd + Hash> Vm<D> {
+impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
     pub fn new() -> Self {
         Self {
             globals: HashMap::new(),
