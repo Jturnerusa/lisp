@@ -360,9 +360,10 @@ unsafe impl<D> Trace for Cons<D> {
     }
 }
 
-impl<D> Object<D> {
+impl<D: Clone> Object<D> {
     pub fn print(&self, buffer: &mut String) -> Result<(), ()> {
         match self {
+            Self::Cons(cons) => cons.borrow().print(buffer)?,
             Self::Symbol(symbol) => write!(buffer, " {symbol} ").map_err(|_| ())?,
             Self::String(string) => write!(buffer, r#" "{string}" "#).map_err(|_| ())?,
             Self::Char(char) => write!(buffer, r#" '{char}' "#).map_err(|_| ())?,
