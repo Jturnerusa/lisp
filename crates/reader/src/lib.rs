@@ -52,7 +52,7 @@ enum Token {
     #[regex(r#""[^"]*""#)]
     String,
 
-    #[regex(r#"'[*]{1}'"#)]
+    #[regex(r#"'[^']{1}'"#)]
     Char,
 
     #[regex("[0-9]+")]
