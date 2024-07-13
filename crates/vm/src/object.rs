@@ -383,7 +383,7 @@ impl<D: Clone> Cons<D> {
         write!(buffer, " ( ").map_err(|_| ())?;
 
         for e in self.iter_cars() {
-            write!(buffer, " {e} ").map_err(|_| ())?;
+            e.print(buffer)?;
         }
 
         write!(buffer, " ) ").map_err(|_| ())?;
