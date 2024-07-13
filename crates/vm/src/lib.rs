@@ -163,18 +163,15 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
             .insert(name.to_string(), Object::NativeFunction(native_function));
     }
 
-    pub fn eval(&mut self, opcode_table: &OpCodeTable<D>) -> Result<Option<Local<D>>, (Error, D)> {
+    pub fn eval(&mut self, opcode_table: &OpCodeTable<D>) -> Result<(), (Error, D)> {
         loop {
             let opcode = if let Some(function) = &self.current_function {
                 function.borrow().opcodes.opcodes[self.pc]
             } else if self.pc < opcode_table.opcodes.len() {
                 opcode_table.opcodes[self.pc]
             } else {
-                let ret = self.stack.pop();
-                self.stack.clear();
                 self.pc = 0;
-                self.bp = 0;
-                return Ok(ret);
+                return Ok(());
             };
 
             self.pc += 1;
