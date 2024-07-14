@@ -25,6 +25,7 @@ pub fn compile<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
     match il {
         Il::Lambda(lambda) => compile_lambda(lambda, opcodes),
         Il::Def(def) => compile_def(def, opcodes),
+        Il::If(r#if) => compile_if(r#if, opcodes),
         Il::VarRef(varref) => compile_varref(varref, opcodes),
         Il::Constant(constant) => compile_constant(constant, opcodes),
         Il::List(list) => compile_list(list, opcodes),
@@ -93,6 +94,33 @@ fn compile_lambda<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
             lambda.source.source_sexpr(),
         );
     }
+
+    Ok(())
+}
+
+fn compile_if<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
+    r#if: &'il il::If<'ast, 'sexpr, 'context>,
+    opcodes: &'opcodes mut OpCodeTable<&'sexpr Sexpr<'context>>,
+) -> Result<(), Error<'il, 'ast, 'sexpr, 'context>> {
+    let mut then_opcodes = OpCodeTable::new();
+    let mut else_opcodes = OpCodeTable::new();
+
+    compile(&r#if.predicate, opcodes)?;
+    compile(&r#if.then, &mut then_opcodes)?;
+    compile(&r#if.r#else, &mut else_opcodes)?;
+
+    opcodes.push(
+        OpCode::Branch(then_opcodes.len() + 1),
+        r#if.source.source_sexpr(),
+    );
+
+    then_opcodes.push(
+        OpCode::Jmp(else_opcodes.len() as isize),
+        r#if.source.source_sexpr(),
+    );
+
+    opcodes.append(then_opcodes);
+    opcodes.append(else_opcodes);
 
     Ok(())
 }

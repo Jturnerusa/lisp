@@ -115,7 +115,7 @@ fn test_local_vars() {
 
 #[test]
 fn test_branch() {
-    let input = "(if t 1 2)";
+    let input = "(if true 1 2)";
     assert!(matches!(eval(input).unwrap().unwrap(), vm::Object::Int(1)));
     gc::collect();
 }

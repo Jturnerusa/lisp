@@ -27,6 +27,7 @@ static BUILT_INS: &[&str] = &[
     "set!",
     "eval-when-compile",
     "quote",
+    "if",
 ];
 
 #[derive(Clone, Debug, thiserror::Error)]
