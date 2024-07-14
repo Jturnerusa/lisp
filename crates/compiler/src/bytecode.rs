@@ -34,9 +34,9 @@ pub fn compile<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
     }
 }
 
-fn compile_varref<'opcodes, 'il, 'ast, 'sexpr, 'context>(
+fn compile_varref<'il, 'ast, 'sexpr, 'context>(
     varref: &'il il::VarRef<'ast, 'sexpr, 'context>,
-    opcodes: &'opcodes mut OpCodeTable<&'sexpr Sexpr<'context>>,
+    opcodes: &mut OpCodeTable<&'sexpr Sexpr<'context>>,
 ) -> Result<(), Error<'il, 'ast, 'sexpr, 'context>> {
     let op = match varref {
         il::VarRef::Local { index, .. } => OpCode::GetLocal(*index),
@@ -49,9 +49,9 @@ fn compile_varref<'opcodes, 'il, 'ast, 'sexpr, 'context>(
     Ok(())
 }
 
-fn compile_constant<'opcodes, 'il, 'ast, 'sexpr, 'context>(
+fn compile_constant<'il, 'ast, 'sexpr, 'context>(
     constant: &'il il::Constant<'ast, 'sexpr, 'context>,
-    opcodes: &'opcodes mut OpCodeTable<&'sexpr Sexpr<'context>>,
+    opcodes: &mut OpCodeTable<&'sexpr Sexpr<'context>>,
 ) -> Result<(), Error<'il, 'ast, 'sexpr, 'context>> {
     let op = match constant {
         il::Constant::Symbol { symbol, .. } => OpCode::PushSymbol(Gc::new(symbol.clone())),
