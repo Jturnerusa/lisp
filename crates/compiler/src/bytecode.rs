@@ -25,6 +25,7 @@ pub fn compile<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
     match il {
         Il::Lambda(lambda) => compile_lambda(lambda, opcodes),
         Il::Def(def) => compile_def(def, opcodes),
+        Il::Set(set) => compile_set(set, opcodes),
         Il::If(r#if) => compile_if(r#if, opcodes),
         Il::VarRef(varref) => compile_varref(varref, opcodes),
         Il::Constant(constant) => compile_constant(constant, opcodes),
@@ -135,6 +136,23 @@ fn compile_def<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
         OpCode::DefGlobal(Gc::new(def.parameter.name.clone())),
         def.source.source_sexpr(),
     );
+
+    Ok(())
+}
+
+fn compile_set<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
+    set: &'il il::Set<'ast, 'sexpr, 'context>,
+    opcodes: &'opcodes mut OpCodeTable<&'sexpr Sexpr<'context>>,
+) -> Result<(), Error<'il, 'ast, 'sexpr, 'context>> {
+    compile(&set.body, opcodes)?;
+
+    let op = match &set.target {
+        il::VarRef::Local { index, .. } => OpCode::SetLocal(*index),
+        il::VarRef::UpValue { index, .. } => OpCode::SetUpValue(*index),
+        il::VarRef::Global { name, .. } => OpCode::SetGlobal(Gc::new(name.clone())),
+    };
+
+    opcodes.push(op, set.source.source_sexpr());
 
     Ok(())
 }
