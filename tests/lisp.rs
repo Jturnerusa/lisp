@@ -39,28 +39,66 @@ fn disasm<D: fmt::Debug>(opcode_table: &OpCodeTable<D>, depth: usize) {
     }
 }
 
-fn eval_with_bootstrap(
-    _: &str,
-) -> Result<Option<vm::Object<&'static Sexpr>>, Box<dyn std::error::Error>> {
-    todo!()
-}
-
-fn eval(input: &'static str) -> Result<Option<vm::Object<&Sexpr>>, Box<dyn std::error::Error>> {
+fn compile(
+    input: &str,
+    il_compiler: &mut il::Compiler,
+    opcode_table: &mut OpCodeTable<&'static Sexpr>,
+    vm: &mut Vm<&Sexpr>,
+) -> Result<(), Box<dyn std::error::Error>> {
     let context: &'static reader::Context = leak!(reader::Context::new(input, "test input"));
     let reader = Reader::new(context);
-    let mut il_compiler = il::Compiler::new();
-    let mut opcode_table = OpCodeTable::new();
-    let mut vm = Vm::new();
 
     for sexpr in reader {
         let sexpr: &'static _ = Box::leak(Box::new(sexpr?));
 
         let ast: &'static _ = Box::leak(Box::new(Ast::from_sexpr(sexpr)?));
 
-        let il: &'static _ = Box::leak(Box::new(il_compiler.compile(ast, &mut vm)?));
+        let il: &'static _ = Box::leak(Box::new(il_compiler.compile(ast, vm)?));
 
-        bytecode::compile(il, &mut opcode_table)?;
+        bytecode::compile(il, opcode_table)?;
     }
+
+    Ok(())
+}
+
+fn eval_with_bootstrap(
+    input: &str,
+) -> Result<Option<vm::Object<&'static Sexpr>>, Box<dyn std::error::Error>> {
+    let mut il_compiler = il::Compiler::new();
+    let mut opcode_table = OpCodeTable::new();
+    let mut vm = Vm::new();
+
+    compile(
+        BOOTSTRAP_SOURCE,
+        &mut il_compiler,
+        &mut opcode_table,
+        &mut vm,
+    )?;
+
+    compile(
+        LIST_UTILS_SOURCE,
+        &mut il_compiler,
+        &mut opcode_table,
+        &mut vm,
+    )?;
+
+    compile(input, &mut il_compiler, &mut opcode_table, &mut vm)?;
+
+    match vm.eval(&opcode_table) {
+        Ok(_) => Ok(vm.pop().map(|local| local.into_object())),
+        Err((e, sexpr)) => {
+            eprintln!("error in: {}:\nat: {sexpr}", sexpr.context().display());
+            Err(Box::new(e))
+        }
+    }
+}
+
+fn eval(input: &'static str) -> Result<Option<vm::Object<&Sexpr>>, Box<dyn std::error::Error>> {
+    let mut il_compiler = il::Compiler::new();
+    let mut opcode_table = OpCodeTable::new();
+    let mut vm = Vm::new();
+
+    compile(input, &mut il_compiler, &mut opcode_table, &mut vm)?;
 
     match vm.eval(&opcode_table) {
         Ok(_) => Ok(vm.pop().map(|local| local.into_object())),
