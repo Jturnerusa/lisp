@@ -819,6 +819,21 @@ impl<T> OpCodeTable<T> {
     pub fn debug(&self) -> &[T] {
         self.debug.as_slice()
     }
+
+    pub fn len(&self) -> usize {
+        self.opcodes.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.opcodes.len() == 0
+    }
+
+    pub fn append(&mut self, other: OpCodeTable<T>) {
+        for (opcode, debug) in other.opcodes.into_iter().zip(other.debug.into_iter()) {
+            self.opcodes.push(opcode);
+            self.debug.push(debug);
+        }
+    }
 }
 
 unsafe impl<D> Trace for OpCodeTable<D> {
