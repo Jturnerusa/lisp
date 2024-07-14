@@ -1,33 +1,32 @@
-use crate::xxhash;
-use gc::Gc;
-use identity_hasher::{IdentityHasher, IdentityMap};
-use reader::{Reader, Sexpr};
-use std::{
-    collections::{BTreeSet, HashMap},
-    hash::{Hash, Hasher},
-};
-use vm::{Arity, OpCodeTable, UpValue, Vm};
-
 use crate::{
     ast::{self, Ast, Quoted},
     bytecode,
     environment::{self, Environment, Variable},
     il,
 };
+use reader::{Reader, Sexpr};
+use std::{
+    collections::{BTreeSet, HashSet},
+    hash::Hash,
+};
+use vm::{Arity, OpCodeTable, UpValue, Vm};
 
 #[derive(Debug, thiserror::Error)]
-pub enum Error<'a> {
+pub enum Error<'ast, 'sexpr, 'context> {
     #[error("il compiler error: {message}")]
-    Il { ast: &'a Ast<'a>, message: String },
+    Il {
+        ast: &'ast Ast<'sexpr, 'context>,
+        message: String,
+    },
 
     #[error("reader error: {0}")]
     Reader(#[from] reader::Error<'static>),
 
     #[error("ast error: {0}")]
-    Ast(#[from] ast::Error<'static>),
+    Ast(#[from] ast::Error<'static, 'static>),
 
     #[error("bytecode compiler error: {0}")]
-    Bytecode(#[from] bytecode::Error<'static>),
+    Bytecode(#[from] bytecode::Error<'static, 'static, 'static, 'static>),
 
     #[error("vm error: {0}")]
     Vm(#[from] vm::Error),
@@ -48,124 +47,141 @@ pub enum Type {
 }
 
 #[derive(Clone, Debug)]
-pub enum Il<'a> {
-    Lambda(Lambda<'a>),
-    If(If<'a>),
-    Apply(Apply<'a>),
-    Def(Def<'a>),
-    Set(Set<'a>),
-    FnCall(FnCall<'a>),
-    ArithmeticOperation(ArithmeticOperation<'a>),
-    ComparisonOperation(ComparisonOperation<'a>),
-    List(List<'a>),
-    Cons(Cons<'a>),
-    Car(Car<'a>),
-    Cdr(Cdr<'a>),
-    MapCreate(MapCreate<'a>),
-    MapInsert(MapInsert<'a>),
-    MapRetrieve(MapRetrieve<'a>),
-    VarRef(VarRef<'a>),
-    Constant(Constant<'a>),
+pub enum Il<'ast, 'sexpr, 'context> {
+    Lambda(Lambda<'ast, 'sexpr, 'context>),
+    If(If<'ast, 'sexpr, 'context>),
+    Apply(Apply<'ast, 'sexpr, 'context>),
+    Def(Def<'ast, 'sexpr, 'context>),
+    Set(Set<'ast, 'sexpr, 'context>),
+    FnCall(FnCall<'ast, 'sexpr, 'context>),
+    ArithmeticOperation(ArithmeticOperation<'ast, 'sexpr, 'context>),
+    ComparisonOperation(ComparisonOperation<'ast, 'sexpr, 'context>),
+    List(List<'ast, 'sexpr, 'context>),
+    Cons(Cons<'ast, 'sexpr, 'context>),
+    Car(Car<'ast, 'sexpr, 'context>),
+    Cdr(Cdr<'ast, 'sexpr, 'context>),
+    MapCreate(MapCreate<'ast, 'sexpr, 'context>),
+    MapInsert(MapInsert<'ast, 'sexpr, 'context>),
+    MapRetrieve(MapRetrieve<'ast, 'sexpr, 'context>),
+    VarRef(VarRef<'ast, 'sexpr, 'context>),
+    Constant(Constant<'ast, 'sexpr, 'context>),
 }
 
 #[derive(Clone, Debug)]
-pub enum Constant<'a> {
-    Symbol { source: &'a Ast<'a>, symbol: String },
-    String { source: &'a Ast<'a>, string: String },
-    Char { source: &'a Ast<'a>, char: char },
-    Int { source: &'a Ast<'a>, int: i64 },
-    Bool { source: &'a Ast<'a>, bool: bool },
-    Nil { source: &'a Ast<'a> },
+pub enum Constant<'ast, 'sexpr, 'context> {
+    Symbol {
+        source: &'ast Ast<'sexpr, 'context>,
+        symbol: String,
+    },
+    String {
+        source: &'ast Ast<'sexpr, 'context>,
+        string: String,
+    },
+    Char {
+        source: &'ast Ast<'sexpr, 'context>,
+        char: char,
+    },
+    Int {
+        source: &'ast Ast<'sexpr, 'context>,
+        int: i64,
+    },
+    Bool {
+        source: &'ast Ast<'sexpr, 'context>,
+        bool: bool,
+    },
+    Nil {
+        source: &'ast Ast<'sexpr, 'context>,
+    },
 }
 
 #[derive(Clone, Debug)]
-pub enum VarRef<'a> {
+pub enum VarRef<'ast, 'sexpr, 'context> {
     Local {
-        source: &'a Ast<'a>,
+        source: &'ast Ast<'sexpr, 'context>,
         name: String,
         index: usize,
         r#type: Option<Type>,
     },
     UpValue {
-        source: &'a Ast<'a>,
+        source: &'ast Ast<'sexpr, 'context>,
         name: String,
         index: usize,
         r#type: Option<Type>,
     },
     Global {
-        source: &'a Ast<'a>,
+        source: &'ast Ast<'sexpr, 'context>,
         name: String,
         r#type: Option<Type>,
     },
 }
 
 #[derive(Clone, Debug)]
-pub struct Parameter<'a> {
-    pub source: &'a Ast<'a>,
+pub struct Parameter<'ast, 'sexpr, 'context> {
+    pub source: &'ast Ast<'sexpr, 'context>,
     pub name: String,
     pub r#type: Option<Type>,
 }
 
 #[derive(Clone, Debug)]
-pub enum Parameters<'a> {
-    Nary(Vec<Parameter<'a>>),
-    Variadic(Vec<Parameter<'a>>),
+pub enum Parameters<'ast, 'sexpr, 'context> {
+    Nary(Vec<Parameter<'ast, 'sexpr, 'context>>),
+    Variadic(Vec<Parameter<'ast, 'sexpr, 'context>>),
 }
 
 #[derive(Clone, Debug)]
-pub struct Lambda<'a> {
-    pub source: &'a Ast<'a>,
-    pub parameters: Parameters<'a>,
+pub struct Lambda<'ast, 'sexpr, 'context> {
+    pub source: &'ast Ast<'sexpr, 'context>,
+    pub parameters: Parameters<'ast, 'sexpr, 'context>,
     pub r#type: Option<Type>,
     pub arity: Arity,
     pub upvalues: Vec<UpValue>,
-    pub body: Vec<Il<'a>>,
+    pub body: Vec<Il<'ast, 'sexpr, 'context>>,
 }
 
 #[derive(Clone, Debug)]
-pub struct If<'a> {
-    pub source: &'a Ast<'a>,
-    pub predicate: Box<Il<'a>>,
-    pub then: Box<Il<'a>>,
-    pub r#else: Box<Il<'a>>,
+pub struct If<'ast, 'sexpr, 'context> {
+    pub source: &'ast Ast<'sexpr, 'context>,
+    pub predicate: Box<Il<'ast, 'sexpr, 'context>>,
+    pub then: Box<Il<'ast, 'sexpr, 'context>>,
+    pub r#else: Box<Il<'ast, 'sexpr, 'context>>,
 }
 
 #[derive(Clone, Debug)]
-pub struct FnCall<'a> {
-    pub source: &'a Ast<'a>,
-    pub function: Box<Il<'a>>,
-    pub args: Vec<Il<'a>>,
+pub struct FnCall<'ast, 'sexpr, 'context> {
+    pub source: &'ast Ast<'sexpr, 'context>,
+    pub function: Box<Il<'ast, 'sexpr, 'context>>,
+    pub args: Vec<Il<'ast, 'sexpr, 'context>>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Apply<'a> {
-    pub source: &'a Ast<'a>,
-    pub exprs: Vec<Il<'a>>,
+pub struct Apply<'ast, 'sexpr, 'context> {
+    pub source: &'ast Ast<'sexpr, 'context>,
+    pub exprs: Vec<Il<'ast, 'sexpr, 'context>>,
 }
 
 #[derive(Clone, Debug)]
-pub struct List<'a> {
-    pub source: &'a Ast<'a>,
-    pub exprs: Vec<Il<'a>>,
+pub struct List<'ast, 'sexpr, 'context> {
+    pub source: &'ast Ast<'sexpr, 'context>,
+    pub exprs: Vec<Il<'ast, 'sexpr, 'context>>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Cons<'a> {
-    pub source: &'a Ast<'a>,
-    pub lhs: Box<Il<'a>>,
-    pub rhs: Box<Il<'a>>,
+pub struct Cons<'ast, 'sexpr, 'context> {
+    pub source: &'ast Ast<'sexpr, 'context>,
+    pub lhs: Box<Il<'ast, 'sexpr, 'context>>,
+    pub rhs: Box<Il<'ast, 'sexpr, 'context>>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Car<'a> {
-    pub source: &'a Ast<'a>,
-    pub body: Box<Il<'a>>,
+pub struct Car<'ast, 'sexpr, 'context> {
+    pub source: &'ast Ast<'sexpr, 'context>,
+    pub body: Box<Il<'ast, 'sexpr, 'context>>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Cdr<'a> {
-    pub source: &'a Ast<'a>,
-    pub body: Box<Il<'a>>,
+pub struct Cdr<'ast, 'sexpr, 'context> {
+    pub source: &'ast Ast<'sexpr, 'context>,
+    pub body: Box<Il<'ast, 'sexpr, 'context>>,
 }
 
 #[derive(Clone, Debug)]
@@ -177,11 +193,11 @@ pub enum ArithmeticOperator {
 }
 
 #[derive(Clone, Debug)]
-pub struct ArithmeticOperation<'a> {
-    pub source: &'a Ast<'a>,
+pub struct ArithmeticOperation<'ast, 'sexpr, 'context> {
+    pub source: &'ast Ast<'sexpr, 'context>,
     pub operator: ArithmeticOperator,
-    pub lhs: Box<Il<'a>>,
-    pub rhs: Box<Il<'a>>,
+    pub lhs: Box<Il<'ast, 'sexpr, 'context>>,
+    pub rhs: Box<Il<'ast, 'sexpr, 'context>>,
 }
 
 #[derive(Clone, Debug)]
@@ -192,55 +208,55 @@ pub enum ComparisonOperator {
 }
 
 #[derive(Clone, Debug)]
-pub struct ComparisonOperation<'a> {
-    pub source: &'a Ast<'a>,
+pub struct ComparisonOperation<'ast, 'sexpr, 'context> {
+    pub source: &'ast Ast<'sexpr, 'context>,
     pub operator: ComparisonOperator,
-    pub lhs: Box<Il<'a>>,
-    pub rhs: Box<Il<'a>>,
+    pub lhs: Box<Il<'ast, 'sexpr, 'context>>,
+    pub rhs: Box<Il<'ast, 'sexpr, 'context>>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Def<'a> {
-    pub source: &'a Ast<'a>,
-    pub parameter: Parameter<'a>,
-    pub body: Box<Il<'a>>,
+pub struct Def<'ast, 'sexpr, 'context> {
+    pub source: &'ast Ast<'sexpr, 'context>,
+    pub parameter: Parameter<'ast, 'sexpr, 'context>,
+    pub body: Box<Il<'ast, 'sexpr, 'context>>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Set<'a> {
-    pub source: &'a Ast<'a>,
-    pub target: VarRef<'a>,
-    pub body: Box<Il<'a>>,
+pub struct Set<'ast, 'sexpr, 'context> {
+    pub source: &'ast Ast<'sexpr, 'context>,
+    pub target: VarRef<'ast, 'sexpr, 'context>,
+    pub body: Box<Il<'ast, 'sexpr, 'context>>,
 }
 
 #[derive(Clone, Debug)]
-pub struct MapCreate<'a> {
-    pub source: &'a Ast<'a>,
-    pub map: Box<Il<'a>>,
+pub struct MapCreate<'ast, 'sexpr, 'context> {
+    pub source: &'ast Ast<'sexpr, 'context>,
+    pub map: Box<Il<'ast, 'sexpr, 'context>>,
 }
 
 #[derive(Clone, Debug)]
-pub struct MapInsert<'a> {
-    pub source: &'a Ast<'a>,
-    pub map: Box<Il<'a>>,
-    pub key: Box<Il<'a>>,
-    pub value: Box<Il<'a>>,
+pub struct MapInsert<'ast, 'sexpr, 'context> {
+    pub source: &'ast Ast<'sexpr, 'context>,
+    pub map: Box<Il<'ast, 'sexpr, 'context>>,
+    pub key: Box<Il<'ast, 'sexpr, 'context>>,
+    pub value: Box<Il<'ast, 'sexpr, 'context>>,
 }
 
 #[derive(Clone, Debug)]
-pub struct MapRetrieve<'a> {
-    pub source: &'a Ast<'a>,
-    pub map: Box<Il<'a>>,
-    pub key: Box<Il<'a>>,
+pub struct MapRetrieve<'ast, 'sexpr, 'context> {
+    pub source: &'ast Ast<'sexpr, 'context>,
+    pub map: Box<Il<'ast, 'sexpr, 'context>>,
+    pub key: Box<Il<'ast, 'sexpr, 'context>>,
 }
 
 pub struct Compiler {
     environment: Environment,
-    macros: HashMap<String, u64>,
+    macros: HashSet<String>,
 }
 
-impl<'a> VarRef<'a> {
-    pub fn source(&self) -> &'a Ast<'a> {
+impl<'ast, 'sexpr, 'context> VarRef<'ast, 'sexpr, 'context> {
+    pub fn source(&self) -> &'ast Ast<'sexpr, 'context> {
         match self {
             Self::Local { source, .. }
             | Self::UpValue { source, .. }
@@ -249,8 +265,8 @@ impl<'a> VarRef<'a> {
     }
 }
 
-impl<'a> Constant<'a> {
-    pub fn source(&self) -> &'a Ast<'a> {
+impl<'ast, 'sexpr, 'context> Constant<'ast, 'sexpr, 'context> {
+    pub fn source(&self) -> &'ast Ast<'sexpr, 'context> {
         match self {
             Self::Symbol { source, .. }
             | Self::String { source, .. }
@@ -262,8 +278,8 @@ impl<'a> Constant<'a> {
     }
 }
 
-impl<'a> Il<'a> {
-    pub fn source_ast(&self) -> &Ast<'a> {
+impl<'ast, 'sexpr, 'context> Il<'ast, 'sexpr, 'context> {
+    pub fn source_ast(&self) -> &Ast<'sexpr, 'context> {
         match self {
             Self::Lambda(Lambda { source, .. })
             | Self::ArithmeticOperation(ArithmeticOperation { source, .. })
@@ -320,8 +336,11 @@ impl Type {
     }
 }
 
-impl<'a> Parameter<'a> {
-    pub fn from_ast(source: &'a Ast<'a>, parameter: &'a ast::Parameter) -> Result<Self, ()> {
+impl<'ast, 'sexpr, 'context> Parameter<'ast, 'sexpr, 'context> {
+    pub fn from_ast(
+        source: &'ast Ast<'sexpr, 'context>,
+        parameter: &'ast ast::Parameter,
+    ) -> Result<Self, ()> {
         Ok(Self {
             source,
             name: parameter.name.clone(),
@@ -334,8 +353,11 @@ impl<'a> Parameter<'a> {
     }
 }
 
-impl<'a> Parameters<'a> {
-    pub fn from_ast(source: &'a Ast<'a>, parameters: &'a ast::Parameters) -> Result<Self, ()> {
+impl<'ast, 'sexpr, 'context> Parameters<'ast, 'sexpr, 'context> {
+    pub fn from_ast(
+        source: &'ast Ast<'sexpr, 'context>,
+        parameters: &'ast ast::Parameters,
+    ) -> Result<Self, ()> {
         Ok(match parameters {
             ast::Parameters::Normal(params) => Parameters::Nary(
                 params
@@ -362,15 +384,15 @@ impl Compiler {
     pub fn new() -> Self {
         Self {
             environment: Environment::new(),
-            macros: HashMap::new(),
+            macros: HashSet::new(),
         }
     }
 
-    pub fn compile<'a>(
+    pub fn compile<'vm, 'ast, 'sexpr, 'context>(
         &mut self,
-        ast: &'a Ast<'a>,
-        vm: &mut Vm<&'a Sexpr<'a>>,
-    ) -> Result<Il<'a>, Error<'a>> {
+        ast: &'ast Ast<'sexpr, 'context>,
+        vm: &'vm mut Vm<&'sexpr Sexpr<'context>>,
+    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
         match ast {
             Ast::DefMacro(defmacro) => self.compile_defmacro(ast, defmacro, vm),
             Ast::Lambda(lambda) => self.compile_lambda(ast, lambda, vm),
@@ -381,7 +403,7 @@ impl Compiler {
                 if fncall
                     .function
                     .as_variable()
-                    .is_some_and(|function| self.macros.contains_key(function.name.as_str())) =>
+                    .is_some_and(|function| self.macros.contains(function.name.as_str())) =>
             {
                 self.eval_macro(
                     &fncall.function.as_variable().unwrap().name,
@@ -405,11 +427,11 @@ impl Compiler {
         }
     }
 
-    fn compile_constant<'a>(
+    fn compile_constant<'ast, 'sexpr, 'context>(
         &mut self,
-        source: &'a Ast<'a>,
-        constant: &'a ast::Constant<'a>,
-    ) -> Result<Il<'a>, Error<'a>> {
+        source: &'ast Ast<'sexpr, 'context>,
+        constant: &'ast ast::Constant<'sexpr, 'context>,
+    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
         Ok(match constant {
             ast::Constant::String { string, .. } => Il::Constant(Constant::String {
                 source,
@@ -428,11 +450,11 @@ impl Compiler {
         })
     }
 
-    fn compile_variable_reference<'a>(
+    fn compile_variable_reference<'ast, 'sexpr, 'context>(
         &mut self,
-        source: &'a Ast<'a>,
-        variable: &ast::Variable<'a>,
-    ) -> Result<Il<'a>, Error<'a>> {
+        source: &'ast Ast<'sexpr, 'context>,
+        variable: &'ast ast::Variable<'sexpr, 'context>,
+    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
         Ok(match self.environment.resolve(variable.name.as_str()) {
             Some(environment::Variable::Local(index, r#type)) => Il::VarRef(VarRef::Local {
                 source,
@@ -460,12 +482,12 @@ impl Compiler {
         })
     }
 
-    fn compile_defmacro<'a>(
+    fn compile_defmacro<'vm, 'ast: 'static, 'sexpr, 'context>(
         &mut self,
-        source: &'a Ast<'a>,
-        defmacro: &'a ast::DefMacro<'a>,
-        vm: &mut Vm<&'a Sexpr<'a>>,
-    ) -> Result<Il<'a>, Error<'a>> {
+        source: &'ast Ast<'sexpr, 'context>,
+        defmacro: &'ast ast::DefMacro<'sexpr, 'context>,
+        vm: &'vm mut Vm<&'sexpr Sexpr<'context>>,
+    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
         let arity = match &defmacro.parameters {
             ast::Parameters::Normal(_) if defmacro.parameters.len() == 0 => Arity::Nullary,
             ast::Parameters::Normal(_) => Arity::Nary(defmacro.parameters.len()),
@@ -487,7 +509,7 @@ impl Compiler {
             .map(|ast| self.compile(ast, vm))
             .collect::<Result<Vec<Il>, Error>>()?;
 
-        let lambda: &'static _ = Box::leak(Box::new(Il::Lambda(il::Lambda {
+        let lambda = Box::leak(Box::new(Il::Lambda(il::Lambda {
             source,
             parameters,
             r#type: None,
@@ -497,30 +519,25 @@ impl Compiler {
         })));
 
         let mut opcodes = OpCodeTable::new();
-        let mut constants = IdentityMap::with_hasher(IdentityHasher::new());
-        let constant: vm::Constant<&Sexpr> = vm::Constant::Symbol(Gc::new(defmacro.name.clone()));
-        let hash = xxhash(&constant);
 
-        bytecode::compile(lambda, &mut opcodes, &mut constants).unwrap();
+        bytecode::compile(lambda, &mut opcodes)?;
 
-        vm.load_constants(constants.into_values());
         vm.eval(&opcodes).map_err(|(e, _)| e)?;
 
-        vm.load_constants(std::iter::once(constant));
-        vm.def_global(hash).unwrap();
+        vm.def_global(&defmacro.name.as_str())?;
 
-        self.macros.insert(defmacro.name.clone(), hash);
+        self.macros.insert(defmacro.name.clone());
 
         Ok(Il::Constant(Constant::Nil { source }))
     }
 
-    fn eval_macro<'a>(
+    fn eval_macro<'vm, 'ast, 'sexpr, 'context>(
         &mut self,
         r#macro: &str,
-        source: &'a Ast<'a>,
-        fncall: &'a ast::FnCall<'a>,
-        vm: &mut Vm<&'a Sexpr<'a>>,
-    ) -> Result<Il<'a>, Error<'a>> {
+        source: &'ast Ast<'sexpr, 'context>,
+        fncall: &'ast ast::FnCall<'sexpr, 'context>,
+        vm: &'vm mut Vm<&'sexpr Sexpr<'context>>,
+    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
         let args = fncall
             .exprs
             .iter()
@@ -530,21 +547,12 @@ impl Compiler {
             .collect::<Result<Vec<_>, _>>()?;
 
         let mut opcode_table = OpCodeTable::new();
-        let mut constants = IdentityMap::with_hasher(IdentityHasher::new());
 
         for arg in &args {
-            bytecode::compile(
-                Box::leak(Box::new(arg.clone())),
-                &mut opcode_table,
-                &mut constants,
-            )
-            .unwrap();
+            bytecode::compile(Box::leak(Box::new(arg.clone())), &mut opcode_table).unwrap();
         }
 
-        let macro_symbol_hash = *self.macros.get(r#macro).unwrap();
-
-        vm.load_constants(constants.into_values());
-        vm.get_global(macro_symbol_hash)?;
+        vm.get_global(r#macro)?;
         vm.eval(&opcode_table).map_err(|(e, _)| e)?;
         vm.call(args.len())?;
         vm.eval(&OpCodeTable::new()).map_err(|(e, _)| e)?;
@@ -573,12 +581,12 @@ impl Compiler {
         self.compile(ast, vm)
     }
 
-    fn compile_lambda<'a>(
+    fn compile_lambda<'vm, 'ast, 'sexpr, 'context>(
         &mut self,
-        source: &'a Ast<'a>,
-        lambda: &'a ast::Lambda<'a>,
-        vm: &mut Vm<&'a Sexpr<'a>>,
-    ) -> Result<Il<'a>, Error<'a>> {
+        source: &'ast Ast<'sexpr, 'context>,
+        lambda: &'ast ast::Lambda<'sexpr, 'context>,
+        vm: &'vm mut Vm<&'sexpr Sexpr<'context>>,
+    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
         let arity = match &lambda.parameters {
             ast::Parameters::Normal(_) if lambda.parameters.len() == 0 => Arity::Nullary,
             ast::Parameters::Normal(_) => Arity::Nary(lambda.parameters.len()),
@@ -625,12 +633,12 @@ impl Compiler {
         }))
     }
 
-    fn compile_if<'a, 'b>(
+    fn compile_if<'vm, 'ast, 'sexpr, 'context>(
         &mut self,
-        source: &'a Ast<'a>,
-        r#if: &'a ast::If<'a>,
-        vm: &'b mut Vm<&'a Sexpr<'a>>,
-    ) -> Result<Il<'a>, Error<'a>> {
+        source: &'ast Ast<'sexpr, 'context>,
+        r#if: &'ast ast::If<'sexpr, 'context>,
+        vm: &'vm mut Vm<&'sexpr Sexpr<'context>>,
+    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
         Ok(Il::If(If {
             source,
             predicate: Box::new(self.compile(&r#if.predicate, vm)?),
@@ -639,12 +647,12 @@ impl Compiler {
         }))
     }
 
-    fn compile_def<'a, 'b>(
+    fn compile_def<'vm, 'ast, 'sexpr, 'context>(
         &mut self,
-        source: &'a Ast<'a>,
-        def: &'a ast::Def<'a>,
-        vm: &'b mut Vm<&'a Sexpr<'a>>,
-    ) -> Result<Il<'a>, Error<'a>> {
+        source: &'ast Ast<'sexpr, 'context>,
+        def: &'ast ast::Def<'sexpr, 'context>,
+        vm: &'vm mut Vm<&'sexpr Sexpr<'context>>,
+    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
         self.environment.insert_global(
             def.parameter.name.as_str(),
             match def.parameter.r#type.as_ref().map(Type::from_ast) {
@@ -669,12 +677,12 @@ impl Compiler {
         }))
     }
 
-    fn compile_set<'a, 'b>(
+    fn compile_set<'vm, 'ast, 'sexpr, 'context>(
         &mut self,
-        source: &'a Ast<'a>,
-        set: &'a ast::Set<'a>,
-        vm: &'b mut Vm<&'a Sexpr<'a>>,
-    ) -> Result<Il<'a>, Error<'a>> {
+        source: &'ast Ast<'sexpr, 'context>,
+        set: &'ast ast::Set<'sexpr, 'context>,
+        vm: &'vm mut Vm<&'sexpr Sexpr<'context>>,
+    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
         Ok(Il::Set(Set {
             source,
             target: match self.environment.resolve(set.variable.as_str()) {
@@ -706,11 +714,11 @@ impl Compiler {
         }))
     }
 
-    fn compile_quote<'a>(
+    fn compile_quote<'ast, 'sexpr, 'context>(
         &mut self,
-        source: &'a Ast<'a>,
-        quote: &'a ast::Quote<'a>,
-    ) -> Result<Il<'a>, Error<'a>> {
+        source: &'ast Ast<'sexpr, 'context>,
+        quote: &'ast ast::Quote<'sexpr, 'context>,
+    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
         Ok(match &quote.body {
             Quoted::List { list, .. } => self.compile_quoted_list(source, list.as_slice())?,
             Quoted::Symbol { symbol, .. } => Il::Constant(Constant::Symbol {
@@ -735,11 +743,11 @@ impl Compiler {
     }
 
     #[allow(clippy::only_used_in_recursion)]
-    fn compile_quoted_list<'a>(
+    fn compile_quoted_list<'ast, 'sexpr, 'context>(
         &mut self,
-        source: &'a Ast<'a>,
-        list: &'a [Quoted<'a>],
-    ) -> Result<Il<'a>, Error<'a>> {
+        source: &'ast Ast<'sexpr, 'context>,
+        list: &'ast [Quoted<'sexpr, 'context>],
+    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
         Ok(Il::List(List {
             source,
             exprs: list
@@ -771,16 +779,16 @@ impl Compiler {
                         Quoted::Nil { .. } => Il::Constant(Constant::Nil { source }),
                     })
                 })
-                .collect::<Result<Vec<_>, Error<'a>>>()?,
+                .collect::<Result<Vec<_>, Error<'ast, 'sexpr, 'context>>>()?,
         }))
     }
 
-    fn compile_fncall<'a>(
+    fn compile_fncall<'ast, 'sexpr, 'context>(
         &mut self,
-        source: &'a Ast<'a>,
-        fncall: &'a ast::FnCall<'a>,
-        vm: &mut Vm<&'a Sexpr<'a>>,
-    ) -> Result<Il<'a>, Error<'a>> {
+        source: &'ast Ast<'sexpr, 'context>,
+        fncall: &'ast ast::FnCall<'sexpr, 'context>,
+        vm: &mut Vm<&'sexpr Sexpr<'context>>,
+    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
         Ok(Il::FnCall(FnCall {
             source,
             function: Box::new(self.compile(&fncall.function, vm)?),
@@ -792,12 +800,12 @@ impl Compiler {
         }))
     }
 
-    fn compile_apply<'a>(
+    fn compile_apply<'ast, 'sexpr, 'context>(
         &mut self,
-        source: &'a Ast<'a>,
-        apply: &'a ast::Apply<'a>,
-        vm: &mut Vm<&'a Sexpr<'a>>,
-    ) -> Result<Il<'a>, Error<'a>> {
+        source: &'ast Ast<'sexpr, 'context>,
+        apply: &'ast ast::Apply<'sexpr, 'context>,
+        vm: &mut Vm<&'sexpr Sexpr<'context>>,
+    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
         Ok(Il::Apply(Apply {
             source,
             exprs: apply
@@ -808,12 +816,12 @@ impl Compiler {
         }))
     }
 
-    fn compile_arithmetic_operation<'a>(
+    fn compile_arithmetic_operation<'ast, 'sexpr, 'context>(
         &mut self,
-        source: &'a Ast<'a>,
-        op: &'a ast::BinaryArithmeticOperation<'a>,
-        vm: &mut Vm<&'a Sexpr<'a>>,
-    ) -> Result<Il<'a>, Error<'a>> {
+        source: &'ast Ast<'sexpr, 'context>,
+        op: &'ast ast::BinaryArithmeticOperation<'sexpr, 'context>,
+        vm: &mut Vm<&'sexpr Sexpr<'context>>,
+    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
         Ok(Il::ArithmeticOperation(ArithmeticOperation {
             source,
             operator: match op.operator {
@@ -827,12 +835,12 @@ impl Compiler {
         }))
     }
 
-    fn compile_comparison_operation<'a>(
+    fn compile_comparison_operation<'ast, 'sexpr, 'context>(
         &mut self,
-        source: &'a Ast<'a>,
-        op: &'a ast::ComparisonOperation<'a>,
-        vm: &mut Vm<&'a Sexpr<'a>>,
-    ) -> Result<Il<'a>, Error<'a>> {
+        source: &'ast Ast<'sexpr, 'context>,
+        op: &'ast ast::ComparisonOperation<'sexpr, 'context>,
+        vm: &mut Vm<&'sexpr Sexpr<'context>>,
+    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
         Ok(Il::ComparisonOperation(ComparisonOperation {
             source,
             operator: match op.operator {
@@ -845,12 +853,12 @@ impl Compiler {
         }))
     }
 
-    fn compile_list<'a>(
+    fn compile_list<'ast, 'sexpr, 'context>(
         &mut self,
-        source: &'a Ast<'a>,
-        list: &'a ast::List<'a>,
-        vm: &mut Vm<&'a Sexpr<'a>>,
-    ) -> Result<Il<'a>, Error<'a>> {
+        source: &'ast Ast<'sexpr, 'context>,
+        list: &'ast ast::List<'sexpr, 'context>,
+        vm: &mut Vm<&'sexpr Sexpr<'context>>,
+    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
         Ok(Il::List(List {
             source,
             exprs: list
@@ -861,12 +869,12 @@ impl Compiler {
         }))
     }
 
-    fn compile_cons<'a>(
+    fn compile_cons<'ast, 'sexpr, 'context>(
         &mut self,
-        source: &'a Ast<'a>,
-        cons: &'a ast::Cons<'a>,
-        vm: &mut Vm<&'a Sexpr<'a>>,
-    ) -> Result<Il<'a>, Error<'a>> {
+        source: &'ast Ast<'sexpr, 'context>,
+        cons: &'ast ast::Cons<'sexpr, 'context>,
+        vm: &mut Vm<&'sexpr Sexpr<'context>>,
+    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
         Ok(Il::Cons(Cons {
             source,
             lhs: Box::new(self.compile(&cons.lhs, vm)?),
@@ -874,24 +882,24 @@ impl Compiler {
         }))
     }
 
-    fn compile_car<'a>(
+    fn compile_car<'ast, 'sexpr, 'context>(
         &mut self,
-        source: &'a Ast<'a>,
-        car: &'a ast::Car<'a>,
-        vm: &mut Vm<&'a Sexpr<'a>>,
-    ) -> Result<Il<'a>, Error<'a>> {
+        source: &'ast Ast<'sexpr, 'context>,
+        car: &'ast ast::Car<'sexpr, 'context>,
+        vm: &mut Vm<&'sexpr Sexpr<'context>>,
+    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
         Ok(Il::Car(Car {
             source,
             body: Box::new(self.compile(&car.body, vm)?),
         }))
     }
 
-    fn compile_cdr<'a>(
+    fn compile_cdr<'ast, 'sexpr, 'context>(
         &mut self,
-        source: &'a Ast<'a>,
-        cdr: &'a ast::Cdr<'a>,
-        vm: &mut Vm<&'a Sexpr<'a>>,
-    ) -> Result<Il<'a>, Error<'a>> {
+        source: &'ast Ast<'sexpr, 'context>,
+        cdr: &'ast ast::Cdr<'sexpr, 'context>,
+        vm: &mut Vm<&'sexpr Sexpr<'context>>,
+    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
         Ok(Il::Cdr(Cdr {
             source,
             body: Box::new(self.compile(&cdr.body, vm)?),
@@ -899,8 +907,10 @@ impl Compiler {
     }
 }
 
-impl<'a> IntoIterator for &'a Parameters<'a> {
-    type Item = Parameter<'a>;
+impl<'parameters, 'ast, 'sexpr, 'context> IntoIterator
+    for &'parameters Parameters<'ast, 'sexpr, 'context>
+{
+    type Item = Parameter<'ast, 'sexpr, 'context>;
     type IntoIter = impl Iterator<Item = Self::Item>;
 
     fn into_iter(self) -> Self::IntoIter {

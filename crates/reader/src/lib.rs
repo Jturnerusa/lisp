@@ -68,39 +68,39 @@ enum Macro {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, EnumIs)]
-pub enum Sexpr<'a> {
+pub enum Sexpr<'context> {
     List {
-        list: Vec<Sexpr<'a>>,
-        context: &'a Context,
+        list: Vec<Sexpr<'context>>,
+        context: &'context Context,
         span: Range<usize>,
     },
     Symbol {
         symbol: String,
-        context: &'a Context,
+        context: &'context Context,
         span: Range<usize>,
     },
     String {
         string: String,
-        context: &'a Context,
+        context: &'context Context,
         span: Range<usize>,
     },
     Char {
         char: char,
-        context: &'a Context,
+        context: &'context Context,
         span: Range<usize>,
     },
     Int {
         int: i64,
-        context: &'a Context,
+        context: &'context Context,
         span: Range<usize>,
     },
     Bool {
         bool: bool,
-        context: &'a Context,
+        context: &'context Context,
         span: Range<usize>,
     },
     Nil {
-        context: &'a Context,
+        context: &'context Context,
         span: Range<usize>,
     },
 }
@@ -112,9 +112,9 @@ pub struct Context {
 }
 
 #[derive(Clone, Debug)]
-pub struct Reader<'a> {
-    lexer: Lexer<'a, Token>,
-    context: &'a Context,
+pub struct Reader<'context> {
+    lexer: Lexer<'context, Token>,
+    context: &'context Context,
 }
 
 impl Context {
@@ -138,8 +138,8 @@ impl Context {
     }
 }
 
-impl<'a> Reader<'a> {
-    pub fn new(context: &'a Context) -> Self {
+impl<'context> Reader<'context> {
+    pub fn new(context: &'context Context) -> Self {
         Self {
             lexer: Lexer::new(context.source()),
             context,
@@ -147,7 +147,7 @@ impl<'a> Reader<'a> {
     }
 }
 
-impl<'a> Sexpr<'a> {
+impl<'context> Sexpr<'context> {
     pub fn as_list(&self) -> Option<&[Sexpr]> {
         match self {
             Self::List { list, .. } => Some(list.as_slice()),
@@ -215,8 +215,8 @@ impl<'a> Sexpr<'a> {
     }
 }
 
-impl<'a> Sexpr<'a> {
-    pub fn quote(&'a self) -> Sexpr<'a> {
+impl<'context> Sexpr<'context> {
+    pub fn quote(&'context self) -> Sexpr<'context> {
         let quote = Sexpr::Symbol {
             symbol: "quote".to_string(),
             context: self.context(),
@@ -231,14 +231,14 @@ impl<'a> Sexpr<'a> {
     }
 }
 
-impl<'a> Iterator for Reader<'a> {
-    type Item = Result<Sexpr<'a>, Error<'a>>;
+impl<'context> Iterator for Reader<'context> {
+    type Item = Result<Sexpr<'context>, Error<'context>>;
     fn next(&mut self) -> Option<Self::Item> {
         read(&mut self.lexer, self.context)
     }
 }
 
-impl<'a> fmt::Display for Sexpr<'a> {
+impl<'context> fmt::Display for Sexpr<'context> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Sexpr::List { list, .. } => {
@@ -263,10 +263,10 @@ impl<'a> fmt::Display for Sexpr<'a> {
     }
 }
 
-fn read<'a>(
-    lexer: &mut Lexer<'a, Token>,
-    context: &'a Context,
-) -> Option<Result<Sexpr<'a>, Error<'a>>> {
+fn read<'context>(
+    lexer: &mut Lexer<'context, Token>,
+    context: &'context Context,
+) -> Option<Result<Sexpr<'context>, Error<'context>>> {
     Some(Ok(match lexer.next()? {
         Ok(Token::LeftParen) => match read_list(lexer, context) {
             Ok(sexpr) => sexpr,
@@ -327,10 +327,10 @@ fn read<'a>(
     }))
 }
 
-fn read_list<'a>(
-    lexer: &mut Lexer<'a, Token>,
-    context: &'a Context,
-) -> Result<Sexpr<'a>, Error<'a>> {
+fn read_list<'context>(
+    lexer: &mut Lexer<'context, Token>,
+    context: &'context Context,
+) -> Result<Sexpr<'context>, Error<'context>> {
     let mut list = Vec::new();
 
     loop {
@@ -395,11 +395,11 @@ fn read_list<'a>(
     }
 }
 
-fn expand_macro<'a>(
-    lexer: &mut Lexer<'a, Token>,
-    context: &'a Context,
+fn expand_macro<'context>(
+    lexer: &mut Lexer<'context, Token>,
+    context: &'context Context,
     r#macro: Macro,
-) -> Result<Sexpr<'a>, Error<'a>> {
+) -> Result<Sexpr<'context>, Error<'context>> {
     let span = lexer.span();
 
     let symbol = Sexpr::Symbol {
