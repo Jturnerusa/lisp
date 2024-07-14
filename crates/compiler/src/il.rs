@@ -388,7 +388,7 @@ impl Compiler {
         }
     }
 
-    pub fn compile<'vm, 'ast, 'sexpr, 'context>(
+    pub fn compile<'vm, 'ast: 'static, 'sexpr, 'context>(
         &mut self,
         ast: &'ast Ast<'sexpr, 'context>,
         vm: &'vm mut Vm<&'sexpr Sexpr<'context>>,
@@ -581,7 +581,7 @@ impl Compiler {
         self.compile(ast, vm)
     }
 
-    fn compile_lambda<'vm, 'ast, 'sexpr, 'context>(
+    fn compile_lambda<'vm, 'ast: 'static, 'sexpr, 'context>(
         &mut self,
         source: &'ast Ast<'sexpr, 'context>,
         lambda: &'ast ast::Lambda<'sexpr, 'context>,
@@ -633,7 +633,7 @@ impl Compiler {
         }))
     }
 
-    fn compile_if<'vm, 'ast, 'sexpr, 'context>(
+    fn compile_if<'vm, 'ast: 'static, 'sexpr, 'context>(
         &mut self,
         source: &'ast Ast<'sexpr, 'context>,
         r#if: &'ast ast::If<'sexpr, 'context>,
@@ -647,7 +647,7 @@ impl Compiler {
         }))
     }
 
-    fn compile_def<'vm, 'ast, 'sexpr, 'context>(
+    fn compile_def<'vm, 'ast: 'static, 'sexpr, 'context>(
         &mut self,
         source: &'ast Ast<'sexpr, 'context>,
         def: &'ast ast::Def<'sexpr, 'context>,
@@ -677,7 +677,7 @@ impl Compiler {
         }))
     }
 
-    fn compile_set<'vm, 'ast, 'sexpr, 'context>(
+    fn compile_set<'vm, 'ast: 'static, 'sexpr, 'context>(
         &mut self,
         source: &'ast Ast<'sexpr, 'context>,
         set: &'ast ast::Set<'sexpr, 'context>,
@@ -783,7 +783,7 @@ impl Compiler {
         }))
     }
 
-    fn compile_fncall<'ast, 'sexpr, 'context>(
+    fn compile_fncall<'ast: 'static, 'sexpr, 'context>(
         &mut self,
         source: &'ast Ast<'sexpr, 'context>,
         fncall: &'ast ast::FnCall<'sexpr, 'context>,
@@ -800,7 +800,7 @@ impl Compiler {
         }))
     }
 
-    fn compile_apply<'ast, 'sexpr, 'context>(
+    fn compile_apply<'ast: 'static, 'sexpr, 'context>(
         &mut self,
         source: &'ast Ast<'sexpr, 'context>,
         apply: &'ast ast::Apply<'sexpr, 'context>,
@@ -816,7 +816,7 @@ impl Compiler {
         }))
     }
 
-    fn compile_arithmetic_operation<'ast, 'sexpr, 'context>(
+    fn compile_arithmetic_operation<'ast: 'static, 'sexpr, 'context>(
         &mut self,
         source: &'ast Ast<'sexpr, 'context>,
         op: &'ast ast::BinaryArithmeticOperation<'sexpr, 'context>,
@@ -835,7 +835,7 @@ impl Compiler {
         }))
     }
 
-    fn compile_comparison_operation<'ast, 'sexpr, 'context>(
+    fn compile_comparison_operation<'ast: 'static, 'sexpr, 'context>(
         &mut self,
         source: &'ast Ast<'sexpr, 'context>,
         op: &'ast ast::ComparisonOperation<'sexpr, 'context>,
@@ -853,7 +853,7 @@ impl Compiler {
         }))
     }
 
-    fn compile_list<'ast, 'sexpr, 'context>(
+    fn compile_list<'ast: 'static, 'sexpr, 'context>(
         &mut self,
         source: &'ast Ast<'sexpr, 'context>,
         list: &'ast ast::List<'sexpr, 'context>,
@@ -869,7 +869,7 @@ impl Compiler {
         }))
     }
 
-    fn compile_cons<'ast, 'sexpr, 'context>(
+    fn compile_cons<'ast: 'static, 'sexpr, 'context>(
         &mut self,
         source: &'ast Ast<'sexpr, 'context>,
         cons: &'ast ast::Cons<'sexpr, 'context>,
@@ -882,7 +882,7 @@ impl Compiler {
         }))
     }
 
-    fn compile_car<'ast, 'sexpr, 'context>(
+    fn compile_car<'ast: 'static, 'sexpr, 'context>(
         &mut self,
         source: &'ast Ast<'sexpr, 'context>,
         car: &'ast ast::Car<'sexpr, 'context>,
@@ -894,7 +894,7 @@ impl Compiler {
         }))
     }
 
-    fn compile_cdr<'ast, 'sexpr, 'context>(
+    fn compile_cdr<'ast: 'static, 'sexpr, 'context>(
         &mut self,
         source: &'ast Ast<'sexpr, 'context>,
         cdr: &'ast ast::Cdr<'sexpr, 'context>,
