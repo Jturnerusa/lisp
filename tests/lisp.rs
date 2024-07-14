@@ -1,3 +1,5 @@
+use core::fmt;
+
 use compiler::{
     ast::Ast,
     bytecode,
@@ -27,20 +29,12 @@ macro_rules! leak {
 static BOOTSTRAP_SOURCE: &str = include_str!("../lib/lisp/bootstrap.lisp");
 static LIST_UTILS_SOURCE: &str = include_str!("../lib/lisp/list.lisp");
 
-fn disasm<D>(
-    opcode_table: &OpCodeTable<D>,
-    constants: &IdentityMap<u64, vm::Constant<D>>,
-    depth: usize,
-) {
+fn disasm<D: fmt::Debug>(opcode_table: &OpCodeTable<D>, depth: usize) {
     let indent = "  ".repeat(depth);
     for opcode in opcode_table.opcodes() {
         println!("{indent}{opcode:?}");
         if let OpCode::Lambda { body, .. } = opcode {
-            disasm(
-                constants.get(body).unwrap().as_opcodes().unwrap(),
-                constants,
-                depth + 1,
-            );
+            disasm(body, depth + 1);
         }
     }
 }
@@ -56,7 +50,6 @@ fn eval(input: &'static str) -> Result<Option<vm::Object<&Sexpr>>, Box<dyn std::
     let reader = Reader::new(context);
     let mut il_compiler = il::Compiler::new();
     let mut opcode_table = OpCodeTable::new();
-    let mut constants = IdentityMap::with_hasher(IdentityHasher::new());
     let mut vm = Vm::new();
 
     for sexpr in reader {
@@ -66,10 +59,8 @@ fn eval(input: &'static str) -> Result<Option<vm::Object<&Sexpr>>, Box<dyn std::
 
         let il: &'static _ = Box::leak(Box::new(il_compiler.compile(ast, &mut vm)?));
 
-        bytecode::compile(il, &mut opcode_table, &mut constants)?;
+        bytecode::compile(il, &mut opcode_table)?;
     }
-
-    vm.load_constants(constants.into_values());
 
     match vm.eval(&opcode_table) {
         Ok(_) => Ok(vm.pop().map(|local| local.into_object())),
