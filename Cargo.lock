@@ -313,9 +313,7 @@ name = "vm"
 version = "0.1.0"
 dependencies = [
  "gc",
- "identity-hasher",
  "thiserror",
- "twox-hash",
  "unwrap-enum",
  "value",
 ]
