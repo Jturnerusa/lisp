@@ -27,6 +27,9 @@ pub fn compile<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
         Il::Def(def) => compile_def(def, opcodes),
         Il::Set(set) => compile_set(set, opcodes),
         Il::If(r#if) => compile_if(r#if, opcodes),
+        Il::Cons(cons) => compile_cons(cons, opcodes),
+        Il::Car(car) => compile_car(car, opcodes),
+        Il::Cdr(cdr) => compile_cdr(cdr, opcodes),
         Il::VarRef(varref) => compile_varref(varref, opcodes),
         Il::Constant(constant) => compile_constant(constant, opcodes),
         Il::List(list) => compile_list(list, opcodes),
@@ -204,6 +207,40 @@ fn compile_fncall<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
         OpCode::Call(fncall.args.len()),
         fncall.source.source_sexpr(),
     );
+
+    Ok(())
+}
+
+fn compile_cons<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
+    cons: &'il il::Cons<'ast, 'sexpr, 'context>,
+    opcodes: &'opcodes mut OpCodeTable<&'sexpr Sexpr<'context>>,
+) -> Result<(), Error<'il, 'ast, 'sexpr, 'context>> {
+    compile(&cons.lhs, opcodes)?;
+    compile(&cons.rhs, opcodes)?;
+
+    opcodes.push(OpCode::Cons, cons.source.source_sexpr());
+
+    Ok(())
+}
+
+fn compile_car<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
+    car: &'il il::Car<'ast, 'sexpr, 'context>,
+    opcodes: &'opcodes mut OpCodeTable<&'sexpr Sexpr<'context>>,
+) -> Result<(), Error<'il, 'ast, 'sexpr, 'context>> {
+    compile(&car.body, opcodes)?;
+
+    opcodes.push(OpCode::Car, car.source.source_sexpr());
+
+    Ok(())
+}
+
+fn compile_cdr<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
+    cdr: &'il il::Cdr<'ast, 'sexpr, 'context>,
+    opcodes: &'opcodes mut OpCodeTable<&'sexpr Sexpr<'context>>,
+) -> Result<(), Error<'il, 'ast, 'sexpr, 'context>> {
+    compile(&cdr.body, opcodes)?;
+
+    opcodes.push(OpCode::Cdr, cdr.source.source_sexpr());
 
     Ok(())
 }
