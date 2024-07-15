@@ -578,8 +578,6 @@ impl Compiler {
             message: "failed to print macro result".to_string(),
         })?;
 
-        dbg!(&buff);
-
         let context: &'static _ = Box::leak(Box::new(reader::Context::new(
             buff.as_str(),
             "macro-expansion",
