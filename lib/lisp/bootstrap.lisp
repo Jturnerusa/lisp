@@ -118,15 +118,14 @@
         ((nil? (cdr exprs)) (car exprs))
         (true (list 'if (car exprs)
                  (cons 'and (cdr exprs))
-                 nil))))
+                 false))))
 
 (defmacro or (&rest exprs)
-  (cond ((nil? exprs) nil)
+  (cond ((nil? exprs) false)
         ((nil? (cdr exprs)) (car exprs))
         (true (list 'if (car exprs)
                     true
                     (cons 'or (cdr exprs))))))
-
 
 (defmacro quasiquote (exprs)
   (cons 'append (map (lambda (expr)
