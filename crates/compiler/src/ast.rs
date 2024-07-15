@@ -942,7 +942,7 @@ mod tests {
         let parameters = parse_parameters(&sexpr, list).unwrap();
 
         match parameters {
-            Parameters::Rest(params, rest) if params.is_empty() => (),
+            Parameters::Rest(params, _) if params.is_empty() => (),
             _ => panic!(),
         };
     }
