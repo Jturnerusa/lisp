@@ -409,6 +409,9 @@ impl Compiler {
         vm: &'vm mut Vm<&'sexpr Sexpr<'context>>,
     ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
         match ast {
+            Ast::EvalWhenCompile(eval_when_compile) => {
+                self.eval_when_compile(ast, eval_when_compile, vm)
+            }
             Ast::DefMacro(defmacro) => self.compile_defmacro(ast, defmacro, vm),
             Ast::Lambda(lambda) => self.compile_lambda(ast, lambda, vm),
             Ast::Def(def) => self.compile_def(ast, def, vm),
@@ -439,8 +442,27 @@ impl Compiler {
             Ast::IsType(is_type) => self.compile_is_type(ast, is_type, vm),
             Ast::Constant(constant) => self.compile_constant(ast, constant),
             Ast::Variable(variable) => self.compile_variable_reference(ast, variable),
-            _ => todo!(),
         }
+    }
+
+    fn eval_when_compile<'ast: 'static, 'sexpr, 'context>(
+        &mut self,
+        source: &'ast Ast<'sexpr, 'context>,
+        eval_when_compile: &'ast ast::EvalWhenCompile<'sexpr, 'context>,
+        vm: &mut Vm<&'sexpr Sexpr<'context>>,
+    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
+        let mut opcode_table = OpCodeTable::new();
+
+        for expr in &eval_when_compile.exprs {
+            let il = Box::leak(Box::new(self.compile(expr, vm)?));
+
+            bytecode::compile(il, &mut opcode_table)?;
+        }
+
+        vm.eval(&opcode_table)
+            .map_err(|(error, sexpr)| Error::VmWithDebug { error, sexpr })?;
+
+        Ok(Il::Constant(Constant::Nil { source }))
     }
 
     fn compile_constant<'ast, 'sexpr, 'context>(
