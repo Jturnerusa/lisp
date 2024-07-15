@@ -3,7 +3,7 @@
                    nil)
                   ((= n 0)
                    nil)
-                  (t
+                  (true
                    (cons (car list) (take (cdr list) (- n 1)))))))
 
 (def drop (lambda (list n)
@@ -11,7 +11,7 @@
                    nil)
                   ((= n 1)
                    (cdr list))
-                  (t
+                  (true
                    (drop (cdr list) (- n 1))))))
 
 (def merge (lambda (l r pred)
@@ -21,7 +21,7 @@
                     l)
                    ((pred (car l) (car r))
                     (cons (car l) (merge (cdr l) r pred)))
-                   (t
+                   (true
                     (cons (car r) (merge l (cdr r) pred))))))
 
 (def sort (lambda (list pred)
@@ -29,7 +29,7 @@
                    nil)
                   ((< (length list) 2)
                    list)
-                  (t
+                  (true
                    (let* ((mid (/ (length list) 2))
                           (l (take list mid))
                           (r (drop list mid)))
