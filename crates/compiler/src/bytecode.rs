@@ -275,6 +275,7 @@ fn compile_is_type<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
 
     let vm_type = match is_type.r#type {
         il::Type::Function => vm::object::Type::Function,
+        il::Type::Cons => vm::object::Type::Cons,
         il::Type::Symbol => vm::object::Type::Symbol,
         il::Type::String => vm::object::Type::String,
         il::Type::Char => vm::object::Type::Char,
