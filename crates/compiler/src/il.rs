@@ -577,8 +577,6 @@ impl Compiler {
         fncall: &'ast ast::FnCall<'sexpr, 'context>,
         vm: &'vm mut Vm<&'sexpr Sexpr<'context>>,
     ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
-        dbg!(fncall);
-
         let args = fncall
             .exprs
             .iter()
