@@ -298,7 +298,7 @@ impl<'sexpr, 'context> Ast<'sexpr, 'context> {
                         Ast::If(If::from_sexpr(sexpr, predicate, then, r#else)?)
                     }
                     [Sexpr::Symbol { symbol, .. }, rest @ ..] if symbol == "apply" => {
-                        todo!()
+                        Ast::Apply(Apply::from_sexpr(sexpr, rest)?)
                     }
                     [operator @ Sexpr::Symbol { symbol, .. }, lhs, rhs]
                         if matches!(symbol.as_str(), "+" | "-" | "*" | "/") =>
