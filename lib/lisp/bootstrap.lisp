@@ -114,18 +114,18 @@
             (cons 'cond (cdr clauses)))))
 
 (defmacro and (&rest exprs)
-  (cond ((nil? exprs) t)
+  (cond ((nil? exprs) true)
         ((nil? (cdr exprs)) (car exprs))
-        (t (list 'if (car exprs)
+        (true (list 'if (car exprs)
                  (cons 'and (cdr exprs))
                  nil))))
 
 (defmacro or (&rest exprs)
   (cond ((nil? exprs) nil)
         ((nil? (cdr exprs)) (car exprs))
-        (t (list 'if (car exprs)
-                 t
-                 (cons 'or (cdr exprs))))))
+        (true (list 'if (car exprs)
+                    true
+                    (cons 'or (cdr exprs))))))
 
 
 (defmacro quasiquote (exprs)
