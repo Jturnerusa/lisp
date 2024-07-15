@@ -4,7 +4,7 @@ use std::{cmp::Ordering, ops::Range};
 use thiserror::Error;
 use unwrap_enum::EnumIs;
 
-#[derive(Clone, Debug, Error)]
+#[derive(Clone, Error)]
 pub enum Error<'a> {
     #[error("lexer error: remaining input: {0}")]
     Lexer(&'a str),
@@ -67,7 +67,7 @@ enum Macro {
     Splice,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, EnumIs)]
+#[derive(Clone, PartialEq, Eq, Hash, EnumIs)]
 pub enum Sexpr<'context> {
     List {
         list: Vec<Sexpr<'context>>,
@@ -439,5 +439,44 @@ impl<'a> PartialOrd for Sexpr<'a> {
             (Self::Nil { .. }, Self::Nil { .. }) => Some(Ordering::Equal),
             _ => None,
         }
+    }
+}
+
+impl<'context> fmt::Debug for Error<'context> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Lexer(remainder) => {
+                let mut buff = remainder.to_string();
+                buff.truncate(10);
+                write!(f, "lexer error: {buff}...")
+            }
+            Self::UnExpectedEof => write!(f, "unexpected eof"),
+            Self::UnbalancedParens => write!(f, "unbalanced parens"),
+        }
+    }
+}
+
+impl<'context> fmt::Debug for Sexpr<'context> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let span = match self {
+            Self::List { list, .. } => list.first().unwrap().span().start - 1..self.span().end,
+            _ => self.span(),
+        };
+
+        let line = self
+            .context()
+            .source
+            .bytes()
+            .take(span.start)
+            .filter(|b| *b == b'\n')
+            .count();
+
+        write!(
+            f,
+            "{}:{}: {}",
+            self.context().display,
+            line,
+            &self.context().source[span]
+        )
     }
 }
