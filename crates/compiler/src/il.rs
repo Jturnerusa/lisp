@@ -507,7 +507,7 @@ impl Compiler {
         let arity = match &defmacro.parameters {
             ast::Parameters::Normal(_) if defmacro.parameters.len() == 0 => Arity::Nullary,
             ast::Parameters::Normal(_) => Arity::Nary(defmacro.parameters.len()),
-            ast::Parameters::Rest(..) => Arity::Variadic(defmacro.parameters.len()),
+            ast::Parameters::Rest(..) => Arity::Variadic(defmacro.parameters.len() - 1),
         };
 
         let parameters =
@@ -612,7 +612,7 @@ impl Compiler {
         let arity = match &lambda.parameters {
             ast::Parameters::Normal(_) if lambda.parameters.len() == 0 => Arity::Nullary,
             ast::Parameters::Normal(_) => Arity::Nary(lambda.parameters.len()),
-            ast::Parameters::Rest(..) => Arity::Variadic(lambda.parameters.len()),
+            ast::Parameters::Rest(..) => Arity::Variadic(lambda.parameters.len() - 1),
         };
 
         let parameters =
