@@ -7,84 +7,86 @@
   ;; These functions also should be available at compile time so they can
   ;; be used in macros;
 
-(def car (lambda (cons)
-           (car cons)))
+(eval-when-compile
 
-(def + (lambda (a b)
-         (+ a b)))
+  (def car (lambda (cons)
+             (car cons)))
 
-(def cadr (lambda (cons)
-            (car (cdr cons))))
+  (def + (lambda (a b)
+           (+ a b)))
 
-(def caar (lambda (cons)
-            (car (car cons))))
+  (def cadr (lambda (cons)
+              (car (cdr cons))))
 
-(def cddr (lambda (cons)
-            (cdr (cdr cons))))
+  (def caar (lambda (cons)
+              (car (car cons))))
 
-(def cdar (lambda (cons)
-            (cdr (car cons))))
+  (def cddr (lambda (cons)
+              (cdr (cdr cons))))
 
-(def cadar (lambda (cons)
-             (car (cdr (car cons)))))
+  (def cdar (lambda (cons)
+              (cdr (car cons))))
 
-(def do (lambda (fn list)
-          (if (nil? list)
-              nil
-              ((lambda ()
-                 (fn (car list))
-                 (do fn (cdr list)))))))
+  (def cadar (lambda (cons)
+               (car (cdr (car cons)))))
 
-(def map (lambda (fn list)
-           (if (nil? list)
-               nil
-               (cons (fn (car list))
-                     (map fn (cdr list))))))
-
-(def filter (lambda (pred list)
-              (if (nil? list)
-                  nil
-                  (if (pred (car list))
-                      (cons (car list) (filter pred (cdr list)))
-                      (filter pred (cdr list))))))
-
-(def nth (lambda (list n)
-           (if (nil? list)
-               nil
-               (if (= n 0)
-                   (car list)
-                   (nth (cdr list) (- n 1))))))
-
-(def last (lambda (list)
+  (def do (lambda (fn list)
             (if (nil? list)
                 nil
-                (if (nil? (cdr list))
-                    (car list)
-                    (last (cdr list))))))
+                ((lambda ()
+                   (fn (car list))
+                   (do fn (cdr list)))))))
 
-(def nth-cdr (lambda (list n)
-               (if (= n 0)
-                   list
-                   (nth-cdr (cdr list) (- n 1)))))
+  (def map (lambda (fn list)
+             (if (nil? list)
+                 nil
+                 (cons (fn (car list))
+                       (map fn (cdr list))))))
 
-(def length (lambda (list)
-              ((lambda (loop)
-                 (loop list 0 loop))
-               (lambda (list counter loop)
-                 (if (nil? list)
-                     counter
-                     (loop (cdr list) (+ counter 1) loop))))))
+  (def filter (lambda (pred list)
+                (if (nil? list)
+                    nil
+                    (if (pred (car list))
+                        (cons (car list) (filter pred (cdr list)))
+                        (filter pred (cdr list))))))
 
-(def append (lambda (&rest lists)
-              (if (= (length lists) 0)
+  (def nth (lambda (list n)
+             (if (nil? list)
+                 nil
+                 (if (= n 0)
+                     (car list)
+                     (nth (cdr list) (- n 1))))))
+
+  (def last (lambda (list)
+              (if (nil? list)
                   nil
-                  (if (= (length lists) 1)
-                      (car lists)
-                      (if (nil? (cdr (car lists)))
-                          (cons (car (car lists))
-                                (apply append (cdr lists)))
-                          (cons (car (car lists))
-                                (apply append (cons (cdr (car lists)) (cdr lists)))))))))
+                  (if (nil? (cdr list))
+                      (car list)
+                      (last (cdr list))))))
+
+  (def nth-cdr (lambda (list n)
+                 (if (= n 0)
+                     list
+                     (nth-cdr (cdr list) (- n 1)))))
+
+  (def length (lambda (list)
+                ((lambda (loop)
+                   (loop list 0 loop))
+                 (lambda (list counter loop)
+                   (if (nil? list)
+                       counter
+                       (loop (cdr list) (+ counter 1) loop))))))
+
+  (def append (lambda (&rest lists)
+                (if (= (length lists) 0)
+                    nil
+                    (if (= (length lists) 1)
+                        (car lists)
+                        (if (nil? (cdr (car lists)))
+                            (cons (car (car lists))
+                                  (apply append (cdr lists)))
+                            (cons (car (car lists))
+                                  (apply append (cons (cdr (car lists)) (cdr lists))))))))))
 
 (def Z (lambda (f)
          ((lambda (g) (g g)) (lambda (g)
