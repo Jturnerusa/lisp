@@ -931,4 +931,19 @@ mod tests {
             _ => panic!(),
         };
     }
+
+    #[test]
+    fn test_parse_only_rest_parameters() {
+        let input = "(&rest c)";
+        let context = reader::Context::new(input, "test_parse_parameters");
+        let mut reader = Reader::new(&context);
+        let sexpr = reader.next().unwrap().unwrap();
+        let list = sexpr.as_list().unwrap();
+        let parameters = parse_parameters(&sexpr, list).unwrap();
+
+        match parameters {
+            Parameters::Rest(params, rest) if params.is_empty() => (),
+            _ => panic!(),
+        };
+    }
 }
