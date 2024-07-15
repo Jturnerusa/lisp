@@ -37,6 +37,12 @@ enum Token {
     #[token(",@")]
     Splice,
 
+    #[token("true")]
+    True,
+
+    #[token("false")]
+    False,
+
     #[token("nil")]
     Nil,
 
@@ -283,16 +289,6 @@ fn read<'context>(
             Ok(sexpr) => sexpr,
             Err(_) => return Some(Err(Error::Lexer(lexer.remainder()))),
         },
-        Ok(Token::Symbol) if lexer.slice() == "t" => Sexpr::Bool {
-            bool: true,
-            context,
-            span: lexer.span(),
-        },
-        Ok(Token::Symbol) if lexer.slice() == "f" => Sexpr::Bool {
-            bool: false,
-            context,
-            span: lexer.span(),
-        },
         Ok(Token::Symbol) => Sexpr::Symbol {
             symbol: lexer.slice().to_string(),
             context,
@@ -310,6 +306,16 @@ fn read<'context>(
         },
         Ok(Token::Int) => Sexpr::Int {
             int: lexer.slice().parse().unwrap(),
+            context,
+            span: lexer.span(),
+        },
+        Ok(Token::True) => Sexpr::Bool {
+            bool: true,
+            context,
+            span: lexer.span(),
+        },
+        Ok(Token::False) => Sexpr::Bool {
+            bool: false,
             context,
             span: lexer.span(),
         },
@@ -349,16 +355,6 @@ fn read_list<'context>(
             }
             Some(Ok(Token::UnQuote)) => list.push(expand_macro(lexer, context, Macro::UnQuote)?),
             Some(Ok(Token::Splice)) => list.push(expand_macro(lexer, context, Macro::Splice)?),
-            Some(Ok(Token::Symbol)) if lexer.slice() == "t" => list.push(Sexpr::Bool {
-                bool: true,
-                context,
-                span: lexer.span(),
-            }),
-            Some(Ok(Token::Symbol)) if lexer.slice() == "f" => list.push(Sexpr::Bool {
-                bool: false,
-                context,
-                span: lexer.span(),
-            }),
             Some(Ok(Token::Symbol)) => list.push(Sexpr::Symbol {
                 symbol: lexer.slice().to_string(),
                 context,
@@ -379,7 +375,16 @@ fn read_list<'context>(
                 context,
                 span: lexer.span(),
             }),
-
+            Some(Ok(Token::True)) => list.push(Sexpr::Bool {
+                bool: true,
+                context,
+                span: lexer.span(),
+            }),
+            Some(Ok(Token::False)) => list.push(Sexpr::Bool {
+                bool: false,
+                context,
+                span: lexer.span(),
+            }),
             Some(Ok(Token::Nil)) => list.push(Sexpr::Nil {
                 context,
                 span: lexer.span(),
@@ -468,7 +473,7 @@ impl<'context> fmt::Debug for Sexpr<'context> {
 
         write!(
             f,
-            "{}:{}:\n{}",
+            "{}:{}: {}",
             self.context().display,
             line,
             &self.context().source[span]
