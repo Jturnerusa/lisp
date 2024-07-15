@@ -17,7 +17,7 @@ pub enum Error<'a> {
 }
 
 #[derive(Clone, Debug, Logos)]
-#[logos(skip r#"[\s\t\n]|[;][\s]*[\n]"#)]
+#[logos(skip r#"[\s\t\n]|;.*\n"#)]
 enum Token {
     #[token("(")]
     LeftParen,
