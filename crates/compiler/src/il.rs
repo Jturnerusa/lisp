@@ -430,7 +430,7 @@ impl Compiler {
             Ast::Cons(cons) => self.compile_cons(ast, cons, vm),
             Ast::Car(car) => self.compile_car(ast, car, vm),
             Ast::Cdr(cdr) => self.compile_cdr(ast, cdr, vm),
-            Ast::IsType(is_type) => todo!(),
+            Ast::IsType(is_type) => self.compile_is_type(ast, is_type, vm),
             Ast::Constant(constant) => self.compile_constant(ast, constant),
             Ast::Variable(variable) => self.compile_variable_reference(ast, variable),
             _ => todo!(),
