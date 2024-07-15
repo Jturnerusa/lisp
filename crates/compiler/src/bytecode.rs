@@ -36,6 +36,7 @@ pub fn compile<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
         Il::FnCall(fncall) => compile_fncall(fncall, opcodes),
         Il::ArithmeticOperation(op) => compile_arithmetic_operation(op, opcodes),
         Il::ComparisonOperation(op) => compile_comparison_operation(op, opcodes),
+        Il::IsType(is_type) => compile_is_type(is_type, opcodes),
         _ => todo!("{il:?}"),
     }
 }
@@ -261,6 +262,28 @@ fn compile_cdr<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
     compile(&cdr.body, opcodes)?;
 
     opcodes.push(OpCode::Cdr, cdr.source.source_sexpr());
+
+    Ok(())
+}
+
+fn compile_is_type<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
+    is_type: &'il il::IsType<'ast, 'sexpr, 'context>,
+    opcodes: &'opcodes mut OpCodeTable<&'sexpr Sexpr<'context>>,
+) -> Result<(), Error<'il, 'ast, 'sexpr, 'context>> {
+    compile(&is_type.body, opcodes)?;
+
+    let vm_type = match is_type.r#type {
+        il::Type::Function => vm::object::Type::Function,
+        il::Type::Symbol => vm::object::Type::Symbol,
+        il::Type::String => vm::object::Type::String,
+        il::Type::Char => vm::object::Type::Char,
+        il::Type::Int => vm::object::Type::Int,
+        il::Type::Bool => vm::object::Type::Bool,
+        il::Type::Nil => vm::object::Type::Nil,
+        _ => unreachable!(),
+    };
+
+    opcodes.push(OpCode::IsType(vm_type), is_type.source.source_sexpr());
 
     Ok(())
 }

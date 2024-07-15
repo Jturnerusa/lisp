@@ -56,6 +56,7 @@ pub enum Ast<'sexpr, 'context> {
     Cdr(Cdr<'sexpr, 'context>),
     FnCall(FnCall<'sexpr, 'context>),
     Quote(Quote<'sexpr, 'context>),
+    IsType(IsType<'sexpr, 'context>),
     Variable(Variable<'sexpr, 'context>),
     Constant(Constant<'sexpr, 'context>),
 }
@@ -227,6 +228,25 @@ pub struct Quote<'sexpr, 'context> {
 }
 
 #[derive(Clone, Debug)]
+pub enum IsTypeParameter {
+    Function,
+    Cons,
+    Symbol,
+    String,
+    Int,
+    Char,
+    Bool,
+    Nil,
+}
+
+#[derive(Clone, Debug)]
+pub struct IsType<'sexpr, 'context> {
+    pub source: &'sexpr Sexpr<'context>,
+    pub parameter: IsTypeParameter,
+    pub body: Box<Ast<'sexpr, 'context>>,
+}
+
+#[derive(Clone, Debug)]
 pub enum Quoted<'sexpr, 'context> {
     List {
         source: &'sexpr Sexpr<'context>,
@@ -329,6 +349,21 @@ impl<'sexpr, 'context> Ast<'sexpr, 'context> {
                     [Sexpr::Symbol { symbol, .. }, body] if symbol == "quote" => {
                         Ast::Quote(Quote::from_sexpr(sexpr, body)?)
                     }
+                    [type_assersion @ Sexpr::Symbol { symbol, .. }, body]
+                        if matches!(
+                            symbol.as_str(),
+                            "function?"
+                                | "cons?"
+                                | "symbol?"
+                                | "string?"
+                                | "char?"
+                                | "int?"
+                                | "bool?"
+                                | "nil?"
+                        ) =>
+                    {
+                        Ast::IsType(IsType::from_sexpr(sexpr, type_assersion, body)?)
+                    }
                     _ => {
                         return Err(Error {
                             sexpr,
@@ -388,6 +423,7 @@ impl<'sexpr, 'context> Ast<'sexpr, 'context> {
             | Self::Cdr(Cdr { source, .. })
             | Self::FnCall(FnCall { source, .. })
             | Self::Quote(Quote { source, .. })
+            | Self::IsType(IsType { source, .. })
             | Self::Variable(Variable { source, .. })
             | Self::Constant(Constant::String { source, .. })
             | Self::Constant(Constant::Char { source, .. })
@@ -802,6 +838,41 @@ impl<'sexpr, 'context> Quote<'sexpr, 'context> {
                 },
                 Sexpr::Nil { .. } => Quoted::Nil { source },
             },
+        })
+    }
+}
+
+impl<'sexpr, 'context> IsType<'sexpr, 'context> {
+    pub fn from_sexpr(
+        source: &'sexpr Sexpr<'context>,
+        type_assertion: &'sexpr Sexpr<'context>,
+        body: &'sexpr Sexpr<'context>,
+    ) -> Result<Self, Error<'sexpr, 'context>> {
+        Ok(Self {
+            source,
+            parameter: match type_assertion {
+                Sexpr::Symbol { symbol, .. } if symbol == "function" => IsTypeParameter::Function,
+                Sexpr::Symbol { symbol, .. } if symbol == "cons?" => IsTypeParameter::Cons,
+                Sexpr::Symbol { symbol, .. } if symbol == "symbol?" => IsTypeParameter::Symbol,
+                Sexpr::Symbol { symbol, .. } if symbol == "string?" => IsTypeParameter::String,
+                Sexpr::Symbol { symbol, .. } if symbol == "char?" => IsTypeParameter::Char,
+                Sexpr::Symbol { symbol, .. } if symbol == "int?" => IsTypeParameter::Int,
+                Sexpr::Symbol { symbol, .. } if symbol == "bool?" => IsTypeParameter::Bool,
+                Sexpr::Symbol { symbol, .. } if symbol == "nil?" => IsTypeParameter::Nil,
+                Sexpr::Symbol { symbol, .. } => {
+                    return Err(Error {
+                        sexpr: source,
+                        message: format!("unknown type assersion: {symbol}"),
+                    })
+                }
+                _ => {
+                    return Err(Error {
+                        sexpr: source,
+                        message: "expected symbol".to_string(),
+                    })
+                }
+            },
+            body: Box::new(Ast::from_sexpr(body)?),
         })
     }
 }

@@ -63,6 +63,7 @@ pub enum Il<'ast, 'sexpr, 'context> {
     MapCreate(MapCreate<'ast, 'sexpr, 'context>),
     MapInsert(MapInsert<'ast, 'sexpr, 'context>),
     MapRetrieve(MapRetrieve<'ast, 'sexpr, 'context>),
+    IsType(IsType<'ast, 'sexpr, 'context>),
     VarRef(VarRef<'ast, 'sexpr, 'context>),
     Constant(Constant<'ast, 'sexpr, 'context>),
 }
@@ -250,6 +251,13 @@ pub struct MapRetrieve<'ast, 'sexpr, 'context> {
     pub key: Box<Il<'ast, 'sexpr, 'context>>,
 }
 
+#[derive(Clone, Debug)]
+pub struct IsType<'ast, 'sexpr, 'context> {
+    pub source: &'ast Ast<'sexpr, 'context>,
+    pub r#type: Type,
+    pub body: Box<Il<'ast, 'sexpr, 'context>>,
+}
+
 pub struct Compiler {
     environment: Environment,
     macros: HashSet<String>,
@@ -296,6 +304,7 @@ impl<'ast, 'sexpr, 'context> Il<'ast, 'sexpr, 'context> {
             | Self::MapCreate(MapCreate { source, .. })
             | Self::MapInsert(MapInsert { source, .. })
             | Self::MapRetrieve(MapRetrieve { source, .. })
+            | Self::IsType(IsType { source, .. })
             | Self::VarRef(VarRef::Local { source, .. })
             | Self::VarRef(VarRef::UpValue { source, .. })
             | Self::VarRef(VarRef::Global { source, .. })
@@ -421,6 +430,7 @@ impl Compiler {
             Ast::Cons(cons) => self.compile_cons(ast, cons, vm),
             Ast::Car(car) => self.compile_car(ast, car, vm),
             Ast::Cdr(cdr) => self.compile_cdr(ast, cdr, vm),
+            Ast::IsType(is_type) => todo!(),
             Ast::Constant(constant) => self.compile_constant(ast, constant),
             Ast::Variable(variable) => self.compile_variable_reference(ast, variable),
             _ => todo!(),
@@ -903,6 +913,28 @@ impl Compiler {
         Ok(Il::Cdr(Cdr {
             source,
             body: Box::new(self.compile(&cdr.body, vm)?),
+        }))
+    }
+
+    fn compile_is_type<'ast: 'static, 'sexpr, 'context>(
+        &mut self,
+        source: &'ast Ast<'sexpr, 'context>,
+        is_type: &'ast ast::IsType<'sexpr, 'context>,
+        vm: &mut Vm<&'sexpr Sexpr<'context>>,
+    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
+        Ok(Il::IsType(IsType {
+            source,
+            r#type: match is_type.parameter {
+                ast::IsTypeParameter::Function => Type::Function,
+                ast::IsTypeParameter::Cons => Type::Cons,
+                ast::IsTypeParameter::Symbol => Type::Symbol,
+                ast::IsTypeParameter::String => Type::String,
+                ast::IsTypeParameter::Char => Type::Char,
+                ast::IsTypeParameter::Int => Type::Int,
+                ast::IsTypeParameter::Bool => Type::Bool,
+                ast::IsTypeParameter::Nil => Type::Nil,
+            },
+            body: Box::new(self.compile(&is_type.body, vm)?),
         }))
     }
 }
