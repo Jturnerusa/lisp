@@ -35,6 +35,7 @@ pub fn compile<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
         Il::List(list) => compile_list(list, opcodes),
         Il::FnCall(fncall) => compile_fncall(fncall, opcodes),
         Il::ArithmeticOperation(op) => compile_arithmetic_operation(op, opcodes),
+        Il::ComparisonOperation(op) => compile_comparison_operation(op, opcodes),
         _ => todo!("{il:?}"),
     }
 }
@@ -175,6 +176,25 @@ fn compile_arithmetic_operation<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 
             il::ArithmeticOperator::Div => OpCode::Div,
         },
         arithmetic_op.source.source_sexpr(),
+    );
+
+    Ok(())
+}
+
+fn compile_comparison_operation<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
+    comparison_op: &'il il::ComparisonOperation<'ast, 'sexpr, 'context>,
+    opcodes: &'opcodes mut OpCodeTable<&'sexpr Sexpr<'context>>,
+) -> Result<(), Error<'il, 'ast, 'sexpr, 'context>> {
+    compile(&comparison_op.lhs, opcodes)?;
+    compile(&comparison_op.rhs, opcodes)?;
+
+    opcodes.push(
+        match comparison_op.operator {
+            il::ComparisonOperator::Eq => OpCode::Eq,
+            il::ComparisonOperator::Lt => OpCode::Lt,
+            il::ComparisonOperator::Gt => OpCode::Gt,
+        },
+        comparison_op.source.source_sexpr(),
     );
 
     Ok(())

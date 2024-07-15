@@ -262,21 +262,30 @@ fn test_eq() {
 #[test]
 fn test_not_lt() {
     let input = "(< 1 0)";
-    assert!(matches!(eval(input).unwrap().unwrap(), vm::Object::Nil));
+    assert!(matches!(
+        eval(input).unwrap().unwrap(),
+        vm::Object::Bool(false)
+    ));
     gc::collect();
 }
 
 #[test]
 fn test_not_gt() {
     let input = "(> 1 2)";
-    assert!(matches!(eval(input).unwrap().unwrap(), vm::Object::Nil));
+    assert!(matches!(
+        eval(input).unwrap().unwrap(),
+        vm::Object::Bool(false)
+    ));
     gc::collect();
 }
 
 #[test]
 fn test_not_eq() {
     let input = "(= 1 2)";
-    assert!(matches!(eval(input).unwrap().unwrap(), vm::Object::Nil));
+    assert!(matches!(
+        eval(input).unwrap().unwrap(),
+        vm::Object::Bool(false)
+    ));
     gc::collect();
 }
 
