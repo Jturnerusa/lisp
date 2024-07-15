@@ -102,7 +102,7 @@
   (if (nil? bindings)
       (list (cons 'lambda (cons '() body)))
       (cons (list 'lambda (list (caar bindings))
-                  (apply let* (cons (cdr bindings) body)))
+                  (cons 'let* (cons (cdr bindings) body)))
             (cdar bindings))))
 
 (defmacro cond (&rest clauses)
