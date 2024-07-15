@@ -909,3 +909,26 @@ fn quote_list<'sexpr, 'context>(
             .collect(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+
+    use reader::Reader;
+
+    use super::*;
+
+    #[test]
+    fn test_parse_parameters() {
+        let input = "(a b &rest c)";
+        let context = reader::Context::new(input, "test_parse_parameters");
+        let mut reader = Reader::new(&context);
+        let sexpr = reader.next().unwrap().unwrap();
+        let list = sexpr.as_list().unwrap();
+        let parameters = parse_parameters(&sexpr, list).unwrap();
+
+        match parameters {
+            Parameters::Rest(..) => (),
+            _ => panic!(),
+        };
+    }
+}
