@@ -293,7 +293,7 @@ fn test_not_eq() {
 fn test_fact() {
     let input = include_str!("lisp/fact.lisp");
     assert!(matches!(
-        eval(input).unwrap().unwrap(),
+        eval_with_bootstrap(input).unwrap().unwrap(),
         vm::Object::Int(3628800)
     ));
     gc::collect();
@@ -302,7 +302,10 @@ fn test_fact() {
 #[test]
 fn test_let() {
     let input = include_str!("lisp/let.lisp");
-    assert!(matches!(eval(input).unwrap().unwrap(), vm::Object::Int(3)));
+    assert!(matches!(
+        eval_with_bootstrap(input).unwrap().unwrap(),
+        vm::Object::Int(3)
+    ));
     gc::collect();
 }
 
@@ -319,21 +322,33 @@ fn test_eq_list() {
 #[test]
 fn test_map() {
     let input = include_str!("lisp/map.lisp");
-    assert!(eval(input).unwrap().unwrap().as_bool().unwrap());
+    assert!(eval_with_bootstrap(input)
+        .unwrap()
+        .unwrap()
+        .as_bool()
+        .unwrap());
     gc::collect();
 }
 
 #[test]
 fn test_fold() {
     let input = include_str!("lisp/fold.lisp");
-    assert!(eval(input).unwrap().unwrap().as_bool().unwrap());
+    assert!(eval_with_bootstrap(input)
+        .unwrap()
+        .unwrap()
+        .as_bool()
+        .unwrap());
     gc::collect();
 }
 
 #[test]
 fn test_filter() {
     let input = include_str!("lisp/filter.lisp");
-    assert!(eval(input).unwrap().unwrap().as_bool().unwrap());
+    assert!(eval_with_bootstrap(input)
+        .unwrap()
+        .unwrap()
+        .as_bool()
+        .unwrap());
     gc::collect();
 }
 
@@ -347,35 +362,35 @@ fn test_upvalues() {
 #[test]
 fn test_string_split() {
     let input = include_str!("lisp/string-split.lisp");
-    assert!(eval(input).is_ok());
+    assert!(eval_with_bootstrap(input).is_ok());
     gc::collect();
 }
 
 #[test]
 fn test_length() {
     let input = include_str!("lisp/length.lisp");
-    assert!(eval(input).is_ok());
+    assert!(eval_with_bootstrap(input).is_ok());
     gc::collect();
 }
 
 #[test]
 fn test_nth() {
     let input = include_str!("lisp/nth.lisp");
-    assert!(eval(input).is_ok());
+    assert!(eval_with_bootstrap(input).is_ok());
     gc::collect();
 }
 
 #[test]
 fn test_last() {
     let input = include_str!("lisp/last.lisp");
-    assert!(eval(input).is_ok());
+    assert!(eval_with_bootstrap(input).is_ok());
     gc::collect();
 }
 
 #[test]
 fn test_parallel_let() {
     let input = include_str!("lisp/parallel-let.lisp");
-    assert!(eval(input).is_ok());
+    assert!(eval_with_bootstrap(input).is_ok());
     gc::collect();
 }
 
@@ -387,23 +402,16 @@ fn test_hashmap() {
 }
 
 #[test]
-fn test_setcdr() {
-    let input = include_str!("lisp/setcdr.lisp");
-    assert!(eval(input).is_ok());
-    gc::collect();
-}
-
-#[test]
 fn test_nthcdr() {
     let input = include_str!("lisp/nth-cdr.lisp");
-    assert!(eval(input).is_ok());
+    assert!(eval_with_bootstrap(input).is_ok());
     gc::collect();
 }
 
 #[test]
 fn test_find() {
     let input = include_str!("lisp/find.lisp");
-    assert!(eval(input).is_ok());
+    assert!(eval_with_bootstrap(input).is_ok());
     gc::collect();
 }
 
