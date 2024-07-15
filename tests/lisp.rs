@@ -41,11 +41,12 @@ fn disasm<D: fmt::Debug>(opcode_table: &OpCodeTable<D>, depth: usize) {
 
 fn compile(
     input: &str,
+    context: &str,
     il_compiler: &mut il::Compiler,
     opcode_table: &mut OpCodeTable<&'static Sexpr>,
     vm: &mut Vm<&Sexpr>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let context: &'static reader::Context = leak!(reader::Context::new(input, "test input"));
+    let context: &'static reader::Context = leak!(reader::Context::new(input, context));
     let reader = Reader::new(context);
 
     for sexpr in reader {
@@ -70,6 +71,7 @@ fn eval_with_bootstrap(
 
     compile(
         BOOTSTRAP_SOURCE,
+        "bootstrap.lisp",
         &mut il_compiler,
         &mut opcode_table,
         &mut vm,
@@ -77,12 +79,19 @@ fn eval_with_bootstrap(
 
     compile(
         LIST_UTILS_SOURCE,
+        "list.lisp",
         &mut il_compiler,
         &mut opcode_table,
         &mut vm,
     )?;
 
-    compile(input, &mut il_compiler, &mut opcode_table, &mut vm)?;
+    compile(
+        input,
+        "test input",
+        &mut il_compiler,
+        &mut opcode_table,
+        &mut vm,
+    )?;
 
     match vm.eval(&opcode_table) {
         Ok(_) => Ok(vm.pop().map(|local| local.into_object())),
@@ -98,7 +107,13 @@ fn eval(input: &'static str) -> Result<Option<vm::Object<&Sexpr>>, Box<dyn std::
     let mut opcode_table = OpCodeTable::new();
     let mut vm = Vm::new();
 
-    compile(input, &mut il_compiler, &mut opcode_table, &mut vm)?;
+    compile(
+        input,
+        "test input",
+        &mut il_compiler,
+        &mut opcode_table,
+        &mut vm,
+    )?;
 
     match vm.eval(&opcode_table) {
         Ok(_) => Ok(vm.pop().map(|local| local.into_object())),
