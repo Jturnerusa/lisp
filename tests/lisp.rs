@@ -14,7 +14,7 @@ macro_rules! deftest {
         #[test]
         fn $name() {
             let input = include_str!($input);
-            assert!(eval_with_bootstrap(input).is_ok());
+            eval_with_bootstrap(input).unwrap();
             gc::collect();
         }
     };
