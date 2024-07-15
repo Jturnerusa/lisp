@@ -136,7 +136,7 @@
                               (cadr expr))
                              ((cons? expr)
                               (list 'list (list 'quasiquote expr)))
-                             (t
+                             (true
                               (list 'list (list 'quote expr)))))
                      exprs)))
 
