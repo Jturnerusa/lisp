@@ -30,6 +30,12 @@ pub enum Error<'ast, 'sexpr, 'context> {
 
     #[error("vm error: {0}")]
     Vm(#[from] vm::Error),
+
+    #[error("vm error: {sexpr}")]
+    VmWithDebug {
+        error: vm::Error,
+        sexpr: &'sexpr Sexpr<'context>,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -532,9 +538,10 @@ impl Compiler {
 
         bytecode::compile(lambda, &mut opcodes)?;
 
-        vm.eval(&opcodes).map_err(|(e, _)| e)?;
+        vm.eval(&opcodes)
+            .map_err(|(error, sexpr)| Error::VmWithDebug { error, sexpr })?;
 
-        vm.def_global(&defmacro.name.as_str())?;
+        vm.def_global(defmacro.name.as_str())?;
 
         self.macros.insert(defmacro.name.clone());
 
@@ -548,6 +555,8 @@ impl Compiler {
         fncall: &'ast ast::FnCall<'sexpr, 'context>,
         vm: &'vm mut Vm<&'sexpr Sexpr<'context>>,
     ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
+        dbg!(fncall);
+
         let args = fncall
             .exprs
             .iter()
@@ -563,9 +572,14 @@ impl Compiler {
         }
 
         vm.get_global(r#macro)?;
-        vm.eval(&opcode_table).map_err(|(e, _)| e)?;
+
+        vm.eval(&opcode_table)
+            .map_err(|(error, sexpr)| Error::VmWithDebug { error, sexpr })?;
+
         vm.call(args.len())?;
-        vm.eval(&OpCodeTable::new()).map_err(|(e, _)| e)?;
+
+        vm.eval(&OpCodeTable::new())
+            .map_err(|(error, sexpr)| Error::VmWithDebug { error, sexpr })?;
 
         let Some(object) = vm.pop().map(|local| local.into_object()) else {
             return Ok(Il::Constant(Constant::Nil { source }));
