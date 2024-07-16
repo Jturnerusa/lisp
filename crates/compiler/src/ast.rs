@@ -32,6 +32,7 @@ static BUILT_INS: &[&str] = &[
     "=",
     ">",
     "<",
+    "assert",
 ];
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -66,6 +67,7 @@ pub enum Ast<'sexpr, 'context> {
     IsType(IsType<'sexpr, 'context>),
     Variable(Variable<'sexpr, 'context>),
     Constant(Constant<'sexpr, 'context>),
+    Assert(Assert<'sexpr, 'context>),
 }
 
 #[derive(Clone, Debug)]
@@ -261,6 +263,12 @@ pub struct IsType<'sexpr, 'context> {
 }
 
 #[derive(Clone, Debug)]
+pub struct Assert<'sexpr, 'context> {
+    pub source: &'sexpr Sexpr<'context>,
+    pub body: Box<Ast<'sexpr, 'context>>,
+}
+
+#[derive(Clone, Debug)]
 pub enum Quoted<'sexpr, 'context> {
     List {
         source: &'sexpr Sexpr<'context>,
@@ -378,6 +386,9 @@ impl Compiler {
                     }
                     [Symbol { symbol, .. }, body] if symbol == "quote" => {
                         self.compile_quote(sexpr, body)?
+                    }
+                    [Symbol { symbol, .. }, body] if symbol == "assert" => {
+                        self.compile_assert(sexpr, body)?
                     }
                     _ => {
                         return Err(Error {
@@ -729,6 +740,17 @@ impl Compiler {
             body: Box::new(self.compile(body)?),
         }))
     }
+
+    fn compile_assert<'sexpr, 'context>(
+        &mut self,
+        source: &'sexpr Sexpr<'context>,
+        body: &'sexpr Sexpr<'context>,
+    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        Ok(Ast::Assert(Assert {
+            source,
+            body: Box::new(self.compile(body)?),
+        }))
+    }
 }
 
 impl<'sexpr, 'context> fmt::Display for Error<'sexpr, 'context> {
@@ -757,6 +779,7 @@ impl<'sexpr, 'context> Ast<'sexpr, 'context> {
             | Self::MacroCall(MacroCall { source, .. })
             | Self::Quote(Quote { source, .. })
             | Self::IsType(IsType { source, .. })
+            | Self::Assert(Assert { source, .. })
             | Self::Variable(Variable { source, .. })
             | Self::Constant(Constant::String { source, .. })
             | Self::Constant(Constant::Char { source, .. })

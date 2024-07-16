@@ -38,6 +38,7 @@ pub fn compile<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
         Il::ComparisonOperation(op) => compile_comparison_operation(op, opcodes),
         Il::IsType(is_type) => compile_is_type(is_type, opcodes),
         Il::Apply(apply) => compile_apply(apply, opcodes),
+        Il::Assert(assert) => compile_assert(assert, opcodes),
         _ => todo!("{il:?}"),
     }
 }
@@ -299,6 +300,17 @@ fn compile_apply<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
     }
 
     opcodes.push(OpCode::Apply, apply.source.source_sexpr());
+
+    Ok(())
+}
+
+fn compile_assert<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
+    assert: &'il il::Assert<'ast, 'sexpr, 'context>,
+    opcodes: &'opcodes mut OpCodeTable<&'sexpr Sexpr<'context>>,
+) -> Result<(), Error<'il, 'ast, 'sexpr, 'context>> {
+    compile(&assert.body, opcodes)?;
+
+    opcodes.push(OpCode::Assert, assert.source.source_sexpr());
 
     Ok(())
 }

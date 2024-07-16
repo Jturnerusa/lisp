@@ -67,6 +67,7 @@ pub enum Il<'ast, 'sexpr, 'context> {
     MapInsert(MapInsert<'ast, 'sexpr, 'context>),
     MapRetrieve(MapRetrieve<'ast, 'sexpr, 'context>),
     IsType(IsType<'ast, 'sexpr, 'context>),
+    Assert(Assert<'ast, 'sexpr, 'context>),
     VarRef(VarRef<'ast, 'sexpr, 'context>),
     Constant(Constant<'ast, 'sexpr, 'context>),
 }
@@ -261,6 +262,12 @@ pub struct IsType<'ast, 'sexpr, 'context> {
     pub body: Box<Il<'ast, 'sexpr, 'context>>,
 }
 
+#[derive(Clone, Debug)]
+pub struct Assert<'ast, 'sexpr, 'context> {
+    pub source: &'ast Ast<'sexpr, 'context>,
+    pub body: Box<Il<'ast, 'sexpr, 'context>>,
+}
+
 pub struct Compiler {
     environment: Environment,
 }
@@ -307,6 +314,7 @@ impl<'ast, 'sexpr, 'context> Il<'ast, 'sexpr, 'context> {
             | Self::MapInsert(MapInsert { source, .. })
             | Self::MapRetrieve(MapRetrieve { source, .. })
             | Self::IsType(IsType { source, .. })
+            | Self::Assert(Assert { source, .. })
             | Self::VarRef(VarRef::Local { source, .. })
             | Self::VarRef(VarRef::UpValue { source, .. })
             | Self::VarRef(VarRef::Global { source, .. })
@@ -428,6 +436,7 @@ impl Compiler {
             Ast::Car(car) => self.compile_car(ast, car, vm, ast_compiler),
             Ast::Cdr(cdr) => self.compile_cdr(ast, cdr, vm, ast_compiler),
             Ast::IsType(is_type) => self.compile_is_type(ast, is_type, vm, ast_compiler),
+            Ast::Assert(assert) => self.compile_assert(ast, assert, vm, ast_compiler),
             Ast::Constant(constant) => self.compile_constant(ast, constant),
             Ast::Variable(variable) => self.compile_variable_reference(ast, variable),
         }
@@ -961,6 +970,19 @@ impl Compiler {
                 ast::IsTypeParameter::Nil => Type::Nil,
             },
             body: Box::new(self.compile(&is_type.body, vm, ast_compiler)?),
+        }))
+    }
+
+    fn compile_assert<'ast: 'static, 'sexpr, 'context>(
+        &mut self,
+        source: &'ast Ast<'sexpr, 'context>,
+        assert: &'ast ast::Assert<'sexpr, 'context>,
+        vm: &mut Vm<&'sexpr Sexpr<'context>>,
+        ast_compiler: &mut ast::Compiler,
+    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
+        Ok(Il::Assert(Assert {
+            source,
+            body: Box::new(self.compile(&assert.body, vm, ast_compiler)?),
         }))
     }
 }
