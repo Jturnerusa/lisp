@@ -4,7 +4,6 @@ members = [ "crates/gc","lib/native"]
 [workspace.dependencies]
 micro-nom = { path = "../micro-nom" }
 unwrap-enum = { path = "../unwrap-enum" }
-twox-hash = "=1.6.3"
 
 [package]
 name = "lisp"
@@ -16,6 +15,5 @@ value = { path = "crates/value" }
 reader = { path = "crates/reader" }
 compiler = { path = "crates/compiler" }
 vm = { path = "crates/vm" }
-identity-hasher = { path = "crates/identity-hasher" }
 native-functions = { path = "lib/native" }
 gc = { path = "crates/gc" }

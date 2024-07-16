@@ -1,11 +1,5 @@
+use compiler::{ast, bytecode, il};
 use core::fmt;
-
-use compiler::{
-    ast::{self, Ast},
-    bytecode,
-    il::{self, Il},
-};
-use identity_hasher::{IdentityHasher, IdentityMap};
 use reader::{Reader, Sexpr};
 use vm::{OpCode, OpCodeTable, Vm};
 

@@ -6,9 +6,7 @@ edition = "2021"
 [dependencies]
 reader = { path = "../reader" }
 vm = { path = "../vm" }
-identity-hasher = { path = "../identity-hasher" }
 gc = { path = "../gc" }
 unwrap-enum = { workspace = true }
-twox-hash = { workspace = true }
 micro-nom = { workspace = true }
 thiserror = "1.0.61"
