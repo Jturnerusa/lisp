@@ -1,4 +1,5 @@
 use core::fmt;
+use std::collections::HashSet;
 
 use reader::Sexpr;
 use unwrap_enum::{EnumAs, EnumIs};
@@ -39,6 +40,11 @@ pub struct Error<'sexpr, 'context> {
     message: String,
 }
 
+#[derive(Clone, Debug)]
+pub struct Compiler {
+    macros: HashSet<String>,
+}
+
 #[derive(Clone, Debug, EnumAs, EnumIs)]
 pub enum Ast<'sexpr, 'context> {
     EvalWhenCompile(EvalWhenCompile<'sexpr, 'context>),
@@ -55,6 +61,7 @@ pub enum Ast<'sexpr, 'context> {
     Car(Car<'sexpr, 'context>),
     Cdr(Cdr<'sexpr, 'context>),
     FnCall(FnCall<'sexpr, 'context>),
+    MacroCall(MacroCall<'sexpr, 'context>),
     Quote(Quote<'sexpr, 'context>),
     IsType(IsType<'sexpr, 'context>),
     Variable(Variable<'sexpr, 'context>),
@@ -222,6 +229,13 @@ pub struct FnCall<'sexpr, 'context> {
 }
 
 #[derive(Clone, Debug)]
+pub struct MacroCall<'sexpr, 'context> {
+    pub source: &'sexpr Sexpr<'context>,
+    pub r#macro: String,
+    pub args: Vec<Quoted<'sexpr, 'context>>,
+}
+
+#[derive(Clone, Debug)]
 pub struct Quote<'sexpr, 'context> {
     pub source: &'sexpr Sexpr<'context>,
     pub body: Quoted<'sexpr, 'context>,
@@ -277,79 +291,77 @@ pub enum Quoted<'sexpr, 'context> {
     },
 }
 
-impl<'sexpr, 'context> fmt::Display for Error<'sexpr, 'context> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "error: {}\n{}", self.message, self.sexpr)
+impl Compiler {
+    pub fn new() -> Self {
+        Self {
+            macros: HashSet::new(),
+        }
     }
-}
 
-impl<'sexpr, 'context> Ast<'sexpr, 'context> {
-    pub fn from_sexpr(sexpr: &'sexpr Sexpr<'context>) -> Result<Self, Error<'sexpr, 'context>> {
-        Ok(
-            if let Sexpr::List { list, .. } = sexpr
-                && let Some(Sexpr::Symbol { symbol, .. }) = list.first()
-                && BUILT_INS.iter().any(|b| b == symbol)
+    pub fn compile<'sexpr, 'context>(
+        &mut self,
+        sexpr: &'sexpr Sexpr<'context>,
+    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        use Sexpr::*;
+        Ok(match sexpr {
+            Sexpr::List { list, .. }
+                if list
+                    .first()
+                    .and_then(|first| first.as_symbol())
+                    .is_some_and(|symbol| BUILT_INS.iter().any(|b| symbol == *b)) =>
             {
                 match list.as_slice() {
-                    [Sexpr::Symbol { symbol, .. }, rest @ ..] if symbol == "eval-when-compile" => {
-                        Ast::EvalWhenCompile(EvalWhenCompile::from_sexpr(sexpr, rest)?)
+                    [Symbol { symbol, .. }, rest @ ..] if symbol == "eval-when-compile" => {
+                        self.compile_eval_when_compile(sexpr, rest)?
                     }
-
-                    [Sexpr::Symbol { symbol, .. }, name, parameters, rest @ ..]
+                    [Symbol { symbol, .. }, Symbol { symbol: name, .. }, parameters, rest @ ..]
                         if symbol == "defmacro" =>
                     {
-                        Ast::DefMacro(DefMacro::from_sexpr(sexpr, name, parameters, rest)?)
+                        self.compile_defmacro(sexpr, name, parameters, rest)?
                     }
-                    [Sexpr::Symbol { symbol, .. }, parameters, rest @ ..] if symbol == "lambda" => {
-                        Ast::Lambda(Lambda::from_sexpr(sexpr, parameters, None, rest)?)
-                    }
-                    [Sexpr::Symbol { symbol, .. }, parameters, Sexpr::Symbol { symbol: arrow, .. }, r#type, rest @ ..]
+                    [Symbol { symbol, .. }, parameters, _, Symbol { symbol: arrow, .. }, r#type, rest @ ..]
                         if symbol == "lambda" && arrow == "->" =>
                     {
-                        Ast::Lambda(Lambda::from_sexpr(sexpr, parameters, Some(r#type), rest)?)
+                        self.compile_lambda(sexpr, parameters, Some(r#type), rest)?
                     }
-                    [Sexpr::Symbol { symbol, .. }, parameter, body] if symbol == "def" => {
-                        Ast::Def(Def::from_sexpr(sexpr, parameter, body)?)
+                    [Symbol { symbol, .. }, parameters, rest @ ..] if symbol == "lambda" => {
+                        self.compile_lambda(sexpr, parameters, None, rest)?
                     }
-                    [Sexpr::Symbol { symbol, .. }, parameter, body] if symbol == "set!" => {
-                        Ast::Set(Set::from_sexpr(sexpr, parameter, body)?)
+                    [Symbol { symbol, .. }, parameter, body] if symbol == "def" => {
+                        self.compile_def(sexpr, parameter, body)?
                     }
-                    [Sexpr::Symbol { symbol, .. }, predicate, then, r#else] if symbol == "if" => {
-                        Ast::If(If::from_sexpr(sexpr, predicate, then, r#else)?)
+                    [Symbol { symbol, .. }, parameter, body] if symbol == "set!" => {
+                        self.compile_set(sexpr, parameter, body)?
                     }
-                    [Sexpr::Symbol { symbol, .. }, rest @ ..] if symbol == "apply" => {
-                        Ast::Apply(Apply::from_sexpr(sexpr, rest)?)
+                    [Symbol { symbol, .. }, predicate, then, r#else] if symbol == "if" => {
+                        self.compile_if(sexpr, predicate, then, r#else)?
                     }
-                    [operator @ Sexpr::Symbol { symbol, .. }, lhs, rhs]
+                    [Symbol { symbol, .. }, rest @ ..] if symbol == "apply" => {
+                        self.compile_apply(sexpr, rest)?
+                    }
+                    [Symbol { symbol, .. }, lhs, rhs]
                         if matches!(symbol.as_str(), "+" | "-" | "*" | "/") =>
                     {
-                        Ast::BinaryArithemticOperation(BinaryArithmeticOperation::from_sexpr(
-                            sexpr, operator, lhs, rhs,
-                        )?)
+                        self.compile_binary_arithmetic_op(sexpr, symbol, lhs, rhs)?
                     }
-                    [operator @ Sexpr::Symbol { symbol, .. }, lhs, rhs]
-                        if matches!(symbol.as_str(), "=" | ">" | "<") =>
+                    [Symbol { symbol, .. }, lhs, rhs]
+                        if matches!(symbol.as_str(), "=" | "<" | ">") =>
                     {
-                        Ast::ComparisonOperation(ComparisonOperation::from_sexpr(
-                            sexpr, operator, lhs, rhs,
-                        )?)
+                        self.compile_comparison_op(sexpr, symbol, lhs, rhs)?
                     }
-                    [Sexpr::Symbol { symbol, .. }, rest @ ..] if symbol == "list" => {
-                        Ast::List(List::from_sexpr(sexpr, rest)?)
+                    [Symbol { symbol, .. }, rest @ ..] if symbol == "list" => {
+                        self.compile_list(sexpr, rest)?
                     }
-                    [Sexpr::Symbol { symbol, .. }, lhs, rhs] if symbol == "cons" => {
-                        Ast::Cons(Cons::from_sexpr(sexpr, lhs, rhs)?)
+                    [Symbol { symbol, .. }, lhs, rhs] if symbol == "cons" => {
+                        self.compile_cons(sexpr, lhs, rhs)?
                     }
-                    [Sexpr::Symbol { symbol, .. }, body] if symbol == "car" => {
-                        Ast::Car(Car::from_sexpr(sexpr, body)?)
+                    [Symbol { symbol, .. }, body] if symbol == "car" => {
+                        self.compile_car(sexpr, body)?
                     }
-                    [Sexpr::Symbol { symbol, .. }, body] if symbol == "cdr" => {
-                        Ast::Cdr(Cdr::from_sexpr(sexpr, body)?)
+                    [Symbol { symbol, .. }, body] if symbol == "cdr" => {
+                        self.compile_cdr(sexpr, body)?
                     }
-                    [Sexpr::Symbol { symbol, .. }, body] if symbol == "quote" => {
-                        Ast::Quote(Quote::from_sexpr(sexpr, body)?)
-                    }
-                    [type_assersion @ Sexpr::Symbol { symbol, .. }, body]
+                    [Symbol { symbol, .. }, body]
                         if matches!(
                             symbol.as_str(),
                             "function?"
@@ -362,7 +374,10 @@ impl<'sexpr, 'context> Ast<'sexpr, 'context> {
                                 | "nil?"
                         ) =>
                     {
-                        Ast::IsType(IsType::from_sexpr(sexpr, type_assersion, body)?)
+                        self.compile_is_type(sexpr, symbol, body)?
+                    }
+                    [Symbol { symbol, .. }, body] if symbol == "quote" => {
+                        self.compile_quote(sexpr, body)?
                     }
                     _ => {
                         return Err(Error {
@@ -371,41 +386,358 @@ impl<'sexpr, 'context> Ast<'sexpr, 'context> {
                         })
                     }
                 }
-            } else if let Sexpr::List { list, .. } = sexpr {
-                Ast::FnCall(FnCall::from_sexpr(sexpr, list.as_slice())?)
-            } else if let Sexpr::Symbol { symbol, .. } = sexpr {
-                Ast::Variable(Variable {
-                    source: sexpr,
-                    name: symbol.clone(),
-                })
-            } else if let Sexpr::String { string, .. } = sexpr {
-                Ast::Constant(Constant::String {
-                    source: sexpr,
-                    string: string.clone(),
-                })
-            } else if let Sexpr::Char { char, .. } = sexpr {
-                Ast::Constant(Constant::Char {
-                    source: sexpr,
-                    char: *char,
-                })
-            } else if let Sexpr::Int { int, .. } = sexpr {
-                Ast::Constant(Constant::Int {
-                    source: sexpr,
-                    int: *int,
-                })
-            } else if let Sexpr::Bool { bool, .. } = sexpr {
-                Ast::Constant(Constant::Bool {
-                    source: sexpr,
-                    bool: *bool,
-                })
-            } else if let Sexpr::Nil { .. } = sexpr {
-                Ast::Constant(Constant::Nil { source: sexpr })
-            } else {
-                todo!()
-            },
-        )
+            }
+            List { list, .. }
+                if list
+                    .first()
+                    .and_then(|first| first.as_symbol())
+                    .is_some_and(|symbol| self.macros.contains(symbol)) =>
+            {
+                self.compile_macro_call(
+                    sexpr,
+                    list.first().unwrap().as_symbol().unwrap(),
+                    &list.as_slice()[1..],
+                )?
+            }
+            List { list, .. } if !list.is_empty() => {
+                self.compile_fncall(sexpr, list.first().unwrap(), &list.as_slice()[1..])?
+            }
+            Symbol { symbol, .. } => Ast::Variable(Variable {
+                source: sexpr,
+                name: symbol.to_string(),
+            }),
+            String { string, .. } => Ast::Constant(Constant::String {
+                source: sexpr,
+                string: string.clone(),
+            }),
+            Char { char, .. } => Ast::Constant(Constant::Char {
+                source: sexpr,
+                char: *char,
+            }),
+            Int { int, .. } => Ast::Constant(Constant::Int {
+                source: sexpr,
+                int: *int,
+            }),
+            Bool { bool, .. } => Ast::Constant(Constant::Bool {
+                source: sexpr,
+                bool: *bool,
+            }),
+            Nil { .. } => Ast::Constant(Constant::Nil { source: sexpr }),
+            _ => unreachable!(),
+        })
     }
 
+    fn compile_eval_when_compile<'sexpr, 'context>(
+        &mut self,
+        source: &'sexpr Sexpr<'context>,
+        args: &'sexpr [Sexpr<'context>],
+    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        Ok(Ast::EvalWhenCompile(EvalWhenCompile {
+            source,
+            exprs: args
+                .iter()
+                .map(|arg| self.compile(arg))
+                .collect::<Result<Vec<_>, _>>()?,
+        }))
+    }
+
+    fn compile_defmacro<'sexpr, 'context>(
+        &mut self,
+        source: &'sexpr Sexpr<'context>,
+        name: &str,
+        parameters: &'sexpr Sexpr<'context>,
+        rest: &'sexpr [Sexpr<'context>],
+    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        self.macros.insert(name.to_string());
+
+        Ok(Ast::DefMacro(DefMacro {
+            source,
+            name: name.to_string(),
+            parameters: match parameters {
+                Sexpr::List { list, .. } => {
+                    parse_parameters(source, list.as_slice()).map_err(|_| Error {
+                        sexpr: source,
+                        message: "failed to parse parameters".to_string(),
+                    })?
+                }
+                Sexpr::Nil { .. } => Parameters::Normal(Vec::new()),
+                _ => {
+                    return Err(Error {
+                        sexpr: source,
+                        message: "expected list for parameters".to_string(),
+                    })
+                }
+            },
+            body: rest
+                .iter()
+                .map(|arg| self.compile(arg))
+                .collect::<Result<Vec<_>, _>>()?,
+        }))
+    }
+
+    fn compile_lambda<'sexpr, 'context>(
+        &mut self,
+        source: &'sexpr Sexpr<'context>,
+        parameters: &'sexpr Sexpr<'context>,
+        r#type: Option<&'sexpr Sexpr<'context>>,
+        rest: &'sexpr [Sexpr<'context>],
+    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        Ok(Ast::Lambda(Lambda {
+            source,
+            r#type: match r#type.map(Type::from_sexpr) {
+                Some(Ok(t)) => Some(t),
+                Some(Err(_)) => {
+                    return Err(Error {
+                        sexpr: source,
+                        message: "failed to parse type".to_string(),
+                    })
+                }
+                None => None,
+            },
+            parameters: match parameters {
+                Sexpr::List { list, .. } => {
+                    parse_parameters(source, list.as_slice()).map_err(|_| Error {
+                        sexpr: source,
+                        message: "failed to parse parameters".to_string(),
+                    })?
+                }
+                Sexpr::Nil { .. } => Parameters::Normal(Vec::new()),
+                _ => {
+                    return Err(Error {
+                        sexpr: source,
+                        message: "expectes list for parameters".to_string(),
+                    })
+                }
+            },
+            body: rest
+                .iter()
+                .map(|arg| self.compile(arg))
+                .collect::<Result<Vec<_>, _>>()?,
+        }))
+    }
+
+    fn compile_def<'sexpr, 'context>(
+        &mut self,
+        source: &'sexpr Sexpr<'context>,
+        parameter: &'sexpr Sexpr<'context>,
+        body: &'sexpr Sexpr<'context>,
+    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        Ok(Ast::Def(Def {
+            source,
+            parameter: Parameter::from_sexpr(parameter).map_err(|_| Error {
+                sexpr: source,
+                message: "failed to parse parameter".to_string(),
+            })?,
+            body: Box::new(self.compile(body)?),
+        }))
+    }
+
+    fn compile_set<'sexpr, 'context>(
+        &mut self,
+        source: &'sexpr Sexpr<'context>,
+        parameter: &'sexpr Sexpr<'context>,
+        body: &'sexpr Sexpr<'context>,
+    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        Ok(Ast::Set(Set {
+            source,
+            variable: parameter.as_symbol().map(|s| s.to_string()).ok_or(Error {
+                sexpr: source,
+                message: "expectes symbol as parameter".to_string(),
+            })?,
+            body: Box::new(self.compile(body)?),
+        }))
+    }
+
+    fn compile_if<'sexpr, 'context>(
+        &mut self,
+        source: &'sexpr Sexpr<'context>,
+        predicate: &'sexpr Sexpr<'context>,
+        then: &'sexpr Sexpr<'context>,
+        r#else: &'sexpr Sexpr<'context>,
+    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        Ok(Ast::If(If {
+            source,
+            predicate: Box::new(self.compile(predicate)?),
+            then: Box::new(self.compile(then)?),
+            r#else: Box::new(self.compile(r#else)?),
+        }))
+    }
+
+    fn compile_apply<'sexpr, 'context>(
+        &mut self,
+        source: &'sexpr Sexpr<'context>,
+        args: &'sexpr [Sexpr<'context>],
+    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        Ok(Ast::Apply(Apply {
+            source,
+            exprs: args
+                .iter()
+                .map(|arg| self.compile(arg))
+                .collect::<Result<Vec<_>, _>>()?,
+        }))
+    }
+
+    fn compile_binary_arithmetic_op<'sexpr, 'context>(
+        &mut self,
+        source: &'sexpr Sexpr<'context>,
+        operator: &str,
+        lhs: &'sexpr Sexpr<'context>,
+        rhs: &'sexpr Sexpr<'context>,
+    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        Ok(Ast::BinaryArithemticOperation(BinaryArithmeticOperation {
+            source,
+            operator: match operator {
+                "+" => BinaryArithmeticOperator::Add,
+                "-" => BinaryArithmeticOperator::Sub,
+                "*" => BinaryArithmeticOperator::Mul,
+                "/" => BinaryArithmeticOperator::Div,
+                _ => unreachable!(),
+            },
+            lhs: Box::new(self.compile(lhs)?),
+            rhs: Box::new(self.compile(rhs)?),
+        }))
+    }
+
+    fn compile_comparison_op<'sexpr, 'context>(
+        &mut self,
+        source: &'sexpr Sexpr<'context>,
+        operator: &str,
+        lhs: &'sexpr Sexpr<'context>,
+        rhs: &'sexpr Sexpr<'context>,
+    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        Ok(Ast::ComparisonOperation(ComparisonOperation {
+            source,
+            operator: match operator {
+                "=" => ComparisonOperator::Eq,
+                "<" => ComparisonOperator::Lt,
+                ">" => ComparisonOperator::Gt,
+                _ => unreachable!(),
+            },
+            lhs: Box::new(self.compile(lhs)?),
+            rhs: Box::new(self.compile(rhs)?),
+        }))
+    }
+
+    fn compile_list<'sexpr, 'context>(
+        &mut self,
+        source: &'sexpr Sexpr<'context>,
+        args: &'sexpr [Sexpr<'context>],
+    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        Ok(Ast::List(List {
+            source,
+            exprs: args
+                .iter()
+                .map(|arg| self.compile(arg))
+                .collect::<Result<Vec<_>, _>>()?,
+        }))
+    }
+
+    fn compile_cons<'sexpr, 'context>(
+        &mut self,
+        source: &'sexpr Sexpr<'context>,
+        lhs: &'sexpr Sexpr<'context>,
+        rhs: &'sexpr Sexpr<'context>,
+    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        Ok(Ast::Cons(Cons {
+            source,
+            lhs: Box::new(self.compile(lhs)?),
+            rhs: Box::new(self.compile(rhs)?),
+        }))
+    }
+
+    fn compile_car<'sexpr, 'context>(
+        &mut self,
+        source: &'sexpr Sexpr<'context>,
+        body: &'sexpr Sexpr<'context>,
+    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        Ok(Ast::Car(Car {
+            source,
+            body: Box::new(self.compile(body)?),
+        }))
+    }
+
+    fn compile_cdr<'sexpr, 'context>(
+        &mut self,
+        source: &'sexpr Sexpr<'context>,
+        body: &'sexpr Sexpr<'context>,
+    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        Ok(Ast::Cdr(Cdr {
+            source,
+            body: Box::new(self.compile(body)?),
+        }))
+    }
+
+    fn compile_fncall<'sexpr, 'context>(
+        &mut self,
+        source: &'sexpr Sexpr<'context>,
+        function: &'sexpr Sexpr<'context>,
+        args: &'sexpr [Sexpr<'context>],
+    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        Ok(Ast::FnCall(FnCall {
+            source,
+            function: Box::new(self.compile(function)?),
+            exprs: args
+                .iter()
+                .map(|arg| self.compile(arg))
+                .collect::<Result<Vec<_>, _>>()?,
+        }))
+    }
+
+    fn compile_macro_call<'sexpr, 'context>(
+        &mut self,
+        source: &'sexpr Sexpr<'context>,
+        r#macro: &str,
+        args: &'sexpr [Sexpr<'context>],
+    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        Ok(Ast::MacroCall(MacroCall {
+            source,
+            r#macro: r#macro.to_string(),
+            args: args.iter().map(|arg| quote(source, arg)).collect(),
+        }))
+    }
+
+    fn compile_quote<'sexpr, 'context>(
+        &mut self,
+        source: &'sexpr Sexpr<'context>,
+        body: &'sexpr Sexpr<'context>,
+    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        Ok(Ast::Quote(Quote {
+            source,
+            body: quote(source, body),
+        }))
+    }
+
+    fn compile_is_type<'sexpr, 'context>(
+        &mut self,
+        source: &'sexpr Sexpr<'context>,
+        parameter: &str,
+        body: &'sexpr Sexpr<'context>,
+    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        Ok(Ast::IsType(IsType {
+            source,
+            parameter: match parameter {
+                "function?" => IsTypeParameter::Function,
+                "cons?" => IsTypeParameter::Cons,
+                "symbol?" => IsTypeParameter::Symbol,
+                "string?" => IsTypeParameter::String,
+                "char?" => IsTypeParameter::Char,
+                "int?" => IsTypeParameter::Int,
+                "bool?" => IsTypeParameter::Bool,
+                "nil?" => IsTypeParameter::Nil,
+                _ => unreachable!(),
+            },
+            body: Box::new(self.compile(body)?),
+        }))
+    }
+}
+
+impl<'sexpr, 'context> fmt::Display for Error<'sexpr, 'context> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "error: {}\n{}", self.message, self.sexpr)
+    }
+}
+
+impl<'sexpr, 'context> Ast<'sexpr, 'context> {
     pub fn source_sexpr(&self) -> &'sexpr Sexpr<'context> {
         match self {
             Self::EvalWhenCompile(EvalWhenCompile { source, .. })
@@ -422,6 +754,7 @@ impl<'sexpr, 'context> Ast<'sexpr, 'context> {
             | Self::Car(Car { source, .. })
             | Self::Cdr(Cdr { source, .. })
             | Self::FnCall(FnCall { source, .. })
+            | Self::MacroCall(MacroCall { source, .. })
             | Self::Quote(Quote { source, .. })
             | Self::IsType(IsType { source, .. })
             | Self::Variable(Variable { source, .. })
@@ -524,356 +857,30 @@ fn parse_parameters<'sexpr, 'context>(
     Ok(p)
 }
 
-impl<'sexpr, 'context> EvalWhenCompile<'sexpr, 'context> {
-    pub fn from_sexpr(
-        source: &'sexpr Sexpr<'context>,
-        exprs: &'sexpr [Sexpr<'context>],
-    ) -> Result<Self, Error<'sexpr, 'context>> {
-        Ok(EvalWhenCompile {
+fn quote<'sexpr, 'context>(
+    source: &'sexpr Sexpr<'context>,
+    sexpr: &'sexpr Sexpr<'context>,
+) -> Quoted<'sexpr, 'context> {
+    match sexpr {
+        Sexpr::List { list, .. } => quote_list(source, list.as_slice()),
+        Sexpr::Symbol { symbol, .. } => Quoted::Symbol {
             source,
-            exprs: exprs
-                .iter()
-                .map(Ast::from_sexpr)
-                .collect::<Result<Vec<_>, _>>()?,
-        })
-    }
-}
-
-impl<'sexpr, 'context> DefMacro<'sexpr, 'context> {
-    pub fn from_sexpr(
-        source: &'sexpr Sexpr<'context>,
-        name: &'sexpr Sexpr<'context>,
-        parameters: &'sexpr Sexpr<'context>,
-        rest: &'sexpr [Sexpr<'context>],
-    ) -> Result<Self, Error<'sexpr, 'context>> {
-        Ok(DefMacro {
+            symbol: symbol.clone(),
+        },
+        Sexpr::String { string, .. } => Quoted::String {
             source,
-            name: name
-                .as_symbol()
-                .ok_or(Error {
-                    sexpr: source,
-                    message: "expected symbol as identifer".to_string(),
-                })?
-                .to_string(),
-            parameters: match parameters {
-                Sexpr::List { list, .. } => parse_parameters(source, list.as_slice())?,
-                Sexpr::Nil { .. } => Parameters::Normal(Vec::new()),
-                _ => {
-                    return Err(Error {
-                        sexpr: source,
-                        message: "expected list for parameters".to_string(),
-                    })
-                }
-            },
-            body: rest
-                .iter()
-                .map(Ast::from_sexpr)
-                .collect::<Result<Vec<_>, Error>>()?,
-        })
-    }
-}
-
-impl<'sexpr, 'context> Lambda<'sexpr, 'context> {
-    pub fn from_sexpr(
-        source: &'sexpr Sexpr<'context>,
-        parameters: &'sexpr Sexpr<'context>,
-        r#type: Option<&'sexpr Sexpr<'context>>,
-        rest: &'sexpr [Sexpr<'context>],
-    ) -> Result<Self, Error<'sexpr, 'context>> {
-        Ok(Lambda {
+            string: string.clone(),
+        },
+        Sexpr::Char { char, .. } => Quoted::Char {
             source,
-            parameters: match parameters {
-                Sexpr::List { list, .. } => parse_parameters(source, list.as_slice())?,
-                Sexpr::Nil { .. } => Parameters::Normal(Vec::new()),
-                _ => {
-                    return Err(Error {
-                        sexpr: source,
-                        message: "expected list for parameters".to_string(),
-                    })
-                }
-            },
-            r#type: match r#type {
-                Some(r#type) => Some(Type::from_sexpr(r#type).map_err(|_| Error {
-                    sexpr: source,
-                    message: "failed to parse type parameter".to_string(),
-                })?),
-                None => None,
-            },
-            body: rest
-                .iter()
-                .map(Ast::from_sexpr)
-                .collect::<Result<Vec<_>, Error>>()?,
-        })
-    }
-}
-
-impl<'sexpr, 'context> Def<'sexpr, 'context> {
-    pub fn from_sexpr(
-        source: &'sexpr Sexpr<'context>,
-        parameter: &'sexpr Sexpr<'context>,
-        body: &'sexpr Sexpr<'context>,
-    ) -> Result<Self, Error<'sexpr, 'context>> {
-        Ok(Def {
+            char: *char,
+        },
+        Sexpr::Int { int, .. } => Quoted::Int { source, int: *int },
+        Sexpr::Bool { bool, .. } => Quoted::Bool {
             source,
-            parameter: Parameter::from_sexpr(parameter).map_err(|_| Error {
-                sexpr: source,
-                message: "failed to parse parameter".to_string(),
-            })?,
-            body: Box::new(Ast::from_sexpr(body)?),
-        })
-    }
-}
-
-impl<'sexpr, 'context> Set<'sexpr, 'context> {
-    pub fn from_sexpr(
-        source: &'sexpr Sexpr<'context>,
-        variable: &'sexpr Sexpr<'context>,
-        body: &'sexpr Sexpr<'context>,
-    ) -> Result<Self, Error<'sexpr, 'context>> {
-        Ok(Self {
-            source,
-            variable: variable
-                .as_symbol()
-                .ok_or(Error {
-                    sexpr: source,
-                    message: "expected symbol as indentifiter".to_string(),
-                })?
-                .to_string(),
-            body: Box::new(Ast::from_sexpr(body)?),
-        })
-    }
-}
-
-impl<'sexpr, 'context> If<'sexpr, 'context> {
-    pub fn from_sexpr(
-        source: &'sexpr Sexpr<'context>,
-        predicate: &'sexpr Sexpr<'context>,
-        then: &'sexpr Sexpr<'context>,
-        r#else: &'sexpr Sexpr<'context>,
-    ) -> Result<Self, Error<'sexpr, 'context>> {
-        Ok(If {
-            source,
-            predicate: Box::new(Ast::from_sexpr(predicate)?),
-            then: Box::new(Ast::from_sexpr(then)?),
-            r#else: Box::new(Ast::from_sexpr(r#else)?),
-        })
-    }
-}
-
-impl<'sexpr, 'context> Apply<'sexpr, 'context> {
-    pub fn from_sexpr(
-        source: &'sexpr Sexpr<'context>,
-        exprs: &'sexpr [Sexpr<'context>],
-    ) -> Result<Self, Error<'sexpr, 'context>> {
-        Ok(Self {
-            source,
-            exprs: exprs
-                .iter()
-                .map(Ast::from_sexpr)
-                .collect::<Result<Vec<_>, _>>()?,
-        })
-    }
-}
-
-impl<'sexpr, 'context> BinaryArithmeticOperation<'sexpr, 'context> {
-    pub fn from_sexpr(
-        source: &'sexpr Sexpr<'context>,
-        operator: &'sexpr Sexpr<'context>,
-        lhs: &'sexpr Sexpr<'context>,
-        rhs: &'sexpr Sexpr<'context>,
-    ) -> Result<Self, Error<'sexpr, 'context>> {
-        Ok(Self {
-            source,
-            operator: match operator {
-                Sexpr::Symbol { symbol, .. } if symbol == "+" => BinaryArithmeticOperator::Add,
-                Sexpr::Symbol { symbol, .. } if symbol == "-" => BinaryArithmeticOperator::Sub,
-                Sexpr::Symbol { symbol, .. } if symbol == "*" => BinaryArithmeticOperator::Mul,
-                Sexpr::Symbol { symbol, .. } if symbol == "/" => BinaryArithmeticOperator::Div,
-                Sexpr::Symbol { symbol, .. } => {
-                    return Err(Error {
-                        sexpr: source,
-                        message: format!("unknown operator: {symbol}"),
-                    })
-                }
-                _ => {
-                    return Err(Error {
-                        sexpr: source,
-                        message: "expected symbol as operator".to_string(),
-                    })
-                }
-            },
-            lhs: Box::new(Ast::from_sexpr(lhs)?),
-            rhs: Box::new(Ast::from_sexpr(rhs)?),
-        })
-    }
-}
-
-impl<'sexpr, 'context> ComparisonOperation<'sexpr, 'context> {
-    pub fn from_sexpr(
-        source: &'sexpr Sexpr<'context>,
-        operator: &'sexpr Sexpr<'context>,
-        lhs: &'sexpr Sexpr<'context>,
-        rhs: &'sexpr Sexpr<'context>,
-    ) -> Result<Self, Error<'sexpr, 'context>> {
-        Ok(Self {
-            source,
-            operator: match operator {
-                Sexpr::Symbol { symbol, .. } if symbol == "=" => ComparisonOperator::Eq,
-                Sexpr::Symbol { symbol, .. } if symbol == ">" => ComparisonOperator::Gt,
-                Sexpr::Symbol { symbol, .. } if symbol == "<" => ComparisonOperator::Lt,
-                Sexpr::Symbol { .. } => {
-                    return Err(Error {
-                        sexpr: source,
-                        message: "invalid comparison operator".to_string(),
-                    })
-                }
-                _ => {
-                    return Err(Error {
-                        sexpr: source,
-                        message: "expected symbol as operator".to_string(),
-                    })
-                }
-            },
-            lhs: Box::new(Ast::from_sexpr(lhs)?),
-            rhs: Box::new(Ast::from_sexpr(rhs)?),
-        })
-    }
-}
-
-impl<'sexpr, 'context> List<'sexpr, 'context> {
-    pub fn from_sexpr(
-        source: &'sexpr Sexpr<'context>,
-        list: &'sexpr [Sexpr<'context>],
-    ) -> Result<Self, Error<'sexpr, 'context>> {
-        Ok(List {
-            source,
-            exprs: list
-                .iter()
-                .map(Ast::from_sexpr)
-                .collect::<Result<Vec<_>, Error>>()?,
-        })
-    }
-}
-
-impl<'sexpr, 'context> Cons<'sexpr, 'context> {
-    pub fn from_sexpr(
-        source: &'sexpr Sexpr<'context>,
-        lhs: &'sexpr Sexpr<'context>,
-        rhs: &'sexpr Sexpr<'context>,
-    ) -> Result<Self, Error<'sexpr, 'context>> {
-        Ok(Self {
-            source,
-            lhs: Box::new(Ast::from_sexpr(lhs)?),
-            rhs: Box::new(Ast::from_sexpr(rhs)?),
-        })
-    }
-}
-
-impl<'sexpr, 'context> Car<'sexpr, 'context> {
-    pub fn from_sexpr(
-        source: &'sexpr Sexpr<'context>,
-        body: &'sexpr Sexpr<'context>,
-    ) -> Result<Self, Error<'sexpr, 'context>> {
-        Ok(Self {
-            source,
-            body: Box::new(Ast::from_sexpr(body)?),
-        })
-    }
-}
-
-impl<'sexpr, 'context> Cdr<'sexpr, 'context> {
-    pub fn from_sexpr(
-        source: &'sexpr Sexpr<'context>,
-        body: &'sexpr Sexpr<'context>,
-    ) -> Result<Self, Error<'sexpr, 'context>> {
-        Ok(Self {
-            source,
-            body: Box::new(Ast::from_sexpr(body)?),
-        })
-    }
-}
-
-impl<'sexpr, 'context> FnCall<'sexpr, 'context> {
-    pub fn from_sexpr(
-        source: &'sexpr Sexpr<'context>,
-        exprs: &'sexpr [Sexpr<'context>],
-    ) -> Result<Self, Error<'sexpr, 'context>> {
-        Ok(Self {
-            source,
-            function: Box::new(exprs.first().map(Ast::from_sexpr).unwrap()?),
-            exprs: exprs
-                .iter()
-                .skip(1)
-                .map(Ast::from_sexpr)
-                .collect::<Result<Vec<_>, Error>>()?,
-        })
-    }
-}
-
-impl<'sexpr, 'context> Quote<'sexpr, 'context> {
-    pub fn from_sexpr(
-        source: &'sexpr Sexpr<'context>,
-        body: &'sexpr Sexpr<'context>,
-    ) -> Result<Self, Error<'sexpr, 'context>> {
-        Ok(Self {
-            source,
-            body: match body {
-                Sexpr::List { list, .. } => quote_list(source, list.as_slice()),
-                Sexpr::Symbol { symbol, .. } => Quoted::Symbol {
-                    source,
-                    symbol: symbol.clone(),
-                },
-                Sexpr::String { string, .. } => Quoted::String {
-                    source,
-                    string: string.clone(),
-                },
-                Sexpr::Char { char, .. } => Quoted::Char {
-                    source,
-                    char: *char,
-                },
-                Sexpr::Int { int, .. } => Quoted::Int { source, int: *int },
-                Sexpr::Bool { bool, .. } => Quoted::Bool {
-                    source,
-                    bool: *bool,
-                },
-                Sexpr::Nil { .. } => Quoted::Nil { source },
-            },
-        })
-    }
-}
-
-impl<'sexpr, 'context> IsType<'sexpr, 'context> {
-    pub fn from_sexpr(
-        source: &'sexpr Sexpr<'context>,
-        type_assertion: &'sexpr Sexpr<'context>,
-        body: &'sexpr Sexpr<'context>,
-    ) -> Result<Self, Error<'sexpr, 'context>> {
-        Ok(Self {
-            source,
-            parameter: match type_assertion {
-                Sexpr::Symbol { symbol, .. } if symbol == "function" => IsTypeParameter::Function,
-                Sexpr::Symbol { symbol, .. } if symbol == "cons?" => IsTypeParameter::Cons,
-                Sexpr::Symbol { symbol, .. } if symbol == "symbol?" => IsTypeParameter::Symbol,
-                Sexpr::Symbol { symbol, .. } if symbol == "string?" => IsTypeParameter::String,
-                Sexpr::Symbol { symbol, .. } if symbol == "char?" => IsTypeParameter::Char,
-                Sexpr::Symbol { symbol, .. } if symbol == "int?" => IsTypeParameter::Int,
-                Sexpr::Symbol { symbol, .. } if symbol == "bool?" => IsTypeParameter::Bool,
-                Sexpr::Symbol { symbol, .. } if symbol == "nil?" => IsTypeParameter::Nil,
-                Sexpr::Symbol { symbol, .. } => {
-                    return Err(Error {
-                        sexpr: source,
-                        message: format!("unknown type assersion: {symbol}"),
-                    })
-                }
-                _ => {
-                    return Err(Error {
-                        sexpr: source,
-                        message: "expected symbol".to_string(),
-                    })
-                }
-            },
-            body: Box::new(Ast::from_sexpr(body)?),
-        })
+            bool: *bool,
+        },
+        Sexpr::Nil { .. } => Quoted::Nil { source },
     }
 }
 

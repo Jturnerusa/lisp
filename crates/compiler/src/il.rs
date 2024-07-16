@@ -5,10 +5,7 @@ use crate::{
     il,
 };
 use reader::{Reader, Sexpr};
-use std::{
-    collections::{BTreeSet, HashSet},
-    hash::Hash,
-};
+use std::{collections::BTreeSet, hash::Hash};
 use vm::{Arity, OpCodeTable, UpValue, Vm};
 
 #[derive(Debug, thiserror::Error)]
@@ -266,7 +263,6 @@ pub struct IsType<'ast, 'sexpr, 'context> {
 
 pub struct Compiler {
     environment: Environment,
-    macros: HashSet<String>,
 }
 
 impl<'ast, 'sexpr, 'context> VarRef<'ast, 'sexpr, 'context> {
@@ -399,62 +395,55 @@ impl Compiler {
     pub fn new() -> Self {
         Self {
             environment: Environment::new(),
-            macros: HashSet::new(),
         }
     }
 
-    pub fn compile<'vm, 'ast: 'static, 'sexpr, 'context>(
+    pub fn compile<'ast_compiler, 'vm, 'ast: 'static, 'sexpr, 'context>(
         &mut self,
         ast: &'ast Ast<'sexpr, 'context>,
         vm: &'vm mut Vm<&'sexpr Sexpr<'context>>,
+        ast_compiler: &'ast_compiler mut ast::Compiler,
     ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
         match ast {
             Ast::EvalWhenCompile(eval_when_compile) => {
-                self.eval_when_compile(ast, eval_when_compile, vm)
+                self.eval_when_compile(ast, eval_when_compile, vm, ast_compiler)
             }
-            Ast::DefMacro(defmacro) => self.compile_defmacro(ast, defmacro, vm),
-            Ast::Lambda(lambda) => self.compile_lambda(ast, lambda, vm),
-            Ast::Def(def) => self.compile_def(ast, def, vm),
-            Ast::Set(set) => self.compile_set(ast, set, vm),
-            Ast::If(r#if) => self.compile_if(ast, r#if, vm),
-            Ast::FnCall(fncall)
-                if fncall
-                    .function
-                    .as_variable()
-                    .is_some_and(|function| self.macros.contains(function.name.as_str())) =>
-            {
-                self.eval_macro(
-                    &fncall.function.as_variable().unwrap().name,
-                    ast,
-                    fncall,
-                    vm,
-                )
+            Ast::DefMacro(defmacro) => self.compile_defmacro(ast, defmacro, vm, ast_compiler),
+            Ast::Lambda(lambda) => self.compile_lambda(ast, lambda, vm, ast_compiler),
+            Ast::Def(def) => self.compile_def(ast, def, vm, ast_compiler),
+            Ast::Set(set) => self.compile_set(ast, set, vm, ast_compiler),
+            Ast::If(r#if) => self.compile_if(ast, r#if, vm, ast_compiler),
+            Ast::MacroCall(macro_call) => self.eval_macro(ast, macro_call, vm, ast_compiler),
+            Ast::FnCall(fncall) => self.compile_fncall(ast, fncall, vm, ast_compiler),
+            Ast::Quote(quote) => self.compile_quoted(ast, &quote.body),
+            Ast::Apply(apply) => self.compile_apply(ast, apply, vm, ast_compiler),
+            Ast::BinaryArithemticOperation(op) => {
+                self.compile_arithmetic_operation(ast, op, vm, ast_compiler)
             }
-            Ast::FnCall(fncall) => self.compile_fncall(ast, fncall, vm),
-            Ast::Quote(quote) => self.compile_quote(ast, quote),
-            Ast::Apply(apply) => self.compile_apply(ast, apply, vm),
-            Ast::BinaryArithemticOperation(op) => self.compile_arithmetic_operation(ast, op, vm),
-            Ast::ComparisonOperation(op) => self.compile_comparison_operation(ast, op, vm),
-            Ast::List(list) => self.compile_list(ast, list, vm),
-            Ast::Cons(cons) => self.compile_cons(ast, cons, vm),
-            Ast::Car(car) => self.compile_car(ast, car, vm),
-            Ast::Cdr(cdr) => self.compile_cdr(ast, cdr, vm),
-            Ast::IsType(is_type) => self.compile_is_type(ast, is_type, vm),
+            Ast::ComparisonOperation(op) => {
+                self.compile_comparison_operation(ast, op, vm, ast_compiler)
+            }
+            Ast::List(list) => self.compile_list(ast, list, vm, ast_compiler),
+            Ast::Cons(cons) => self.compile_cons(ast, cons, vm, ast_compiler),
+            Ast::Car(car) => self.compile_car(ast, car, vm, ast_compiler),
+            Ast::Cdr(cdr) => self.compile_cdr(ast, cdr, vm, ast_compiler),
+            Ast::IsType(is_type) => self.compile_is_type(ast, is_type, vm, ast_compiler),
             Ast::Constant(constant) => self.compile_constant(ast, constant),
             Ast::Variable(variable) => self.compile_variable_reference(ast, variable),
         }
     }
 
-    fn eval_when_compile<'ast: 'static, 'sexpr, 'context>(
+    fn eval_when_compile<'ast_compiler, 'ast: 'static, 'sexpr, 'context>(
         &mut self,
         source: &'ast Ast<'sexpr, 'context>,
         eval_when_compile: &'ast ast::EvalWhenCompile<'sexpr, 'context>,
         vm: &mut Vm<&'sexpr Sexpr<'context>>,
+        ast_compiler: &'ast_compiler mut ast::Compiler,
     ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
         let mut opcode_table = OpCodeTable::new();
 
         for expr in &eval_when_compile.exprs {
-            let il = Box::leak(Box::new(self.compile(expr, vm)?));
+            let il = Box::leak(Box::new(self.compile(expr, vm, ast_compiler)?));
 
             bytecode::compile(il, &mut opcode_table)?;
         }
@@ -520,11 +509,12 @@ impl Compiler {
         })
     }
 
-    fn compile_defmacro<'vm, 'ast: 'static, 'sexpr, 'context>(
+    fn compile_defmacro<'ast_compiler, 'vm, 'ast: 'static, 'sexpr, 'context>(
         &mut self,
         source: &'ast Ast<'sexpr, 'context>,
         defmacro: &'ast ast::DefMacro<'sexpr, 'context>,
         vm: &'vm mut Vm<&'sexpr Sexpr<'context>>,
+        ast_compiler: &'ast_compiler mut ast::Compiler,
     ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
         let arity = match &defmacro.parameters {
             ast::Parameters::Normal(_) if defmacro.parameters.len() == 0 => Arity::Nullary,
@@ -544,7 +534,7 @@ impl Compiler {
         let body = defmacro
             .body
             .iter()
-            .map(|ast| self.compile(ast, vm))
+            .map(|ast| self.compile(ast, vm, ast_compiler))
             .collect::<Result<Vec<Il>, Error>>()?;
 
         let lambda = Box::leak(Box::new(Il::Lambda(il::Lambda {
@@ -565,38 +555,29 @@ impl Compiler {
 
         vm.def_global(defmacro.name.as_str())?;
 
-        self.macros.insert(defmacro.name.clone());
-
         Ok(Il::Constant(Constant::Nil { source }))
     }
 
-    fn eval_macro<'vm, 'ast, 'sexpr, 'context>(
+    fn eval_macro<'ast, 'sexpr, 'context>(
         &mut self,
-        r#macro: &str,
         source: &'ast Ast<'sexpr, 'context>,
-        fncall: &'ast ast::FnCall<'sexpr, 'context>,
-        vm: &'vm mut Vm<&'sexpr Sexpr<'context>>,
+        macro_call: &'ast ast::MacroCall<'sexpr, 'context>,
+        vm: &mut Vm<&'sexpr Sexpr<'context>>,
+        ast_compiler: &mut ast::Compiler,
     ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
-        let args = fncall
-            .exprs
-            .iter()
-            .map(|expr| Box::leak(Box::new(expr.source_sexpr().quote())))
-            .map(|sexpr| Box::leak(Box::new(Ast::from_sexpr(sexpr).unwrap())))
-            .map(|ast| self.compile(ast, vm))
-            .collect::<Result<Vec<_>, _>>()?;
-
         let mut opcode_table = OpCodeTable::new();
 
-        for arg in &args {
-            bytecode::compile(Box::leak(Box::new(arg.clone())), &mut opcode_table).unwrap();
+        for arg in &macro_call.args {
+            let il = Box::leak(Box::new(self.compile_quoted(source, arg)?));
+            bytecode::compile(Box::leak(Box::new(il)), &mut opcode_table).unwrap();
         }
 
-        vm.get_global(r#macro)?;
+        vm.get_global(macro_call.r#macro.as_str())?;
 
         vm.eval(&opcode_table)
             .map_err(|(error, sexpr)| Error::VmWithDebug { error, sexpr })?;
 
-        vm.call(args.len())?;
+        vm.call(macro_call.args.len())?;
 
         vm.eval(&OpCodeTable::new())
             .map_err(|(error, sexpr)| Error::VmWithDebug { error, sexpr })?;
@@ -618,16 +599,17 @@ impl Compiler {
         )));
         let mut reader = Reader::new(context);
         let sexpr: &'static _ = Box::leak(Box::new(reader.next().unwrap()?));
-        let ast: &'static _ = Box::leak(Box::new(Ast::from_sexpr(sexpr)?));
+        let ast: &'static _ = Box::leak(Box::new(ast_compiler.compile(sexpr)?));
 
-        self.compile(ast, vm)
+        self.compile(ast, vm, ast_compiler)
     }
 
-    fn compile_lambda<'vm, 'ast: 'static, 'sexpr, 'context>(
+    fn compile_lambda<'ast_compiler, 'vm, 'ast: 'static, 'sexpr, 'context>(
         &mut self,
         source: &'ast Ast<'sexpr, 'context>,
         lambda: &'ast ast::Lambda<'sexpr, 'context>,
         vm: &'vm mut Vm<&'sexpr Sexpr<'context>>,
+        ast_compiler: &'ast_compiler mut ast::Compiler,
     ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
         let arity = match &lambda.parameters {
             ast::Parameters::Normal(_) if lambda.parameters.len() == 0 => Arity::Nullary,
@@ -647,7 +629,7 @@ impl Compiler {
         let body = lambda
             .body
             .iter()
-            .map(|ast| self.compile(ast, vm))
+            .map(|ast| self.compile(ast, vm, ast_compiler))
             .collect::<Result<Vec<Il>, Error>>()?;
 
         let upvalues = self.environment.upvalues().collect::<Vec<UpValue>>();
@@ -675,25 +657,27 @@ impl Compiler {
         }))
     }
 
-    fn compile_if<'vm, 'ast: 'static, 'sexpr, 'context>(
+    fn compile_if<'ast_compiler, 'vm, 'ast: 'static, 'sexpr, 'context>(
         &mut self,
         source: &'ast Ast<'sexpr, 'context>,
         r#if: &'ast ast::If<'sexpr, 'context>,
         vm: &'vm mut Vm<&'sexpr Sexpr<'context>>,
+        ast_compiler: &'ast_compiler mut ast::Compiler,
     ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
         Ok(Il::If(If {
             source,
-            predicate: Box::new(self.compile(&r#if.predicate, vm)?),
-            then: Box::new(self.compile(&r#if.then, vm)?),
-            r#else: Box::new(self.compile(&r#if.r#else, vm)?),
+            predicate: Box::new(self.compile(&r#if.predicate, vm, ast_compiler)?),
+            then: Box::new(self.compile(&r#if.then, vm, ast_compiler)?),
+            r#else: Box::new(self.compile(&r#if.r#else, vm, ast_compiler)?),
         }))
     }
 
-    fn compile_def<'vm, 'ast: 'static, 'sexpr, 'context>(
+    fn compile_def<'ast_compiler, 'vm, 'ast: 'static, 'sexpr, 'context>(
         &mut self,
         source: &'ast Ast<'sexpr, 'context>,
         def: &'ast ast::Def<'sexpr, 'context>,
         vm: &'vm mut Vm<&'sexpr Sexpr<'context>>,
+        ast_compiler: &'ast_compiler mut ast::Compiler,
     ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
         self.environment.insert_global(
             def.parameter.name.as_str(),
@@ -715,15 +699,16 @@ impl Compiler {
                 ast: source,
                 message: "failed to parse parameter".to_string(),
             })?,
-            body: Box::new(self.compile(&def.body, vm)?),
+            body: Box::new(self.compile(&def.body, vm, ast_compiler)?),
         }))
     }
 
-    fn compile_set<'vm, 'ast: 'static, 'sexpr, 'context>(
+    fn compile_set<'ast_compiler, 'vm, 'ast: 'static, 'sexpr, 'context>(
         &mut self,
         source: &'ast Ast<'sexpr, 'context>,
         set: &'ast ast::Set<'sexpr, 'context>,
         vm: &'vm mut Vm<&'sexpr Sexpr<'context>>,
+        ast_compiler: &'ast_compiler mut ast::Compiler,
     ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
         Ok(Il::Set(Set {
             source,
@@ -752,16 +737,16 @@ impl Compiler {
                     })
                 }
             },
-            body: Box::new(self.compile(&set.body, vm)?),
+            body: Box::new(self.compile(&set.body, vm, ast_compiler)?),
         }))
     }
 
-    fn compile_quote<'ast, 'sexpr, 'context>(
+    fn compile_quoted<'ast, 'sexpr, 'context>(
         &mut self,
         source: &'ast Ast<'sexpr, 'context>,
-        quote: &'ast ast::Quote<'sexpr, 'context>,
+        quoted: &'ast ast::Quoted<'sexpr, 'context>,
     ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
-        Ok(match &quote.body {
+        Ok(match &quoted {
             Quoted::List { list, .. } => self.compile_quoted_list(source, list.as_slice())?,
             Quoted::Symbol { symbol, .. } => Il::Constant(Constant::Symbol {
                 source,
@@ -825,44 +810,47 @@ impl Compiler {
         }))
     }
 
-    fn compile_fncall<'ast: 'static, 'sexpr, 'context>(
+    fn compile_fncall<'ast_compiler, 'ast: 'static, 'sexpr, 'context>(
         &mut self,
         source: &'ast Ast<'sexpr, 'context>,
         fncall: &'ast ast::FnCall<'sexpr, 'context>,
         vm: &mut Vm<&'sexpr Sexpr<'context>>,
+        ast_compiler: &'ast_compiler mut ast::Compiler,
     ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
         Ok(Il::FnCall(FnCall {
             source,
-            function: Box::new(self.compile(&fncall.function, vm)?),
+            function: Box::new(self.compile(&fncall.function, vm, ast_compiler)?),
             args: fncall
                 .exprs
                 .iter()
-                .map(|arg| self.compile(arg, vm))
+                .map(|arg| self.compile(arg, vm, ast_compiler))
                 .collect::<Result<Vec<_>, _>>()?,
         }))
     }
 
-    fn compile_apply<'ast: 'static, 'sexpr, 'context>(
+    fn compile_apply<'ast_compiler, 'ast: 'static, 'sexpr, 'context>(
         &mut self,
         source: &'ast Ast<'sexpr, 'context>,
         apply: &'ast ast::Apply<'sexpr, 'context>,
         vm: &mut Vm<&'sexpr Sexpr<'context>>,
+        ast_compiler: &'ast_compiler mut ast::Compiler,
     ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
         Ok(Il::Apply(Apply {
             source,
             exprs: apply
                 .exprs
                 .iter()
-                .map(|expr| self.compile(expr, vm))
+                .map(|expr| self.compile(expr, vm, ast_compiler))
                 .collect::<Result<Vec<_>, _>>()?,
         }))
     }
 
-    fn compile_arithmetic_operation<'ast: 'static, 'sexpr, 'context>(
+    fn compile_arithmetic_operation<'ast_compiler, 'ast: 'static, 'sexpr, 'context>(
         &mut self,
         source: &'ast Ast<'sexpr, 'context>,
         op: &'ast ast::BinaryArithmeticOperation<'sexpr, 'context>,
         vm: &mut Vm<&'sexpr Sexpr<'context>>,
+        ast_compiler: &'ast_compiler mut ast::Compiler,
     ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
         Ok(Il::ArithmeticOperation(ArithmeticOperation {
             source,
@@ -872,16 +860,17 @@ impl Compiler {
                 ast::BinaryArithmeticOperator::Mul => ArithmeticOperator::Mul,
                 ast::BinaryArithmeticOperator::Div => ArithmeticOperator::Div,
             },
-            lhs: Box::new(self.compile(&op.lhs, vm)?),
-            rhs: Box::new(self.compile(&op.rhs, vm)?),
+            lhs: Box::new(self.compile(&op.lhs, vm, ast_compiler)?),
+            rhs: Box::new(self.compile(&op.rhs, vm, ast_compiler)?),
         }))
     }
 
-    fn compile_comparison_operation<'ast: 'static, 'sexpr, 'context>(
+    fn compile_comparison_operation<'ast_compiler, 'ast: 'static, 'sexpr, 'context>(
         &mut self,
         source: &'ast Ast<'sexpr, 'context>,
         op: &'ast ast::ComparisonOperation<'sexpr, 'context>,
         vm: &mut Vm<&'sexpr Sexpr<'context>>,
+        ast_compiler: &'ast_compiler mut ast::Compiler,
     ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
         Ok(Il::ComparisonOperation(ComparisonOperation {
             source,
@@ -890,69 +879,74 @@ impl Compiler {
                 ast::ComparisonOperator::Lt => ComparisonOperator::Lt,
                 ast::ComparisonOperator::Gt => ComparisonOperator::Gt,
             },
-            lhs: Box::new(self.compile(&op.lhs, vm)?),
-            rhs: Box::new(self.compile(&op.rhs, vm)?),
+            lhs: Box::new(self.compile(&op.lhs, vm, ast_compiler)?),
+            rhs: Box::new(self.compile(&op.rhs, vm, ast_compiler)?),
         }))
     }
 
-    fn compile_list<'ast: 'static, 'sexpr, 'context>(
+    fn compile_list<'ast_compiler, 'ast: 'static, 'sexpr, 'context>(
         &mut self,
         source: &'ast Ast<'sexpr, 'context>,
         list: &'ast ast::List<'sexpr, 'context>,
         vm: &mut Vm<&'sexpr Sexpr<'context>>,
+        ast_compiler: &'ast_compiler mut ast::Compiler,
     ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
         Ok(Il::List(List {
             source,
             exprs: list
                 .exprs
                 .iter()
-                .map(|expr| self.compile(expr, vm))
+                .map(|expr| self.compile(expr, vm, ast_compiler))
                 .collect::<Result<Vec<_>, _>>()?,
         }))
     }
 
-    fn compile_cons<'ast: 'static, 'sexpr, 'context>(
+    fn compile_cons<'ast_compiler, 'ast: 'static, 'sexpr, 'context>(
         &mut self,
         source: &'ast Ast<'sexpr, 'context>,
         cons: &'ast ast::Cons<'sexpr, 'context>,
         vm: &mut Vm<&'sexpr Sexpr<'context>>,
+        ast_compiler: &'ast_compiler mut ast::Compiler,
     ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
         Ok(Il::Cons(Cons {
             source,
-            lhs: Box::new(self.compile(&cons.lhs, vm)?),
-            rhs: Box::new(self.compile(&cons.rhs, vm)?),
+            lhs: Box::new(self.compile(&cons.lhs, vm, ast_compiler)?),
+            rhs: Box::new(self.compile(&cons.rhs, vm, ast_compiler)?),
         }))
     }
 
-    fn compile_car<'ast: 'static, 'sexpr, 'context>(
+    fn compile_car<'ast_compiler, 'ast: 'static, 'sexpr, 'context>(
         &mut self,
         source: &'ast Ast<'sexpr, 'context>,
         car: &'ast ast::Car<'sexpr, 'context>,
         vm: &mut Vm<&'sexpr Sexpr<'context>>,
+        ast_compiler: &'ast_compiler mut ast::Compiler,
     ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
         Ok(Il::Car(Car {
             source,
-            body: Box::new(self.compile(&car.body, vm)?),
+            body: Box::new(self.compile(&car.body, vm, ast_compiler)?),
         }))
     }
 
-    fn compile_cdr<'ast: 'static, 'sexpr, 'context>(
+    fn compile_cdr<'ast_compiler, 'ast: 'static, 'sexpr, 'context>(
         &mut self,
         source: &'ast Ast<'sexpr, 'context>,
         cdr: &'ast ast::Cdr<'sexpr, 'context>,
         vm: &mut Vm<&'sexpr Sexpr<'context>>,
+        ast_compiler: &'ast_compiler mut ast::Compiler,
     ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
         Ok(Il::Cdr(Cdr {
             source,
-            body: Box::new(self.compile(&cdr.body, vm)?),
+            body: Box::new(self.compile(&cdr.body, vm, ast_compiler)?),
         }))
     }
 
-    fn compile_is_type<'ast: 'static, 'sexpr, 'context>(
+    fn compile_is_type<'ast_compiler, 'ast: 'static, 'sexpr, 'context>(
         &mut self,
         source: &'ast Ast<'sexpr, 'context>,
         is_type: &'ast ast::IsType<'sexpr, 'context>,
         vm: &mut Vm<&'sexpr Sexpr<'context>>,
+        ast_compiler: &'ast_compiler mut ast::Compiler,
     ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
         Ok(Il::IsType(IsType {
             source,
@@ -966,7 +960,7 @@ impl Compiler {
                 ast::IsTypeParameter::Bool => Type::Bool,
                 ast::IsTypeParameter::Nil => Type::Nil,
             },
-            body: Box::new(self.compile(&is_type.body, vm)?),
+            body: Box::new(self.compile(&is_type.body, vm, ast_compiler)?),
         }))
     }
 }
