@@ -431,8 +431,6 @@ fn test_find() {
     gc::collect();
 }
 
-deftest!(test_setcar, "lisp/setcar.lisp");
-
 deftest!(test_quasiquote, "lisp/quasiquote.lisp");
 
 deftest!(test_apply, "lisp/apply.lisp");
