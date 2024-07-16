@@ -83,16 +83,17 @@ impl Environment {
         } else if let Some(scope) = self.scopes.last()
             && let Some((i, upvalue)) = scope.get_upvalue(name)
         {
-            let r#type = search_upvalue_type(upvalue, self.scopes.iter());
+            let r#type = search_upvalue_type(upvalue, self.scopes.iter().rev().skip(1));
             Some(Variable::Upvalue(i, r#type))
-        } else if let Some(upvalue) = search_for_upvalue(name, self.scopes.iter_mut()) {
+        } else if let Some(upvalue) = search_for_upvalue(name, self.scopes.iter_mut().rev().skip(1))
+        {
             self.scopes
                 .last_mut()
                 .unwrap()
                 .upvalues
                 .push((name.to_string(), upvalue));
 
-            let r#type = search_upvalue_type(upvalue, self.scopes.iter());
+            let r#type = search_upvalue_type(upvalue, self.scopes.iter().rev().skip(1));
             let i = self.scopes.last().unwrap().upvalues.len() - 1;
 
             Some(Variable::Upvalue(i, r#type))
