@@ -1,4 +1,4 @@
-(assert (cond (nil nil)
-              ((= 1 2) nil)
-              ((= 1 1) t)))
+(assert (cond (false false)
+              ((= 1 2) false)
+              ((= 1 1) true)))
 
