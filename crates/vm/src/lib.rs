@@ -330,17 +330,19 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
             }
         };
 
-        let function = match self.stack.last_mut().unwrap() {
-            Local::Value(Object::Function(function)) => function,
-            value => {
-                return Err(Error::Type {
+        self.stack
+            .last_mut()
+            .unwrap()
+            .with_mut(|object| match object {
+                Object::Function(function) => {
+                    function.borrow_mut().upvalues.push(val);
+                    Ok(())
+                }
+                object => Err(Error::Type {
                     expected: Type::Function,
-                    recieved: Type::from(&value.clone().into_object()),
-                })
-            }
-        };
-
-        function.borrow_mut().upvalues.push(val);
+                    recieved: Type::from(&*object),
+                }),
+            })?;
 
         Ok(())
     }
