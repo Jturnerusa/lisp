@@ -407,7 +407,7 @@ fn expand_macro<'context>(
             Macro::Quote => "quote",
             Macro::QuasiQuote => "quasiquote",
             Macro::UnQuote => "unquote",
-            Macro::Splice => "splice",
+            Macro::Splice => "unquote-splice",
         }
         .to_string(),
         context,
