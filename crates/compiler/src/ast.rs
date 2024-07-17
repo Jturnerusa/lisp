@@ -37,6 +37,7 @@ static BUILT_INS: &[&str] = &[
     "map-create",
     "map-insert!",
     "map-retrieve",
+    "map-items",
 ];
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -73,6 +74,7 @@ pub enum Ast<'sexpr, 'context> {
     MapCreate(MapCreate<'sexpr, 'context>),
     MapInsert(MapInsert<'sexpr, 'context>),
     MapRetrieve(MapRetrieve<'sexpr, 'context>),
+    MapItems(MapItems<'sexpr, 'context>),
     Variable(Variable<'sexpr, 'context>),
     Constant(Constant<'sexpr, 'context>),
     Assert(Assert<'sexpr, 'context>),
@@ -304,6 +306,12 @@ pub struct MapRetrieve<'sexpr, 'context> {
 }
 
 #[derive(Clone, Debug)]
+pub struct MapItems<'sexpr, 'context> {
+    pub source: &'sexpr Sexpr<'context>,
+    pub map: Box<Ast<'sexpr, 'context>>,
+}
+
+#[derive(Clone, Debug)]
 pub enum Quoted<'sexpr, 'context> {
     List {
         source: &'sexpr Sexpr<'context>,
@@ -436,6 +444,9 @@ impl Compiler {
                     }
                     [Symbol { symbol, .. }, map, key] if symbol == "map-retrieve" => {
                         self.compile_map_retrieve(sexpr, map, key)?
+                    }
+                    [Symbol { symbol, .. }, map] if symbol == "map-items" => {
+                        self.compile_map_items(sexpr, map)?
                     }
                     _ => {
                         return Err(Error {
@@ -842,6 +853,17 @@ impl Compiler {
             key: Box::new(self.compile(key)?),
         }))
     }
+
+    fn compile_map_items<'sexpr, 'context>(
+        &mut self,
+        source: &'sexpr Sexpr<'context>,
+        map: &'sexpr Sexpr<'context>,
+    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        Ok(Ast::MapItems(MapItems {
+            source,
+            map: Box::new(self.compile(map)?),
+        }))
+    }
 }
 
 impl<'sexpr, 'context> fmt::Display for Error<'sexpr, 'context> {
@@ -875,6 +897,7 @@ impl<'sexpr, 'context> Ast<'sexpr, 'context> {
             | Self::MapCreate(MapCreate { source, .. })
             | Self::MapInsert(MapInsert { source, .. })
             | Self::MapRetrieve(MapRetrieve { source, .. })
+            | Self::MapItems(MapItems { source, .. })
             | Self::Variable(Variable { source, .. })
             | Self::Constant(Constant::String { source, .. })
             | Self::Constant(Constant::Char { source, .. })

@@ -42,6 +42,7 @@ pub fn compile<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
         Il::MapCreate(map_create) => compile_map_create(map_create, opcodes),
         Il::MapInsert(map_insert) => compile_map_insert(map_insert, opcodes),
         Il::MapRetrieve(map_retrieve) => compile_map_retrieve(map_retrieve, opcodes),
+        Il::MapItems(map_items) => compile_map_items(map_items, opcodes),
     }
 }
 
@@ -347,6 +348,17 @@ fn compile_map_retrieve<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>
     compile(&map_retrieve.key, opcodes)?;
 
     opcodes.push(OpCode::MapRetrieve, map_retrieve.source.source_sexpr());
+
+    Ok(())
+}
+
+fn compile_map_items<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
+    map_items: &'il il::MapItems<'ast, 'sexpr, 'context>,
+    opcodes: &'opcodes mut OpCodeTable<&'sexpr Sexpr<'context>>,
+) -> Result<(), Error<'il, 'ast, 'sexpr, 'context>> {
+    compile(&map_items.map, opcodes)?;
+
+    opcodes.push(OpCode::MapItems, map_items.source.source_sexpr());
 
     Ok(())
 }
