@@ -295,7 +295,7 @@ fn read<'context>(
             span: lexer.span(),
         },
         Ok(Token::String) => Sexpr::String {
-            string: lexer.slice().to_string(),
+            string: lexer.slice()[1..lexer.slice().len() - 1].to_string(),
             context,
             span: lexer.span(),
         },
@@ -361,7 +361,7 @@ fn read_list<'context>(
                 span: lexer.span(),
             }),
             Some(Ok(Token::String)) => list.push(Sexpr::String {
-                string: lexer.slice().to_string(),
+                string: lexer.slice()[1..lexer.slice().len() - 1].to_string(),
                 context,
                 span: lexer.span(),
             }),
