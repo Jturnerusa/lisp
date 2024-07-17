@@ -1,0 +1,1 @@
+(decl print (lambda (string)))
