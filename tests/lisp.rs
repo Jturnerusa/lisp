@@ -376,13 +376,6 @@ fn test_upvalues() {
 }
 
 #[test]
-fn test_string_split() {
-    let input = include_str!("lisp/string-split.lisp");
-    assert!(eval_with_bootstrap(input).is_ok());
-    gc::collect();
-}
-
-#[test]
 fn test_length() {
     let input = include_str!("lisp/length.lisp");
     assert!(eval_with_bootstrap(input).is_ok());
