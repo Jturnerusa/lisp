@@ -34,6 +34,9 @@ static BUILT_INS: &[&str] = &[
     "<",
     "assert",
     "decl",
+    "map-create",
+    "map-insert!",
+    "map-retrieve",
 ];
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -67,6 +70,9 @@ pub enum Ast<'sexpr, 'context> {
     MacroCall(MacroCall<'sexpr, 'context>),
     Quote(Quote<'sexpr, 'context>),
     IsType(IsType<'sexpr, 'context>),
+    MapCreate(MapCreate<'sexpr, 'context>),
+    MapInsert(MapInsert<'sexpr, 'context>),
+    MapRetrieve(MapRetrieve<'sexpr, 'context>),
     Variable(Variable<'sexpr, 'context>),
     Constant(Constant<'sexpr, 'context>),
     Assert(Assert<'sexpr, 'context>),
@@ -278,6 +284,26 @@ pub struct Assert<'sexpr, 'context> {
 }
 
 #[derive(Clone, Debug)]
+pub struct MapCreate<'sexpr, 'context> {
+    pub source: &'sexpr Sexpr<'context>,
+}
+
+#[derive(Clone, Debug)]
+pub struct MapInsert<'sexpr, 'context> {
+    pub source: &'sexpr Sexpr<'context>,
+    pub map: Box<Ast<'sexpr, 'context>>,
+    pub key: Box<Ast<'sexpr, 'context>>,
+    pub value: Box<Ast<'sexpr, 'context>>,
+}
+
+#[derive(Clone, Debug)]
+pub struct MapRetrieve<'sexpr, 'context> {
+    pub source: &'sexpr Sexpr<'context>,
+    pub map: Box<Ast<'sexpr, 'context>>,
+    pub key: Box<Ast<'sexpr, 'context>>,
+}
+
+#[derive(Clone, Debug)]
 pub enum Quoted<'sexpr, 'context> {
     List {
         source: &'sexpr Sexpr<'context>,
@@ -401,6 +427,15 @@ impl Compiler {
                     }
                     [Symbol { symbol, .. }, body] if symbol == "assert" => {
                         self.compile_assert(sexpr, body)?
+                    }
+                    [Symbol { symbol, .. }] if symbol == "map-create" => {
+                        Ast::MapCreate(MapCreate { source: sexpr })
+                    }
+                    [Symbol { symbol, .. }, map, key, value] if symbol == "map-insert!" => {
+                        self.compile_map_insert(sexpr, map, key, value)?
+                    }
+                    [Symbol { symbol, .. }, map, key] if symbol == "map-retrieve" => {
+                        self.compile_map_retrieve(sexpr, map, key)?
                     }
                     _ => {
                         return Err(Error {
@@ -779,6 +814,34 @@ impl Compiler {
             body: Box::new(self.compile(body)?),
         }))
     }
+
+    fn compile_map_insert<'sexpr, 'context>(
+        &mut self,
+        source: &'sexpr Sexpr<'context>,
+        map: &'sexpr Sexpr<'context>,
+        key: &'sexpr Sexpr<'context>,
+        value: &'sexpr Sexpr<'context>,
+    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        Ok(Ast::MapInsert(MapInsert {
+            source,
+            map: Box::new(self.compile(map)?),
+            key: Box::new(self.compile(key)?),
+            value: Box::new(self.compile(value)?),
+        }))
+    }
+
+    fn compile_map_retrieve<'sexpr, 'context>(
+        &mut self,
+        source: &'sexpr Sexpr<'context>,
+        map: &'sexpr Sexpr<'context>,
+        key: &'sexpr Sexpr<'context>,
+    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        Ok(Ast::MapRetrieve(MapRetrieve {
+            source,
+            map: Box::new(self.compile(map)?),
+            key: Box::new(self.compile(key)?),
+        }))
+    }
 }
 
 impl<'sexpr, 'context> fmt::Display for Error<'sexpr, 'context> {
@@ -809,6 +872,9 @@ impl<'sexpr, 'context> Ast<'sexpr, 'context> {
             | Self::Quote(Quote { source, .. })
             | Self::IsType(IsType { source, .. })
             | Self::Assert(Assert { source, .. })
+            | Self::MapCreate(MapCreate { source, .. })
+            | Self::MapInsert(MapInsert { source, .. })
+            | Self::MapRetrieve(MapRetrieve { source, .. })
             | Self::Variable(Variable { source, .. })
             | Self::Constant(Constant::String { source, .. })
             | Self::Constant(Constant::Char { source, .. })

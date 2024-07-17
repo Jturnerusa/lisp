@@ -237,7 +237,6 @@ pub struct Set<'ast, 'sexpr, 'context> {
 #[derive(Clone, Debug)]
 pub struct MapCreate<'ast, 'sexpr, 'context> {
     pub source: &'ast Ast<'sexpr, 'context>,
-    pub map: Box<Il<'ast, 'sexpr, 'context>>,
 }
 
 #[derive(Clone, Debug)]
@@ -437,6 +436,13 @@ impl Compiler {
             Ast::Car(car) => self.compile_car(ast, car, vm, ast_compiler),
             Ast::Cdr(cdr) => self.compile_cdr(ast, cdr, vm, ast_compiler),
             Ast::IsType(is_type) => self.compile_is_type(ast, is_type, vm, ast_compiler),
+            Ast::MapCreate(_) => self.compile_map_create(ast),
+            Ast::MapInsert(map_insert) => {
+                self.compile_map_insert(ast, map_insert, vm, ast_compiler)
+            }
+            Ast::MapRetrieve(map_retrieve) => {
+                self.compile_map_retrieve(ast, map_retrieve, vm, ast_compiler)
+            }
             Ast::Assert(assert) => self.compile_assert(ast, assert, vm, ast_compiler),
             Ast::Constant(constant) => self.compile_constant(ast, constant),
             Ast::Variable(variable) => self.compile_variable_reference(ast, variable),
@@ -1006,6 +1012,42 @@ impl Compiler {
         Ok(Il::Assert(Assert {
             source,
             body: Box::new(self.compile(&assert.body, vm, ast_compiler)?),
+        }))
+    }
+
+    fn compile_map_create<'ast: 'static, 'sexpr, 'context>(
+        &mut self,
+        source: &'ast Ast<'sexpr, 'context>,
+    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
+        Ok(Il::MapCreate(MapCreate { source }))
+    }
+
+    fn compile_map_insert<'ast: 'static, 'sexpr, 'context>(
+        &mut self,
+        source: &'ast Ast<'sexpr, 'context>,
+        map_insert: &'ast ast::MapInsert<'sexpr, 'context>,
+        vm: &mut Vm<&'sexpr Sexpr<'context>>,
+        ast_compiler: &mut ast::Compiler,
+    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
+        Ok(Il::MapInsert(MapInsert {
+            source,
+            map: Box::new(self.compile(&map_insert.map, vm, ast_compiler)?),
+            key: Box::new(self.compile(&map_insert.key, vm, ast_compiler)?),
+            value: Box::new(self.compile(&map_insert.value, vm, ast_compiler)?),
+        }))
+    }
+
+    fn compile_map_retrieve<'ast: 'static, 'sexpr, 'context>(
+        &mut self,
+        source: &'ast Ast<'sexpr, 'context>,
+        map_retrieve: &'ast ast::MapRetrieve<'sexpr, 'context>,
+        vm: &mut Vm<&'sexpr Sexpr<'context>>,
+        ast_compiler: &mut ast::Compiler,
+    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
+        Ok(Il::MapRetrieve(MapRetrieve {
+            source,
+            map: Box::new(self.compile(&map_retrieve.map, vm, ast_compiler)?),
+            key: Box::new(self.compile(&map_retrieve.key, vm, ast_compiler)?),
         }))
     }
 }

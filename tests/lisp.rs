@@ -404,13 +404,6 @@ fn test_parallel_let() {
 }
 
 #[test]
-fn test_hashmap() {
-    let input = include_str!("lisp/hashmap.lisp");
-    assert!(eval(input).is_ok());
-    gc::collect();
-}
-
-#[test]
 fn test_nthcdr() {
     let input = include_str!("lisp/nth-cdr.lisp");
     assert!(eval_with_bootstrap(input).is_ok());
@@ -423,6 +416,8 @@ fn test_find() {
     assert!(eval_with_bootstrap(input).is_ok());
     gc::collect();
 }
+
+deftest!(test_hashmap, "lisp/hashmap.lisp");
 
 deftest!(test_quasiquote, "lisp/quasiquote.lisp");
 

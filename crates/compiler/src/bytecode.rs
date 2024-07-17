@@ -39,7 +39,9 @@ pub fn compile<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
         Il::IsType(is_type) => compile_is_type(is_type, opcodes),
         Il::Apply(apply) => compile_apply(apply, opcodes),
         Il::Assert(assert) => compile_assert(assert, opcodes),
-        _ => todo!("{il:?}"),
+        Il::MapCreate(map_create) => compile_map_create(map_create, opcodes),
+        Il::MapInsert(map_insert) => compile_map_insert(map_insert, opcodes),
+        Il::MapRetrieve(map_retrieve) => compile_map_retrieve(map_retrieve, opcodes),
     }
 }
 
@@ -311,6 +313,40 @@ fn compile_assert<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
     compile(&assert.body, opcodes)?;
 
     opcodes.push(OpCode::Assert, assert.source.source_sexpr());
+
+    Ok(())
+}
+
+fn compile_map_create<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
+    map_create: &'il il::MapCreate<'ast, 'sexpr, 'context>,
+    opcodes: &'opcodes mut OpCodeTable<&'sexpr Sexpr<'context>>,
+) -> Result<(), Error<'il, 'ast, 'sexpr, 'context>> {
+    opcodes.push(OpCode::MapCreate, map_create.source.source_sexpr());
+
+    Ok(())
+}
+
+fn compile_map_insert<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
+    map_insert: &'il il::MapInsert<'ast, 'sexpr, 'context>,
+    opcodes: &'opcodes mut OpCodeTable<&'sexpr Sexpr<'context>>,
+) -> Result<(), Error<'il, 'ast, 'sexpr, 'context>> {
+    compile(&map_insert.map, opcodes)?;
+    compile(&map_insert.key, opcodes)?;
+    compile(&map_insert.value, opcodes)?;
+
+    opcodes.push(OpCode::MapInsert, map_insert.source.source_sexpr());
+
+    Ok(())
+}
+
+fn compile_map_retrieve<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
+    map_retrieve: &'il il::MapRetrieve<'ast, 'sexpr, 'context>,
+    opcodes: &'opcodes mut OpCodeTable<&'sexpr Sexpr<'context>>,
+) -> Result<(), Error<'il, 'ast, 'sexpr, 'context>> {
+    compile(&map_retrieve.map, opcodes)?;
+    compile(&map_retrieve.key, opcodes)?;
+
+    opcodes.push(OpCode::MapRetrieve, map_retrieve.source.source_sexpr());
 
     Ok(())
 }
