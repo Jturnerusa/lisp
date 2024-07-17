@@ -419,6 +419,7 @@ impl Compiler {
             Ast::DefMacro(defmacro) => self.compile_defmacro(ast, defmacro, vm, ast_compiler),
             Ast::Lambda(lambda) => self.compile_lambda(ast, lambda, vm, ast_compiler),
             Ast::Def(def) => self.compile_def(ast, def, vm, ast_compiler),
+            Ast::Decl(decl) => self.compile_decl(ast, decl),
             Ast::Set(set) => self.compile_set(ast, set, vm, ast_compiler),
             Ast::If(r#if) => self.compile_if(ast, r#if, vm, ast_compiler),
             Ast::MacroCall(macro_call) => self.eval_macro(ast, macro_call, vm, ast_compiler),
@@ -710,6 +711,28 @@ impl Compiler {
             })?,
             body: Box::new(self.compile(&def.body, vm, ast_compiler)?),
         }))
+    }
+
+    fn compile_decl<'ast, 'sexpr, 'context>(
+        &mut self,
+        source: &'ast Ast<'sexpr, 'context>,
+        decl: &'ast ast::Decl<'sexpr, 'context>,
+    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
+        self.environment.insert_global(
+            decl.parameter.name.as_str(),
+            match decl.parameter.r#type.as_ref().map(Type::from_ast) {
+                Some(Ok(t)) => Some(t),
+                Some(Err(_)) => {
+                    return Err(Error::Il {
+                        ast: source,
+                        message: "failed to parse type".to_string(),
+                    })
+                }
+                None => None,
+            },
+        );
+
+        Ok(Il::Constant(Constant::Nil { source }))
     }
 
     fn compile_set<'ast_compiler, 'vm, 'ast: 'static, 'sexpr, 'context>(

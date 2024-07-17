@@ -33,6 +33,7 @@ static BUILT_INS: &[&str] = &[
     ">",
     "<",
     "assert",
+    "decl",
 ];
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -52,6 +53,7 @@ pub enum Ast<'sexpr, 'context> {
     DefMacro(DefMacro<'sexpr, 'context>),
     Lambda(Lambda<'sexpr, 'context>),
     Def(Def<'sexpr, 'context>),
+    Decl(Decl<'sexpr, 'context>),
     Set(Set<'sexpr, 'context>),
     If(If<'sexpr, 'context>),
     Apply(Apply<'sexpr, 'context>),
@@ -141,6 +143,13 @@ pub struct Lambda<'sexpr, 'context> {
 
 #[derive(Clone, Debug)]
 pub struct Def<'sexpr, 'context> {
+    pub source: &'sexpr Sexpr<'context>,
+    pub parameter: Parameter,
+    pub body: Box<Ast<'sexpr, 'context>>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Decl<'sexpr, 'context> {
     pub source: &'sexpr Sexpr<'context>,
     pub parameter: Parameter,
     pub body: Box<Ast<'sexpr, 'context>>,
@@ -338,6 +347,9 @@ impl Compiler {
                     [Symbol { symbol, .. }, parameter, body] if symbol == "def" => {
                         self.compile_def(sexpr, parameter, body)?
                     }
+                    [Symbol { symbol, .. }, parameter, body] if symbol == "decl" => {
+                        self.compile_decl(sexpr, parameter, body)?
+                    }
                     [Symbol { symbol, .. }, parameter, body] if symbol == "set!" => {
                         self.compile_set(sexpr, parameter, body)?
                     }
@@ -534,6 +546,22 @@ impl Compiler {
         body: &'sexpr Sexpr<'context>,
     ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
         Ok(Ast::Def(Def {
+            source,
+            parameter: Parameter::from_sexpr(parameter).map_err(|_| Error {
+                sexpr: source,
+                message: "failed to parse parameter".to_string(),
+            })?,
+            body: Box::new(self.compile(body)?),
+        }))
+    }
+
+    fn compile_decl<'sexpr, 'context>(
+        &mut self,
+        source: &'sexpr Sexpr<'context>,
+        parameter: &'sexpr Sexpr<'context>,
+        body: &'sexpr Sexpr<'context>,
+    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        Ok(Ast::Decl(Decl {
             source,
             parameter: Parameter::from_sexpr(parameter).map_err(|_| Error {
                 sexpr: source,
@@ -766,6 +794,7 @@ impl<'sexpr, 'context> Ast<'sexpr, 'context> {
             | Self::DefMacro(DefMacro { source, .. })
             | Self::Lambda(Lambda { source, .. })
             | Self::Def(Def { source, .. })
+            | Self::Decl(Decl { source, .. })
             | Self::Set(Set { source, .. })
             | Self::If(If { source, .. })
             | Self::Apply(Apply { source, .. })
