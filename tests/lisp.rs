@@ -436,3 +436,5 @@ deftest!(test_list_take, "lisp/list/take.lisp");
 deftest!(test_list_drop, "lisp/list/drop.lisp");
 
 deftest!(test_list_sort, "lisp/list/sort.lisp");
+
+deftest!(test_quote_eq_list, "lisp/quote-eq-list.lisp");
