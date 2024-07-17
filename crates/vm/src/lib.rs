@@ -87,6 +87,7 @@ pub enum OpCode<D> {
     MapCreate,
     MapInsert,
     MapRetrieve,
+    MapItems,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -223,6 +224,7 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
             OpCode::MapCreate => self.map_create()?,
             OpCode::MapInsert => self.map_insert()?,
             OpCode::MapRetrieve => self.map_retrieve()?,
+            OpCode::MapItems => self.map_items()?,
             _ => todo!(),
         }
 
@@ -595,9 +597,13 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
     }
 
     pub fn list(&mut self, args: usize) -> Result<(), Error> {
-        let list = make_list(&self.stack[self.stack.len() - args..]);
+        let list = make_list(
+            self.stack[self.stack.len() - args..]
+                .iter()
+                .map(|local| local.clone().into_object()),
+        );
         self.stack.truncate(self.stack.len() - args);
-        self.stack.push(list);
+        self.stack.push(Local::Value(list));
         Ok(())
     }
 
@@ -753,16 +759,28 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
 
         Ok(())
     }
-}
 
-fn make_list<D: Clone>(objects: &[Local<D>]) -> Local<D> {
-    if !objects.is_empty() {
-        Local::Value(Object::Cons(Gc::new(GcCell::new(Cons(
-            objects[0].clone().into_object(),
-            make_list(&objects[1..]).into_object(),
-        )))))
-    } else {
-        Local::Value(Object::Nil)
+    fn map_items(&mut self) -> Result<(), Error> {
+        let map = match self.stack.pop().unwrap().into_object() {
+            Object::HashMap(map) => map,
+            object => {
+                return Err(Error::Type {
+                    expected: Type::Map,
+                    recieved: Type::from(&object),
+                })
+            }
+        };
+
+        let list = make_list(map.borrow().iter().map(|(key, value)| {
+            Object::Cons(Gc::new(GcCell::new(Cons(
+                Object::from(key),
+                Object::Cons(Gc::new(GcCell::new(Cons(value.clone(), Object::Nil)))),
+            ))))
+        }));
+
+        self.stack.push(Local::Value(list));
+
+        Ok(())
     }
 }
 
@@ -844,4 +862,22 @@ unsafe impl<D> Trace for OpCodeTable<D> {
     unsafe fn unroot(&self) {}
 
     unsafe fn trace(&self, _: &mut dyn FnMut(std::ptr::NonNull<gc::Inner<dyn Trace>>) -> bool) {}
+}
+
+fn make_list<'a, D: Clone>(mut objects: impl Iterator<Item = Object<D>>) -> Object<D> {
+    let Some(first) = objects.next() else {
+        return Object::Nil;
+    };
+
+    let mut tail = Gc::new(GcCell::new(Cons(first, Object::Nil)));
+
+    let list = Object::Cons(tail.clone());
+
+    for object in objects {
+        let new_tail = Gc::new(GcCell::new(Cons(object, Object::Nil)));
+        tail.deref().borrow_mut().1 = Object::Cons(new_tail.clone());
+        tail = new_tail
+    }
+
+    list
 }

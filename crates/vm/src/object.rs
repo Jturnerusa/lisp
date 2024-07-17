@@ -268,6 +268,19 @@ impl<D> TryFrom<&Object<D>> for HashMapKey {
     }
 }
 
+impl<D> From<&HashMapKey> for Object<D> {
+    fn from(value: &HashMapKey) -> Self {
+        match value {
+            HashMapKey::Symbol(symbol) => Object::Symbol(symbol.clone()),
+            HashMapKey::String(string) => Object::String(string.clone()),
+            HashMapKey::Char(char) => Object::Char(*char),
+            HashMapKey::Int(int) => Object::Int(*int),
+            HashMapKey::Bool(bool) => Object::Bool(*bool),
+            HashMapKey::Nil => Object::Nil,
+        }
+    }
+}
+
 unsafe impl Trace for HashMapKey {
     unsafe fn root(&self) {
         match self {
