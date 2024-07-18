@@ -11,6 +11,7 @@ use unwrap_enum::{EnumAs, EnumIs};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Type {
+    Module,
     Function,
     Cons,
     Map,
@@ -34,6 +35,7 @@ pub enum HashMapKey {
 
 #[derive(Clone, Debug, EnumAs, EnumIs)]
 pub enum Object<D: 'static> {
+    Module(Gc<GcCell<Module<D>>>),
     NativeFunction(NativeFunction<D>),
     Function(Gc<GcCell<Lambda<D>>>),
     Cons(Gc<GcCell<Cons<D>>>),
@@ -58,6 +60,12 @@ pub struct Lambda<D: 'static> {
 pub struct NativeFunction<D: 'static>(
     pub(crate) Rc<dyn Fn(&mut [crate::Local<D>]) -> Result<Object<D>, Error>>,
 );
+
+#[derive(Debug)]
+pub struct Module<D: 'static> {
+    pub(crate) name: String,
+    pub(crate) globals: HashMap<String, Object<D>>,
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Cons<D: 'static>(pub Object<D>, pub Object<D>);
@@ -114,6 +122,7 @@ impl<D> Debug for NativeFunction<D> {
 impl<D> From<&Object<D>> for Type {
     fn from(value: &Object<D>) -> Self {
         match value {
+            Object::Module(_) => Type::Module,
             Object::Function(_) | Object::NativeFunction(_) => Type::Function,
             Object::Cons(_) => Type::Cons,
             Object::HashMap(_) => Type::Map,
@@ -130,6 +139,7 @@ impl<D> From<&Object<D>> for Type {
 impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Self::Module => write!(f, "module"),
             Self::Function => write!(f, "function"),
             Self::Cons => write!(f, "cons"),
             Self::Map => write!(f, "map"),
@@ -195,6 +205,7 @@ impl<D: Clone> Display for Cons<D> {
 impl<D: Clone> Display for Object<D> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Module(module) => write!(f, "module({})", module.borrow().name.as_str()),
             Self::NativeFunction(native_function) => write!(f, "{native_function}",),
             Self::Function(function) => write!(f, "{}", *function.deref().borrow()),
             Self::Cons(cons) => write!(f, "{}", cons.borrow().deref()),
@@ -277,6 +288,26 @@ impl<D> From<&HashMapKey> for Object<D> {
             HashMapKey::Int(int) => Object::Int(*int),
             HashMapKey::Bool(bool) => Object::Bool(*bool),
             HashMapKey::Nil => Object::Nil,
+        }
+    }
+}
+
+unsafe impl<D: 'static> Trace for Module<D> {
+    unsafe fn root(&self) {
+        for object in self.globals.values() {
+            object.root();
+        }
+    }
+
+    unsafe fn unroot(&self) {
+        for object in self.globals.values() {
+            object.unroot();
+        }
+    }
+
+    unsafe fn trace(&self, tracer: &mut dyn FnMut(NonNull<gc::Inner<dyn Trace>>) -> bool) {
+        for object in self.globals.values() {
+            object.trace(tracer);
         }
     }
 }

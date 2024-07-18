@@ -4,7 +4,7 @@ pub mod object;
 
 use crate::object::{Cons, Lambda, NativeFunction, Type};
 use gc::{Gc, GcCell, Trace};
-use object::HashMapKey;
+use object::{HashMapKey, Module};
 use std::cmp::{Ordering, PartialOrd};
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -51,6 +51,9 @@ pub enum OpCode<D> {
     GetLocal(usize),
     SetUpValue(usize),
     GetUpValue(usize),
+    DefModuleVar(Gc<String>),
+    SetModuleVar(Gc<String>),
+    GetModuleVar(Gc<String>),
     Call(usize),
     Tail(usize),
     Apply,
@@ -60,6 +63,7 @@ pub enum OpCode<D> {
         body: Gc<OpCodeTable<D>>,
     },
     CreateUpValue(UpValue),
+    CreateModule(Gc<String>),
     PushSymbol(Gc<String>),
     PushInt(i64),
     PushChar(char),
@@ -182,12 +186,22 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
             OpCode::GetLocal(local) => self.get_local(local)?,
             OpCode::SetUpValue(upvalue) => self.set_upvalue(upvalue)?,
             OpCode::GetUpValue(upvalue) => self.get_upvalue(upvalue)?,
+            OpCode::DefModuleVar(module_var) => self.def_module_var(module_var.as_str())?,
+            OpCode::SetModuleVar(module_var) => self.set_module_var(module_var.as_str())?,
+            OpCode::GetModuleVar(module_var) => self.get_module_var(module_var.as_str())?,
             OpCode::Call(args) => self.call(args)?,
             OpCode::Tail(args) => self.tail(args)?,
             OpCode::Return => self.ret()?,
             OpCode::Apply => self.apply()?,
             OpCode::Lambda { arity, body } => self.lambda(arity, body)?,
             OpCode::CreateUpValue(upvalue) => self.create_upvalue(upvalue)?,
+            OpCode::CreateModule(module_name) => {
+                self.stack
+                    .push(Local::Value(Object::Module(Gc::new(GcCell::new(Module {
+                        name: module_name.to_string(),
+                        globals: HashMap::new(),
+                    })))));
+            }
             OpCode::PushSymbol(symbol) => {
                 self.stack
                     .push(Local::Value(Object::Symbol(symbol.clone())));
@@ -347,6 +361,65 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
             })?;
 
         Ok(())
+    }
+
+    pub fn def_module_var(&mut self, var: &str) -> Result<(), Error> {
+        let val = self.stack.pop().unwrap().into_object();
+        let module = self.stack.pop().unwrap().into_object();
+
+        match module {
+            Object::Module(m) => {
+                m.borrow_mut().globals.insert(var.to_string(), val);
+                Ok(())
+            }
+            object => Err(Error::Type {
+                expected: Type::Module,
+                recieved: Type::from(&object),
+            }),
+        }
+    }
+
+    pub fn set_module_var(&mut self, var: &str) -> Result<(), Error> {
+        let val = self.stack.pop().unwrap().into_object();
+        let module = self.stack.pop().unwrap().into_object();
+
+        match module {
+            Object::Module(m) => {
+                if let Some(var) = m.borrow_mut().globals.get_mut(var) {
+                    *var = val;
+                } else {
+                    return Err(Error::NotFound(var.to_string()));
+                }
+
+                Ok(())
+            }
+            object => Err(Error::Type {
+                expected: Type::Module,
+                recieved: Type::from(&object),
+            }),
+        }
+    }
+
+    pub fn get_module_var(&mut self, var: &str) -> Result<(), Error> {
+        let module = self.stack.pop().unwrap().into_object();
+
+        match module {
+            Object::Module(m) => {
+                self.stack.push(Local::Value(
+                    m.borrow()
+                        .globals
+                        .get(var)
+                        .cloned()
+                        .ok_or(Error::NotFound(var.to_string()))?,
+                ));
+
+                Ok(())
+            }
+            object => Err(Error::Type {
+                expected: Type::Module,
+                recieved: Type::from(&object),
+            }),
+        }
     }
 
     pub fn call(&mut self, args: usize) -> Result<(), Error> {
