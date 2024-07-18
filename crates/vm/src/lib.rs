@@ -387,9 +387,7 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
             .into_object()
         {
             Object::Function(function) => {
-                self.stack
-                    .drain(self.bp..self.stack.len() - args)
-                    .for_each(|_| ());
+                self.stack.drain(self.bp..self.stack.len() - args);
 
                 self.current_function = Some(function.clone());
 
