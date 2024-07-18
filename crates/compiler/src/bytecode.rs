@@ -1,3 +1,5 @@
+mod optimizer;
+
 use crate::il::{self, Il};
 use core::fmt;
 use gc::Gc;
@@ -91,10 +93,12 @@ fn compile_lambda<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
 
     lambda_opcode_table.push(OpCode::Return, lambda.source.source_sexpr());
 
+    let optimized_opcode_table = optimizer::optimize(&lambda_opcode_table);
+
     opcodes.push(
         OpCode::Lambda {
             arity: lambda.arity,
-            body: Gc::new(lambda_opcode_table),
+            body: Gc::new(optimized_opcode_table),
         },
         lambda.source.source_sexpr(),
     );
