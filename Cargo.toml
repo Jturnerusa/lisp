@@ -10,6 +10,9 @@ name = "lisp"
 version = "0.0.1"
 edition = "2021"
 
+[[bin]]
+name = "disasm"
+
 [dependencies]
 value = { path = "crates/value" }
 reader = { path = "crates/reader" }
