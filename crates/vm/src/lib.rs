@@ -183,6 +183,7 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
             OpCode::SetUpValue(upvalue) => self.set_upvalue(upvalue)?,
             OpCode::GetUpValue(upvalue) => self.get_upvalue(upvalue)?,
             OpCode::Call(args) => self.call(args)?,
+            OpCode::Tail(args) => self.tail(args)?,
             OpCode::Return => self.ret()?,
             OpCode::Apply => self.apply()?,
             OpCode::Lambda { arity, body } => self.lambda(arity, body)?,
@@ -225,7 +226,6 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
             OpCode::MapInsert => self.map_insert()?,
             OpCode::MapRetrieve => self.map_retrieve()?,
             OpCode::MapItems => self.map_items()?,
-            _ => todo!(),
         }
 
         Ok(())
@@ -355,25 +355,6 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
             .into_object()
         {
             Object::Function(function) => {
-                match function.borrow().arity {
-                    Arity::Nullary if args != 0 => {
-                        return Err(Error::Parameters(format!(
-                            "expected 0 parameters, received {args}"
-                        )))
-                    }
-                    Arity::Nary(n) if args != n => {
-                        return Err(Error::Parameters(format!(
-                            "expected {n} parameters, received {args}"
-                        )))
-                    }
-                    Arity::Variadic(n) if args < n => {
-                        return Err(Error::Parameters(format!(
-                            "expected at least {n} parameters, received {args}"
-                        )))
-                    }
-                    _ => (),
-                }
-
                 self.frames.push(Frame {
                     function: self.current_function.clone(),
                     bp: self.bp,
@@ -392,21 +373,7 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
 
                 Ok(())
             }
-            Object::NativeFunction(function) => {
-                let len = self.stack.len();
-                let parameters = &mut self.stack[len - args..];
-                let ret = function.0(parameters);
-
-                self.stack.truncate(self.stack.len() - args - 1);
-
-                match ret {
-                    Ok(val) => {
-                        self.stack.push(Local::Value(val));
-                        Ok(())
-                    }
-                    Err(e) => Err(e),
-                }
-            }
+            Object::NativeFunction(function) => self.native_call(args, function),
             object => Err(Error::Type {
                 expected: Type::Function,
                 recieved: Type::from(&object),
@@ -414,8 +381,63 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
         }
     }
 
-    fn tail(&mut self) -> Result<(), Error> {
-        todo!()
+    fn tail(&mut self, args: usize) -> Result<(), Error> {
+        match self.stack[self.stack.len() - args - 1]
+            .clone()
+            .into_object()
+        {
+            Object::Function(function) => {
+                self.stack
+                    .drain(self.bp..self.stack.len() - args)
+                    .for_each(|_| ());
+
+                self.current_function = Some(function.clone());
+
+                self.pc = 0;
+
+                if let Arity::Variadic(n) = function.borrow().arity {
+                    self.list(args - n)?;
+                }
+
+                Ok(())
+            }
+            Object::NativeFunction(native_function) => self.native_call(args, native_function),
+            object => Err(Error::Type {
+                expected: Type::Function,
+                recieved: Type::from(&object),
+            }),
+        }
+    }
+
+    fn check_arity(&mut self, args: usize, function: Gc<GcCell<Lambda<D>>>) -> Result<(), Error> {
+        match function.borrow().arity {
+            Arity::Nullary if args != 0 => Err(Error::Parameters(format!(
+                "expected 0 parameters, received {args}"
+            ))),
+            Arity::Nary(n) if args != n => Err(Error::Parameters(format!(
+                "expected {n} parameters, received {args}"
+            ))),
+            Arity::Variadic(n) if args < n => Err(Error::Parameters(format!(
+                "expected at least {n} parameters, received {args}"
+            ))),
+            _ => Ok(()),
+        }
+    }
+
+    fn native_call(&mut self, args: usize, function: NativeFunction<D>) -> Result<(), Error> {
+        let len = self.stack.len();
+        let parameters = &mut self.stack[len - args..];
+        let ret = function.0(parameters);
+
+        self.stack.truncate(self.stack.len() - args - 1);
+
+        match ret {
+            Ok(val) => {
+                self.stack.push(Local::Value(val));
+                Ok(())
+            }
+            Err(e) => Err(e),
+        }
     }
 
     pub fn ret(&mut self) -> Result<(), Error> {
