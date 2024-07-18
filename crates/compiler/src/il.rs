@@ -6,6 +6,7 @@ use crate::{
 };
 use reader::{Reader, Sexpr};
 use std::{collections::BTreeSet, hash::Hash};
+use unwrap_enum::{EnumAs, EnumIs};
 use vm::{Arity, OpCodeTable, UpValue, Vm};
 
 #[derive(Debug, thiserror::Error)]
@@ -49,7 +50,7 @@ pub enum Type {
     Union(BTreeSet<Type>),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, EnumAs, EnumIs)]
 pub enum Il<'ast, 'sexpr, 'context> {
     Lambda(Lambda<'ast, 'sexpr, 'context>),
     If(If<'ast, 'sexpr, 'context>),
