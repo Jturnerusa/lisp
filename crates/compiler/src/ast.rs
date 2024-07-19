@@ -53,6 +53,7 @@ pub struct Compiler {
 
 #[derive(Clone, Debug, EnumAs, EnumIs)]
 pub enum Ast<'sexpr, 'context> {
+    Module(Module<'sexpr, 'context>),
     EvalWhenCompile(EvalWhenCompile<'sexpr, 'context>),
     DefMacro(DefMacro<'sexpr, 'context>),
     Lambda(Lambda<'sexpr, 'context>),
@@ -119,6 +120,7 @@ pub enum Type {
 pub struct Variable<'sexpr, 'context> {
     pub source: &'sexpr Sexpr<'context>,
     pub name: String,
+    pub module: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -342,6 +344,12 @@ pub enum Quoted<'sexpr, 'context> {
     },
 }
 
+#[derive(Clone, Debug)]
+pub struct Module<'sexpr, 'context> {
+    source: &'sexpr Sexpr<'context>,
+    name: String,
+}
+
 impl Compiler {
     pub fn new() -> Self {
         Self {
@@ -362,6 +370,9 @@ impl Compiler {
                     .is_some_and(|symbol| BUILT_INS.iter().any(|b| symbol == *b)) =>
             {
                 match list.as_slice() {
+                    [Symbol { symbol, .. }, Symbol { symbol: name, .. }] if symbol == "module" => {
+                        self.compile_module(sexpr, name)?
+                    }
                     [Symbol { symbol, .. }, rest @ ..] if symbol == "eval-when-compile" => {
                         self.compile_eval_when_compile(sexpr, rest)?
                     }
@@ -471,10 +482,18 @@ impl Compiler {
             List { list, .. } if !list.is_empty() => {
                 self.compile_fncall(sexpr, list.first().unwrap(), &list.as_slice()[1..])?
             }
-            Symbol { symbol, .. } => Ast::Variable(Variable {
-                source: sexpr,
-                name: symbol.to_string(),
-            }),
+            Symbol { symbol, .. } => {
+                let (name, module) = parse_variable(symbol.as_str()).map_err(|_| Error {
+                    sexpr,
+                    message: "failed to parse variable".to_string(),
+                })?;
+
+                Ast::Variable(Variable {
+                    source: sexpr,
+                    name: name.to_string(),
+                    module: module.map(|s| s.to_string()),
+                })
+            }
             String { string, .. } => Ast::Constant(Constant::String {
                 source: sexpr,
                 string: string.clone(),
@@ -494,6 +513,17 @@ impl Compiler {
             Nil { .. } => Ast::Constant(Constant::Nil { source: sexpr }),
             _ => unreachable!(),
         })
+    }
+
+    fn compile_module<'sexpr, 'context>(
+        &mut self,
+        source: &'sexpr Sexpr<'context>,
+        name: &str,
+    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        Ok(Ast::Module(Module {
+            source,
+            name: name.to_string(),
+        }))
     }
 
     fn compile_eval_when_compile<'sexpr, 'context>(
@@ -875,7 +905,8 @@ impl<'sexpr, 'context> fmt::Display for Error<'sexpr, 'context> {
 impl<'sexpr, 'context> Ast<'sexpr, 'context> {
     pub fn source_sexpr(&self) -> &'sexpr Sexpr<'context> {
         match self {
-            Self::EvalWhenCompile(EvalWhenCompile { source, .. })
+            Self::Module(Module { source, .. })
+            | Self::EvalWhenCompile(EvalWhenCompile { source, .. })
             | Self::DefMacro(DefMacro { source, .. })
             | Self::Lambda(Lambda { source, .. })
             | Self::Def(Def { source, .. })
@@ -1058,6 +1089,31 @@ fn quote_list<'sexpr, 'context>(
     }
 }
 
+fn parse_variable(name: &str) -> Result<(&str, Option<&str>), ()> {
+    use micro_nom::{branch, map, pair, separated, take_one_if, take_while1};
+
+    let separator = pair::<&str, _, _, _, _>(
+        take_one_if(|c: &char| *c == ':'),
+        take_one_if(|c: &char| *c == ':'),
+    );
+
+    let with_module = map(
+        separated::<&str, _, _, _, _, _, _>(
+            take_while1(|c: char| c != ':'),
+            separator,
+            take_while1(|_| true),
+        ),
+        |(var, module)| (var, Some(module)),
+    );
+
+    let without_module = map(take_while1::<&str, _>(|_| true), |var| (var, None));
+
+    match branch(with_module, without_module)(name) {
+        Ok((_, var)) => Ok(var),
+        Err(_) => Err(()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -1093,5 +1149,19 @@ mod tests {
             Parameters::Rest(params, _) if params.is_empty() => (),
             _ => panic!(),
         };
+    }
+
+    #[test]
+    fn test_parse_variable_with_module() {
+        let input = "a::b";
+
+        assert!(matches!(parse_variable(input), Ok(("a", Some("b")))));
+    }
+
+    #[test]
+    fn test_parse_variable_without_module() {
+        let input = "a";
+
+        assert!(matches!(parse_variable(input), Ok(("a", None))));
     }
 }
