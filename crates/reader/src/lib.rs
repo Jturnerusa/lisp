@@ -46,7 +46,7 @@ enum Token {
     #[token("nil")]
     Nil,
 
-    #[regex(r#"[a-zA-Z+_*/?@^=!<>&-][a-zA-Z0-9+_*/?@^=!<>&-]*"#)]
+    #[regex(r#"[a-zA-Z+_*/?@^=!<>&-][a-zA-Z0-9+_*/?@^=!<>&:-]*"#)]
     Symbol,
 
     #[regex(r#""[^"]*""#)]
