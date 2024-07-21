@@ -1,7 +1,7 @@
 use crate::{
     ast::{self, Ast, Quoted},
     bytecode,
-    environment::{self, Environment, Variable},
+    environment::{self, Environment, ModuleVar, Variable},
     il,
 };
 use reader::{Reader, Sexpr};
@@ -52,6 +52,7 @@ pub enum Type {
 
 #[derive(Clone, Debug, EnumAs, EnumIs)]
 pub enum Il<'ast, 'sexpr, 'context> {
+    Module(Module<'ast, 'sexpr, 'context>),
     Lambda(Lambda<'ast, 'sexpr, 'context>),
     If(If<'ast, 'sexpr, 'context>),
     Apply(Apply<'ast, 'sexpr, 'context>),
@@ -72,6 +73,12 @@ pub enum Il<'ast, 'sexpr, 'context> {
     Assert(Assert<'ast, 'sexpr, 'context>),
     VarRef(VarRef<'ast, 'sexpr, 'context>),
     Constant(Constant<'ast, 'sexpr, 'context>),
+}
+
+#[derive(Clone, Debug)]
+pub struct Module<'ast, 'sexpr, 'context> {
+    pub source: &'ast Ast<'sexpr, 'context>,
+    pub name: String,
 }
 
 #[derive(Clone, Debug)]
@@ -118,6 +125,12 @@ pub enum VarRef<'ast, 'sexpr, 'context> {
     Global {
         source: &'ast Ast<'sexpr, 'context>,
         name: String,
+        r#type: Option<Type>,
+    },
+    Module {
+        source: &'ast Ast<'sexpr, 'context>,
+        name: String,
+        module: String,
         r#type: Option<Type>,
     },
 }
@@ -223,10 +236,18 @@ pub struct ComparisonOperation<'ast, 'sexpr, 'context> {
 }
 
 #[derive(Clone, Debug)]
-pub struct Def<'ast, 'sexpr, 'context> {
-    pub source: &'ast Ast<'sexpr, 'context>,
-    pub parameter: Parameter<'ast, 'sexpr, 'context>,
-    pub body: Box<Il<'ast, 'sexpr, 'context>>,
+pub enum Def<'ast, 'sexpr, 'context> {
+    Global {
+        source: &'ast Ast<'sexpr, 'context>,
+        parameter: Parameter<'ast, 'sexpr, 'context>,
+        body: Box<Il<'ast, 'sexpr, 'context>>,
+    },
+    Module {
+        source: &'ast Ast<'sexpr, 'context>,
+        parameter: Parameter<'ast, 'sexpr, 'context>,
+        module: String,
+        body: Box<Il<'ast, 'sexpr, 'context>>,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -284,7 +305,8 @@ impl<'ast, 'sexpr, 'context> VarRef<'ast, 'sexpr, 'context> {
         match self {
             Self::Local { source, .. }
             | Self::UpValue { source, .. }
-            | Self::Global { source, .. } => source,
+            | Self::Global { source, .. }
+            | Self::Module { source, .. } => source,
         }
     }
 }
@@ -305,10 +327,12 @@ impl<'ast, 'sexpr, 'context> Constant<'ast, 'sexpr, 'context> {
 impl<'ast, 'sexpr, 'context> Il<'ast, 'sexpr, 'context> {
     pub fn source_ast(&self) -> &Ast<'sexpr, 'context> {
         match self {
-            Self::Lambda(Lambda { source, .. })
+            Self::Module(Module { source, .. })
+            | Self::Lambda(Lambda { source, .. })
             | Self::ArithmeticOperation(ArithmeticOperation { source, .. })
             | Self::ComparisonOperation(ComparisonOperation { source, .. })
-            | Self::Def(Def { source, .. })
+            | Self::Def(Def::Global { source, .. })
+            | Self::Def(Def::Module { source, .. })
             | Self::Set(Set { source, .. })
             | Self::If(If { source, .. })
             | Self::FnCall(FnCall { source, .. })
@@ -326,6 +350,7 @@ impl<'ast, 'sexpr, 'context> Il<'ast, 'sexpr, 'context> {
             | Self::VarRef(VarRef::Local { source, .. })
             | Self::VarRef(VarRef::UpValue { source, .. })
             | Self::VarRef(VarRef::Global { source, .. })
+            | Self::VarRef(VarRef::Module { source, .. })
             | Self::Constant(Constant::Symbol { source, .. })
             | Self::Constant(Constant::String { source, .. })
             | Self::Constant(Constant::Char { source, .. })
@@ -407,11 +432,29 @@ impl<'ast, 'sexpr, 'context> Parameters<'ast, 'sexpr, 'context> {
     }
 }
 
+impl<'ast, 'sexpr, 'context> Def<'ast, 'sexpr, 'context> {
+    pub(crate) fn source(&self) -> &'ast Ast<'sexpr, 'context> {
+        match self {
+            Self::Global { source, .. } | Self::Module { source, .. } => source,
+        }
+    }
+
+    pub(crate) fn body(&self) -> &Il<'ast, 'sexpr, 'context> {
+        match self {
+            Self::Global { body, .. } | Self::Module { body, .. } => &*body,
+        }
+    }
+}
+
 impl Compiler {
     pub fn new() -> Self {
         Self {
             environment: Environment::new(),
         }
+    }
+
+    pub fn set_current_module(&mut self, module: Option<&str>) {
+        self.environment.set_current_module(module);
     }
 
     pub fn compile<'ast_compiler, 'vm, 'ast: 'static, 'sexpr, 'context>(
@@ -421,6 +464,7 @@ impl Compiler {
         ast_compiler: &'ast_compiler mut ast::Compiler,
     ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
         match ast {
+            Ast::Module(module) => self.compile_module(ast, module),
             Ast::EvalWhenCompile(eval_when_compile) => {
                 self.eval_when_compile(ast, eval_when_compile, vm, ast_compiler)
             }
@@ -454,9 +498,24 @@ impl Compiler {
             }
             Ast::MapItems(map_items) => self.compile_map_items(ast, map_items, vm, ast_compiler),
             Ast::Assert(assert) => self.compile_assert(ast, assert, vm, ast_compiler),
+            Ast::Export(export) => self.compile_export(ast, export),
             Ast::Constant(constant) => self.compile_constant(ast, constant),
             Ast::Variable(variable) => self.compile_variable_reference(ast, variable),
         }
+    }
+
+    fn compile_module<'ast: 'static, 'sexpr, 'context>(
+        &mut self,
+        source: &'ast Ast<'sexpr, 'context>,
+        module: &'ast ast::Module<'sexpr, 'context>,
+    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
+        self.environment.create_module(module.name.as_str());
+        self.set_current_module(Some(module.name.as_str()));
+
+        Ok(Il::Module(Module {
+            source,
+            name: module.name.clone(),
+        }))
     }
 
     fn eval_when_compile<'ast_compiler, 'ast: 'static, 'sexpr, 'context>(
@@ -508,29 +567,72 @@ impl Compiler {
         source: &'ast Ast<'sexpr, 'context>,
         variable: &'ast ast::Variable<'sexpr, 'context>,
     ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
-        Ok(match self.environment.resolve(variable.name.as_str()) {
-            Some(environment::Variable::Local(index, r#type)) => Il::VarRef(VarRef::Local {
-                source,
-                name: variable.name.clone(),
-                index,
-                r#type,
-            }),
-            Some(environment::Variable::Upvalue(index, r#type)) => Il::VarRef(VarRef::UpValue {
-                source,
-                name: variable.name.clone(),
-                index,
-                r#type,
-            }),
-            Some(environment::Variable::Global(r#type)) => Il::VarRef(VarRef::Global {
-                source,
-                name: variable.name.clone(),
-                r#type,
-            }),
-            None => {
-                return Err(Error::Il {
-                    ast: source,
-                    message: format!("unknown variable referenced: {}", variable.name),
-                })
+        Ok(match variable {
+            ast::Variable::WithoutModule { name, .. } => {
+                match self.environment.resolve(name.as_str()) {
+                    Some(environment::Variable::Local(index, r#type)) => {
+                        Il::VarRef(VarRef::Local {
+                            source,
+                            name: name.clone(),
+                            index,
+                            r#type,
+                        })
+                    }
+                    Some(environment::Variable::Upvalue(index, r#type)) => {
+                        Il::VarRef(VarRef::UpValue {
+                            source,
+                            name: name.clone(),
+                            index,
+                            r#type,
+                        })
+                    }
+                    Some(environment::Variable::Global(r#type)) => Il::VarRef(VarRef::Global {
+                        source,
+                        name: name.clone(),
+                        r#type,
+                    }),
+                    Some(environment::Variable::Module(r#type)) => Il::VarRef(VarRef::Module {
+                        source,
+                        name: name.clone(),
+                        module: self
+                            .environment
+                            .current_module()
+                            .map(|s| s.to_string())
+                            .unwrap(),
+                        r#type,
+                    }),
+                    None => {
+                        return Err(Error::Il {
+                            ast: source,
+                            message: format!("unknown variable referenced: {}", name),
+                        })
+                    }
+                }
+            }
+            ast::Variable::WithModule { name, module, .. } => {
+                match self
+                    .environment
+                    .resolve_module_var(module.as_str(), name.as_str())
+                {
+                    Some(ModuleVar { r#type, visible }) if visible => Il::VarRef(VarRef::Module {
+                        source,
+                        name: name.clone(),
+                        module: module.to_string(),
+                        r#type,
+                    }),
+                    Some(ModuleVar { .. }) => {
+                        return Err(Error::Il {
+                            ast: source,
+                            message: "private module variable referenced".to_string(),
+                        })
+                    }
+                    None => {
+                        return Err(Error::Il {
+                            ast: source,
+                            message: "unknown module variable referenced".to_string(),
+                        })
+                    }
+                }
             }
         })
     }
@@ -705,28 +807,51 @@ impl Compiler {
         vm: &'vm mut Vm<&'sexpr Sexpr<'context>>,
         ast_compiler: &'ast_compiler mut ast::Compiler,
     ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
-        self.environment.insert_global(
-            def.parameter.name.as_str(),
-            match def.parameter.r#type.as_ref().map(Type::from_ast) {
-                Some(Ok(t)) => Some(t),
-                Some(Err(_)) => {
-                    return Err(Error::Il {
-                        ast: source,
-                        message: "failed to parse type".to_string(),
-                    })
-                }
-                None => None,
-            },
-        );
+        let parameter = Parameter::from_ast(source, &def.parameter).map_err(|_| Error::Il {
+            ast: source,
+            message: "failed to parse parameter".to_string(),
+        })?;
 
-        Ok(Il::Def(Def {
-            source,
-            parameter: Parameter::from_ast(source, &def.parameter).map_err(|_| Error::Il {
-                ast: source,
-                message: "failed to parse parameter".to_string(),
-            })?,
-            body: Box::new(self.compile(&def.body, vm, ast_compiler)?),
-        }))
+        let r#type = match def.parameter.r#type.as_ref().map(Type::from_ast) {
+            Some(Ok(t)) => Some(t),
+            Some(Err(_)) => {
+                return Err(Error::Il {
+                    ast: source,
+                    message: "failed to parse type".to_string(),
+                })
+            }
+            None => None,
+        };
+
+        Ok(
+            if let Some(module) = self.environment.current_module().map(|s| s.to_string()) {
+                self.environment.insert_module_var(
+                    module.as_str(),
+                    def.parameter.name.as_str(),
+                    r#type,
+                );
+
+                Il::Def(Def::Module {
+                    source,
+                    parameter,
+                    module: self
+                        .environment
+                        .current_module()
+                        .map(|s| s.to_string())
+                        .unwrap(),
+                    body: Box::new(self.compile(&def.body, vm, ast_compiler)?),
+                })
+            } else {
+                self.environment
+                    .insert_global(def.parameter.name.as_str(), r#type);
+
+                Il::Def(Def::Global {
+                    source,
+                    parameter,
+                    body: Box::new(self.compile(&def.body, vm, ast_compiler)?),
+                })
+            },
+        )
     }
 
     fn compile_decl<'ast, 'sexpr, 'context>(
@@ -760,29 +885,61 @@ impl Compiler {
     ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
         Ok(Il::Set(Set {
             source,
-            target: match self.environment.resolve(set.variable.as_str()) {
-                Some(Variable::Local(index, r#type)) => VarRef::Local {
-                    source,
-                    name: set.variable.clone(),
-                    r#type,
-                    index,
-                },
-                Some(Variable::Upvalue(index, r#type)) => VarRef::UpValue {
-                    source,
-                    name: set.variable.clone(),
-                    r#type,
-                    index,
-                },
-                Some(Variable::Global(r#type)) => VarRef::Global {
-                    source,
-                    name: set.variable.clone(),
-                    r#type,
-                },
-                None => {
-                    return Err(Error::Il {
-                        ast: source,
-                        message: "unknown variable".to_string(),
-                    })
+            target: match &set.variable {
+                ast::Variable::WithoutModule { name, .. } => {
+                    match self.environment.resolve(name.as_str()) {
+                        Some(Variable::Local(index, r#type)) => VarRef::Local {
+                            source,
+                            name: name.clone(),
+                            r#type,
+                            index,
+                        },
+                        Some(Variable::Upvalue(index, r#type)) => VarRef::UpValue {
+                            source,
+                            name: name.clone(),
+                            r#type,
+                            index,
+                        },
+                        Some(Variable::Global(r#type)) => VarRef::Global {
+                            source,
+                            name: name.clone(),
+                            r#type,
+                        },
+                        Some(Variable::Module(r#type)) => VarRef::Module {
+                            source,
+                            name: name.clone(),
+                            module: self.environment.current_module().unwrap().to_string(),
+                            r#type,
+                        },
+                        None => {
+                            return Err(Error::Il {
+                                ast: source,
+                                message: "unknown variable".to_string(),
+                            })
+                        }
+                    }
+                }
+                ast::Variable::WithModule { name, module, .. } => {
+                    match self.environment.resolve_module_var(module, name.as_str()) {
+                        Some(ModuleVar { r#type, visible }) if visible => VarRef::Module {
+                            source,
+                            name: name.clone(),
+                            module: module.to_string(),
+                            r#type,
+                        },
+                        Some(_) => {
+                            return Err(Error::Il {
+                                ast: source,
+                                message: "referenced private symbol".to_string(),
+                            })
+                        }
+                        None => {
+                            return Err(Error::Il {
+                                ast: source,
+                                message: "referenced unknown variable".to_string(),
+                            })
+                        }
+                    }
                 }
             },
             body: Box::new(self.compile(&set.body, vm, ast_compiler)?),
@@ -1072,6 +1229,26 @@ impl Compiler {
             source,
             map: Box::new(self.compile(&map_items.map, vm, ast_compiler)?),
         }))
+    }
+
+    fn compile_export<'ast, 'sexpr, 'context>(
+        &mut self,
+        source: &'ast Ast<'sexpr, 'context>,
+        export: &'ast ast::Export<'sexpr, 'context>,
+    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
+        let current_module = self
+            .environment
+            .current_module()
+            .ok_or(Error::Il {
+                ast: source,
+                message: "can't export symbol at global scope".to_string(),
+            })?
+            .to_string();
+
+        self.environment
+            .export_module_var(current_module.as_str(), export.symbol.as_str());
+
+        Ok(Il::Constant(Constant::Nil { source }))
     }
 }
 

@@ -38,6 +38,8 @@ static BUILT_INS: &[&str] = &[
     "map-insert!",
     "map-retrieve",
     "map-items",
+    "module",
+    "export",
 ];
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -79,6 +81,7 @@ pub enum Ast<'sexpr, 'context> {
     Variable(Variable<'sexpr, 'context>),
     Constant(Constant<'sexpr, 'context>),
     Assert(Assert<'sexpr, 'context>),
+    Export(Export<'sexpr, 'context>),
 }
 
 #[derive(Clone, Debug)]
@@ -117,10 +120,16 @@ pub enum Type {
 }
 
 #[derive(Clone, Debug)]
-pub struct Variable<'sexpr, 'context> {
-    pub source: &'sexpr Sexpr<'context>,
-    pub name: String,
-    pub module: Option<String>,
+pub enum Variable<'sexpr, 'context> {
+    WithoutModule {
+        source: &'sexpr Sexpr<'context>,
+        name: String,
+    },
+    WithModule {
+        source: &'sexpr Sexpr<'context>,
+        name: String,
+        module: String,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -168,7 +177,7 @@ pub struct Decl<'sexpr, 'context> {
 #[derive(Clone, Debug)]
 pub struct Set<'sexpr, 'context> {
     pub source: &'sexpr Sexpr<'context>,
-    pub variable: String,
+    pub variable: Variable<'sexpr, 'context>,
     pub body: Box<Ast<'sexpr, 'context>>,
 }
 
@@ -345,9 +354,15 @@ pub enum Quoted<'sexpr, 'context> {
 }
 
 #[derive(Clone, Debug)]
+pub struct Export<'sexpr, 'context> {
+    pub source: &'sexpr Sexpr<'context>,
+    pub symbol: String,
+}
+
+#[derive(Clone, Debug)]
 pub struct Module<'sexpr, 'context> {
-    source: &'sexpr Sexpr<'context>,
-    name: String,
+    pub source: &'sexpr Sexpr<'context>,
+    pub name: String,
 }
 
 impl Compiler {
@@ -459,6 +474,9 @@ impl Compiler {
                     [Symbol { symbol, .. }, map] if symbol == "map-items" => {
                         self.compile_map_items(sexpr, map)?
                     }
+                    [Symbol { symbol, .. }, Symbol { symbol: item, .. }] if symbol == "export" => {
+                        self.compile_export(sexpr, item)?
+                    }
                     _ => {
                         return Err(Error {
                             sexpr,
@@ -483,16 +501,10 @@ impl Compiler {
                 self.compile_fncall(sexpr, list.first().unwrap(), &list.as_slice()[1..])?
             }
             Symbol { symbol, .. } => {
-                let (name, module) = parse_variable(symbol.as_str()).map_err(|_| Error {
+                Ast::Variable(parse_variable(sexpr, symbol.as_str()).map_err(|_| Error {
                     sexpr,
                     message: "failed to parse variable".to_string(),
-                })?;
-
-                Ast::Variable(Variable {
-                    source: sexpr,
-                    name: name.to_string(),
-                    module: module.map(|s| s.to_string()),
-                })
+                })?)
             }
             String { string, .. } => Ast::Constant(Constant::String {
                 source: sexpr,
@@ -655,10 +667,24 @@ impl Compiler {
     ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
         Ok(Ast::Set(Set {
             source,
-            variable: parameter.as_symbol().map(|s| s.to_string()).ok_or(Error {
-                sexpr: source,
-                message: "expectes symbol as parameter".to_string(),
-            })?,
+            variable: match parameter
+                .as_symbol()
+                .map(|symbol| parse_variable(source, symbol))
+            {
+                Some(Ok(variable)) => variable,
+                Some(Err(())) => {
+                    return Err(Error {
+                        sexpr: source,
+                        message: "failed to parse variable".to_string(),
+                    })
+                }
+                None => {
+                    return Err(Error {
+                        sexpr: source,
+                        message: "expected symbol".to_string(),
+                    })
+                }
+            },
             body: Box::new(self.compile(body)?),
         }))
     }
@@ -894,6 +920,31 @@ impl Compiler {
             map: Box::new(self.compile(map)?),
         }))
     }
+
+    fn compile_export<'sexpr, 'context>(
+        &mut self,
+        source: &'sexpr Sexpr<'context>,
+        item: &str,
+    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        Ok(Ast::Export(Export {
+            source,
+            symbol: match parse_variable(source, item) {
+                Ok(Variable::WithoutModule { name, .. }) => name,
+                Ok(_) => {
+                    return Err(Error {
+                        sexpr: source,
+                        message: "expected non-module variable".to_string(),
+                    })
+                }
+                Err(()) => {
+                    return Err(Error {
+                        sexpr: source,
+                        message: "failed to parse variable".to_string(),
+                    })
+                }
+            },
+        }))
+    }
 }
 
 impl<'sexpr, 'context> fmt::Display for Error<'sexpr, 'context> {
@@ -929,7 +980,9 @@ impl<'sexpr, 'context> Ast<'sexpr, 'context> {
             | Self::MapInsert(MapInsert { source, .. })
             | Self::MapRetrieve(MapRetrieve { source, .. })
             | Self::MapItems(MapItems { source, .. })
-            | Self::Variable(Variable { source, .. })
+            | Self::Export(Export { source, .. })
+            | Self::Variable(Variable::WithoutModule { source, .. })
+            | Self::Variable(Variable::WithModule { source, .. })
             | Self::Constant(Constant::String { source, .. })
             | Self::Constant(Constant::Char { source, .. })
             | Self::Constant(Constant::Int { source, .. })
@@ -1089,7 +1142,10 @@ fn quote_list<'sexpr, 'context>(
     }
 }
 
-fn parse_variable(name: &str) -> Result<(&str, Option<&str>), ()> {
+fn parse_variable<'sexpr, 'context>(
+    source: &'sexpr Sexpr<'context>,
+    variable: &str,
+) -> Result<Variable<'sexpr, 'context>, ()> {
     use micro_nom::{branch, map, pair, separated, take_one_if, take_while1};
 
     let separator = pair::<&str, _, _, _, _>(
@@ -1103,12 +1159,21 @@ fn parse_variable(name: &str) -> Result<(&str, Option<&str>), ()> {
             separator,
             take_while1(|_| true),
         ),
-        |(var, module)| (var, Some(module)),
+        |(module, name)| Variable::WithModule {
+            source,
+            name: name.to_string(),
+            module: module.to_string(),
+        },
     );
 
-    let without_module = map(take_while1::<&str, _>(|_| true), |var| (var, None));
+    let without_module = map(take_while1::<&str, _>(|_| true), |name| {
+        Variable::WithoutModule {
+            source,
+            name: name.to_string(),
+        }
+    });
 
-    match branch(with_module, without_module)(name) {
+    match branch(with_module, without_module)(variable) {
         Ok((_, var)) => Ok(var),
         Err(_) => Err(()),
     }
