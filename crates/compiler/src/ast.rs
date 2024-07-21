@@ -40,6 +40,7 @@ static BUILT_INS: &[&str] = &[
     "map-items",
     "module",
     "export",
+    "require",
 ];
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -55,6 +56,7 @@ pub struct Compiler {
 
 #[derive(Clone, Debug, EnumAs, EnumIs)]
 pub enum Ast<'sexpr, 'context> {
+    Require(Require<'sexpr, 'context>),
     Module(Module<'sexpr, 'context>),
     EvalWhenCompile(EvalWhenCompile<'sexpr, 'context>),
     DefMacro(DefMacro<'sexpr, 'context>),
@@ -142,6 +144,12 @@ pub struct Parameter {
 pub enum Parameters {
     Normal(Vec<Parameter>),
     Rest(Vec<Parameter>, Parameter),
+}
+
+#[derive(Clone, Debug)]
+pub struct Require<'sexpr, 'context> {
+    pub source: &'sexpr Sexpr<'context>,
+    pub module: String,
 }
 
 #[derive(Clone, Debug)]
@@ -388,6 +396,11 @@ impl Compiler {
                     [Symbol { symbol, .. }, Symbol { symbol: name, .. }] if symbol == "module" => {
                         self.compile_module(sexpr, name)?
                     }
+                    [Symbol { symbol, .. }, Symbol { symbol: module, .. }]
+                        if symbol == "require" =>
+                    {
+                        self.compile_require(sexpr, module)?
+                    }
                     [Symbol { symbol, .. }, rest @ ..] if symbol == "eval-when-compile" => {
                         self.compile_eval_when_compile(sexpr, rest)?
                     }
@@ -535,6 +548,17 @@ impl Compiler {
         Ok(Ast::Module(Module {
             source,
             name: name.to_string(),
+        }))
+    }
+
+    fn compile_require<'sexpr, 'context>(
+        &mut self,
+        source: &'sexpr Sexpr<'context>,
+        module: &str,
+    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        Ok(Ast::Require(Require {
+            source,
+            module: module.to_string(),
         }))
     }
 
@@ -957,6 +981,7 @@ impl<'sexpr, 'context> Ast<'sexpr, 'context> {
     pub fn source_sexpr(&self) -> &'sexpr Sexpr<'context> {
         match self {
             Self::Module(Module { source, .. })
+            | Self::Require(Require { source, .. })
             | Self::EvalWhenCompile(EvalWhenCompile { source, .. })
             | Self::DefMacro(DefMacro { source, .. })
             | Self::Lambda(Lambda { source, .. })

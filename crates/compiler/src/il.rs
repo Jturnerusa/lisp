@@ -465,6 +465,7 @@ impl Compiler {
     ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
         match ast {
             Ast::Module(module) => self.compile_module(ast, module),
+            Ast::Require(_) => panic!("requires should be handled outside of the il compiler"),
             Ast::EvalWhenCompile(eval_when_compile) => {
                 self.eval_when_compile(ast, eval_when_compile, vm, ast_compiler)
             }
