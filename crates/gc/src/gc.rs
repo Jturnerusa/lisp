@@ -1,4 +1,5 @@
 use crate::Trace;
+use std::borrow::BorrowMut;
 use std::cell::Cell;
 use std::fmt;
 use std::hash::Hash;
@@ -16,7 +17,6 @@ pub struct Inner<T: Trace + ?Sized> {
     pub(crate) data: T,
 }
 
-#[derive(Debug)]
 pub struct Gc<T: Trace + ?Sized> {
     rooted: Cell<bool>,
     inner: NonNull<Inner<T>>,
@@ -143,6 +143,15 @@ impl<T: Trace + Hash + ?Sized> Hash for Gc<T> {
 impl<T: Trace + fmt::Display> fmt::Display for Gc<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         unsafe { self.inner.as_ref().data.fmt(f) }
+    }
+}
+
+impl<T: Trace + fmt::Debug> fmt::Debug for Gc<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Gc")
+            .field("inner", unsafe { &self.inner.as_ref().data })
+            .field("rooted", &self.rooted.get())
+            .finish()
     }
 }
 
