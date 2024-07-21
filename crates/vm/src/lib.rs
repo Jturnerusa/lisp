@@ -3,6 +3,7 @@
 pub mod object;
 
 use crate::object::{Cons, Lambda, NativeFunction, Type};
+use core::fmt;
 use gc::{Gc, GcCell, Trace};
 use object::{HashMapKey, Module};
 use std::cmp::{Ordering, PartialOrd};
@@ -94,7 +95,7 @@ pub enum OpCode<D> {
     MapItems,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct OpCodeTable<D> {
     opcodes: Vec<OpCode<D>>,
     debug: Vec<D>,
@@ -955,6 +956,12 @@ unsafe impl<D> Trace for OpCodeTable<D> {
     unsafe fn unroot(&self) {}
 
     unsafe fn trace(&self, _: &mut dyn FnMut(std::ptr::NonNull<gc::Inner<dyn Trace>>) -> bool) {}
+}
+
+impl<D> fmt::Debug for OpCodeTable<D> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "OpCodeTable")
+    }
 }
 
 fn make_list<'a, D: Clone>(mut objects: impl Iterator<Item = Object<D>>) -> Object<D> {
