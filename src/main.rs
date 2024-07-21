@@ -41,6 +41,8 @@ fn compile_file<'a>(
     vm: &mut Vm<&'a Sexpr<'_>>,
     opcode_table: &mut OpCodeTable<&'a Sexpr<'_>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    il_compiler.set_current_module(None);
+
     let mut source = String::new();
     let mut file = File::open(path)?;
 
