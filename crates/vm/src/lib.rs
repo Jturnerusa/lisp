@@ -364,8 +364,8 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
     }
 
     pub fn def_module_var(&mut self, var: &str) -> Result<(), Error> {
-        let val = self.stack.pop().unwrap().into_object();
         let module = self.stack.pop().unwrap().into_object();
+        let val = self.stack.pop().unwrap().into_object();
 
         match module {
             Object::Module(m) => {
@@ -380,8 +380,8 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
     }
 
     pub fn set_module_var(&mut self, var: &str) -> Result<(), Error> {
-        let val = self.stack.pop().unwrap().into_object();
         let module = self.stack.pop().unwrap().into_object();
+        let val = self.stack.pop().unwrap().into_object();
 
         match module {
             Object::Module(m) => {
