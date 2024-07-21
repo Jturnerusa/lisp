@@ -409,7 +409,7 @@ impl Compiler {
                     {
                         self.compile_defmacro(sexpr, name, parameters, rest)?
                     }
-                    [Symbol { symbol, .. }, parameters, _, Symbol { symbol: arrow, .. }, r#type, rest @ ..]
+                    [Symbol { symbol, .. }, parameters, Symbol { symbol: arrow, .. }, r#type, rest @ ..]
                         if symbol == "lambda" && arrow == "->" =>
                     {
                         self.compile_lambda(sexpr, parameters, Some(r#type), rest)?
