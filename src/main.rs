@@ -30,7 +30,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     match vm.eval(&opcode_table) {
         Ok(_) => Ok(()),
-        Err((error, sexpr)) => Err(format!("{sexpr:?}: {error}").into()),
+        Err((error, sexpr)) => Err(format!("{sexpr:?}:\n{error}").into()),
     }
 }
 
