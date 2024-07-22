@@ -1,9 +1,6 @@
 use crate::{check_arity, check_type};
-use gc::{Gc, GcCell};
-use vm::{
-    object::{Cons, Type},
-    Error, Local, Object,
-};
+use gc::Gc;
+use vm::{object::Type, Error, Local, Object};
 
 pub fn split<D: Clone>(objects: &mut [Local<D>]) -> Result<Object<D>, Error> {
     check_arity!("string-split", 2, objects);
@@ -11,8 +8,10 @@ pub fn split<D: Clone>(objects: &mut [Local<D>]) -> Result<Object<D>, Error> {
     let string = check_type!(objects[0], String);
     let separator = check_type!(objects[1], String);
 
-    Ok(make_list_of_string(
-        string.split(separator.as_str()).map(|s| s.to_string()),
+    Ok(Object::from_iter(
+        string
+            .split(separator.as_str())
+            .map(|s| Object::String(Gc::new(s.to_string()))),
     ))
 }
 
@@ -21,8 +20,10 @@ pub fn split_ascii_whitespace<D: Clone>(objects: &mut [Local<D>]) -> Result<Obje
 
     let string = check_type!(objects[0], String);
 
-    Ok(make_list_of_string(
-        string.split_ascii_whitespace().map(str::to_string),
+    Ok(Object::from_iter(
+        string
+            .split_ascii_whitespace()
+            .map(|s| Object::String(Gc::new(s.to_string()))),
     ))
 }
 
@@ -31,7 +32,9 @@ pub fn to_list<D: Clone>(objects: &mut [Local<D>]) -> Result<Object<D>, Error> {
 
     let string = check_type!(objects[0], String);
 
-    Ok(make_list_of_char(string.chars()))
+    Ok(Object::from_iter(
+        string.chars().map(|char| Object::Char(char)),
+    ))
 }
 
 pub fn from_list<D: Clone>(objects: &mut [Local<D>]) -> Result<Object<D>, Error> {
@@ -69,7 +72,11 @@ pub fn lines<D: Clone>(objects: &mut [Local<D>]) -> Result<Object<D>, Error> {
 
     let string = check_type!(objects[0], String);
 
-    Ok(make_list_of_string(string.lines().map(|s| s.to_string())))
+    Ok(Object::from_iter(
+        string
+            .lines()
+            .map(|s| Object::String(Gc::new(s.to_string()))),
+    ))
 }
 
 pub fn is_digit<D: Clone>(objects: &mut [Local<D>]) -> Result<Object<D>, Error> {
@@ -82,35 +89,4 @@ pub fn is_digit<D: Clone>(objects: &mut [Local<D>]) -> Result<Object<D>, Error> 
     } else {
         Ok(Object::Bool(false))
     }
-}
-
-fn make_list_of_string<D: Clone>(mut strings: impl Iterator<Item = String>) -> Object<D> {
-    let Some(first) = strings.next() else {
-        return Object::Nil;
-    };
-    let mut tail = Gc::new(GcCell::new(Cons(
-        Object::String(Gc::new(first)),
-        Object::Nil,
-    )));
-    let list = Object::Cons(tail.clone());
-    for s in strings {
-        let new_tail = Gc::new(GcCell::new(Cons(Object::String(Gc::new(s)), Object::Nil)));
-        tail.borrow_mut().1 = Object::Cons(new_tail.clone());
-        tail = new_tail;
-    }
-    list
-}
-
-fn make_list_of_char<D: Clone>(mut chars: impl Iterator<Item = char>) -> Object<D> {
-    let Some(first) = chars.next() else {
-        return Object::Nil;
-    };
-    let mut tail = Gc::new(GcCell::new(Cons(Object::Char(first), Object::Nil)));
-    let list = Object::Cons(tail.clone());
-    for c in chars {
-        let new_tail = Gc::new(GcCell::new(Cons(Object::Char(c), Object::Nil)));
-        tail.borrow_mut().1 = Object::Cons(new_tail.clone());
-        tail = new_tail;
-    }
-    list
 }
