@@ -3,7 +3,7 @@ members = [ "crates/gc","lib/native"]
 
 [workspace.dependencies]
 micro-nom = { path = "../micro-nom" }
-unwrap-enum = { path = "../unwrap-enum" }
+unwrap-enum = "=0.1.0"
 
 [package]
 name = "lisp"
