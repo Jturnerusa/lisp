@@ -20,7 +20,7 @@ macro_rules! leak {
     };
 }
 
-static BOOTSTRAP_SOURCE: &str = include_str!("../lib/lisp/bootstrap.lisp");
+static BOOTSTRAP_SOURCE: &str = include_str!("../lib/bootstrap/bootstrap.lisp");
 static LIST_UTILS_SOURCE: &str = include_str!("../lib/lisp/list.lisp");
 
 fn disasm<D: fmt::Debug>(opcode_table: &OpCodeTable<D>, depth: usize) {
