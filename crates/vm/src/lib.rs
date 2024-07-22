@@ -691,7 +691,7 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
     }
 
     pub fn list(&mut self, args: usize) -> Result<(), Error> {
-        let list = make_list(
+        let list = Object::from_iter(
             self.stack[self.stack.len() - args..]
                 .iter()
                 .map(|local| local.clone().into_object()),
@@ -865,7 +865,7 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
             }
         };
 
-        let list = make_list(map.borrow().iter().map(|(key, value)| {
+        let list = Object::from_iter(map.borrow().iter().map(|(key, value)| {
             Object::Cons(Gc::new(GcCell::new(Cons(
                 Object::from(key),
                 Object::Cons(Gc::new(GcCell::new(Cons(value.clone(), Object::Nil)))),
@@ -962,22 +962,4 @@ impl<D> fmt::Debug for OpCodeTable<D> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "OpCodeTable")
     }
-}
-
-fn make_list<'a, D: Clone>(mut objects: impl Iterator<Item = Object<D>>) -> Object<D> {
-    let Some(first) = objects.next() else {
-        return Object::Nil;
-    };
-
-    let mut tail = Gc::new(GcCell::new(Cons(first, Object::Nil)));
-
-    let list = Object::Cons(tail.clone());
-
-    for object in objects {
-        let new_tail = Gc::new(GcCell::new(Cons(object, Object::Nil)));
-        tail.deref().borrow_mut().1 = Object::Cons(new_tail.clone());
-        tail = new_tail
-    }
-
-    list
 }

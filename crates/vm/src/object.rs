@@ -76,6 +76,28 @@ pub struct IterCons<D: 'static>(Option<Cons<D>>);
 #[derive(Clone, Debug)]
 pub struct IterCars<D: 'static>(IterCons<D>);
 
+impl<D: Clone> FromIterator<Object<D>> for Object<D> {
+    fn from_iter<T: IntoIterator<Item = Object<D>>>(iter: T) -> Self {
+        let mut objects = iter.into_iter();
+
+        let Some(first) = objects.by_ref().next() else {
+            return Object::Nil;
+        };
+
+        let mut tail = Gc::new(GcCell::new(Cons(first, Object::Nil)));
+
+        let list = Object::Cons(tail.clone());
+
+        for object in objects {
+            let new_tail = Gc::new(GcCell::new(Cons(object, Object::Nil)));
+            tail.deref().borrow_mut().1 = Object::Cons(new_tail.clone());
+            tail = new_tail
+        }
+
+        list
+    }
+}
+
 impl<D: Clone + 'static> Cons<D> {
     pub fn iter(&self) -> IterCons<D> {
         IterCons(Some(self.clone()))
