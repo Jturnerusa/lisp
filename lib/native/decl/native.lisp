@@ -5,3 +5,5 @@
 (decl read-file (lambda (string)))
 
 (decl string-split-whitespace (lambda (string)))
+
+(decl string->int (lambda (string)))
