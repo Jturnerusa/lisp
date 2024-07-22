@@ -27,7 +27,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         &mut opcode_table,
     )?;
 
-    for arg in env::args().skip(1) {
+    for arg in env::args().skip(1).take_while(|s| s != "--") {
         let path = PathBuf::from(arg);
 
         lisp::compile_file(
