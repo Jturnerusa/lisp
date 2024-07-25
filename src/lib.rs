@@ -9,12 +9,12 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use vm::{OpCodeTable, Vm};
 
-pub fn compile_file<'a>(
+pub fn compile_file(
     path: &Path,
     il_compiler: &mut il::Compiler,
     ast_compiler: &mut ast::Compiler,
-    vm: &mut Vm<&'a Sexpr<'_>>,
-    opcode_table: &mut OpCodeTable<&'a Sexpr<'_>>,
+    vm: &mut Vm<&'static Sexpr<'static>>,
+    opcode_table: &mut OpCodeTable<&'static Sexpr<'static>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     il_compiler.set_current_module(None);
 
@@ -35,10 +35,10 @@ pub fn compile_file<'a>(
 
     for expr in reader {
         let sexpr: &'static _ = Box::leak(Box::new(expr?));
-        let ast: &'static _ = Box::leak(Box::new(ast_compiler.compile(sexpr)?));
+        let ast = ast_compiler.compile(sexpr)?;
 
         if let Ast::Require(ast::Require { module, .. }) = ast {
-            match find_module(module) {
+            match find_module(module.as_str()) {
                 Some(Ok(m)) => {
                     compile_file(m.as_path(), il_compiler, ast_compiler, vm, opcode_table)?;
                     continue;
@@ -48,8 +48,8 @@ pub fn compile_file<'a>(
             }
         }
 
-        let il: &'static _ = Box::leak(Box::new(il_compiler.compile(ast, vm, ast_compiler)?));
-        bytecode::compile(il, opcode_table)?;
+        let il = il_compiler.compile(&ast, vm, ast_compiler)?;
+        bytecode::compile(&il, opcode_table)?;
     }
 
     Ok(())

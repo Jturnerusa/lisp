@@ -44,8 +44,8 @@ static BUILT_INS: &[&str] = &[
 ];
 
 #[derive(Clone, Debug, thiserror::Error)]
-pub struct Error<'sexpr, 'context> {
-    sexpr: &'sexpr Sexpr<'context>,
+pub struct Error {
+    sexpr: &'static Sexpr<'static>,
     message: String,
 }
 
@@ -55,63 +55,63 @@ pub struct Compiler {
 }
 
 #[derive(Clone, Debug, EnumAs, EnumIs)]
-pub enum Ast<'sexpr, 'context> {
-    Require(Require<'sexpr, 'context>),
-    Module(Module<'sexpr, 'context>),
-    EvalWhenCompile(EvalWhenCompile<'sexpr, 'context>),
-    DefMacro(DefMacro<'sexpr, 'context>),
-    Lambda(Lambda<'sexpr, 'context>),
-    Def(Def<'sexpr, 'context>),
-    Decl(Decl<'sexpr, 'context>),
-    Set(Set<'sexpr, 'context>),
-    If(If<'sexpr, 'context>),
-    Apply(Apply<'sexpr, 'context>),
-    BinaryArithemticOperation(BinaryArithmeticOperation<'sexpr, 'context>),
-    ComparisonOperation(ComparisonOperation<'sexpr, 'context>),
-    List(List<'sexpr, 'context>),
-    Cons(Cons<'sexpr, 'context>),
-    Car(Car<'sexpr, 'context>),
-    Cdr(Cdr<'sexpr, 'context>),
-    FnCall(FnCall<'sexpr, 'context>),
-    MacroCall(MacroCall<'sexpr, 'context>),
-    Quote(Quote<'sexpr, 'context>),
-    IsType(IsType<'sexpr, 'context>),
-    MapCreate(MapCreate<'sexpr, 'context>),
-    MapInsert(MapInsert<'sexpr, 'context>),
-    MapRetrieve(MapRetrieve<'sexpr, 'context>),
-    MapItems(MapItems<'sexpr, 'context>),
-    Variable(Variable<'sexpr, 'context>),
-    Constant(Constant<'sexpr, 'context>),
-    Assert(Assert<'sexpr, 'context>),
-    Export(Export<'sexpr, 'context>),
+pub enum Ast {
+    Require(Require),
+    Module(Module),
+    EvalWhenCompile(EvalWhenCompile),
+    DefMacro(DefMacro),
+    Lambda(Lambda),
+    Def(Def),
+    Decl(Decl),
+    Set(Set),
+    If(If),
+    Apply(Apply),
+    BinaryArithemticOperation(BinaryArithmeticOperation),
+    ComparisonOperation(ComparisonOperation),
+    List(List),
+    Cons(Cons),
+    Car(Car),
+    Cdr(Cdr),
+    FnCall(FnCall),
+    MacroCall(MacroCall),
+    Quote(Quote),
+    IsType(IsType),
+    MapCreate(MapCreate),
+    MapInsert(MapInsert),
+    MapRetrieve(MapRetrieve),
+    MapItems(MapItems),
+    Variable(Variable),
+    Constant(Constant),
+    Assert(Assert),
+    Export(Export),
 }
 
 #[derive(Clone, Debug)]
-pub struct EvalWhenCompile<'sexpr, 'context> {
-    pub source: &'sexpr Sexpr<'context>,
-    pub exprs: Vec<Ast<'sexpr, 'context>>,
+pub struct EvalWhenCompile {
+    pub source: &'static Sexpr<'static>,
+    pub exprs: Vec<Ast>,
 }
 
 #[derive(Clone, Debug)]
-pub enum Constant<'sexpr, 'context> {
+pub enum Constant {
     String {
-        source: &'sexpr Sexpr<'context>,
+        source: &'static Sexpr<'static>,
         string: String,
     },
     Char {
-        source: &'sexpr Sexpr<'context>,
+        source: &'static Sexpr<'static>,
         char: char,
     },
     Int {
-        source: &'sexpr Sexpr<'context>,
+        source: &'static Sexpr<'static>,
         int: i64,
     },
     Bool {
-        source: &'sexpr Sexpr<'context>,
+        source: &'static Sexpr<'static>,
         bool: bool,
     },
     Nil {
-        source: &'sexpr Sexpr<'context>,
+        source: &'static Sexpr<'static>,
     },
 }
 
@@ -122,13 +122,13 @@ pub enum Type {
 }
 
 #[derive(Clone, Debug)]
-pub enum Variable<'sexpr, 'context> {
+pub enum Variable {
     WithoutModule {
-        source: &'sexpr Sexpr<'context>,
+        source: &'static Sexpr<'static>,
         name: String,
     },
     WithModule {
-        source: &'sexpr Sexpr<'context>,
+        source: &'static Sexpr<'static>,
         name: String,
         module: String,
     },
@@ -147,60 +147,60 @@ pub enum Parameters {
 }
 
 #[derive(Clone, Debug)]
-pub struct Require<'sexpr, 'context> {
-    pub source: &'sexpr Sexpr<'context>,
+pub struct Require {
+    pub source: &'static Sexpr<'static>,
     pub module: String,
 }
 
 #[derive(Clone, Debug)]
-pub struct DefMacro<'sexpr, 'context> {
-    pub source: &'sexpr Sexpr<'context>,
+pub struct DefMacro {
+    pub source: &'static Sexpr<'static>,
     pub name: String,
     pub parameters: Parameters,
-    pub body: Vec<Ast<'sexpr, 'context>>,
+    pub body: Vec<Ast>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Lambda<'sexpr, 'context> {
-    pub source: &'sexpr Sexpr<'context>,
+pub struct Lambda {
+    pub source: &'static Sexpr<'static>,
     pub r#type: Option<Type>,
     pub parameters: Parameters,
-    pub body: Vec<Ast<'sexpr, 'context>>,
+    pub body: Vec<Ast>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Def<'sexpr, 'context> {
-    pub source: &'sexpr Sexpr<'context>,
+pub struct Def {
+    pub source: &'static Sexpr<'static>,
     pub parameter: Parameter,
-    pub body: Box<Ast<'sexpr, 'context>>,
+    pub body: Box<Ast>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Decl<'sexpr, 'context> {
-    pub source: &'sexpr Sexpr<'context>,
+pub struct Decl {
+    pub source: &'static Sexpr<'static>,
     pub parameter: Parameter,
-    pub body: Box<Ast<'sexpr, 'context>>,
+    pub body: Box<Ast>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Set<'sexpr, 'context> {
-    pub source: &'sexpr Sexpr<'context>,
-    pub variable: Variable<'sexpr, 'context>,
-    pub body: Box<Ast<'sexpr, 'context>>,
+pub struct Set {
+    pub source: &'static Sexpr<'static>,
+    pub variable: Variable,
+    pub body: Box<Ast>,
 }
 
 #[derive(Clone, Debug)]
-pub struct If<'sexpr, 'context> {
-    pub source: &'sexpr Sexpr<'context>,
-    pub predicate: Box<Ast<'sexpr, 'context>>,
-    pub then: Box<Ast<'sexpr, 'context>>,
-    pub r#else: Box<Ast<'sexpr, 'context>>,
+pub struct If {
+    pub source: &'static Sexpr<'static>,
+    pub predicate: Box<Ast>,
+    pub then: Box<Ast>,
+    pub r#else: Box<Ast>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Apply<'sexpr, 'context> {
-    pub source: &'sexpr Sexpr<'context>,
-    pub exprs: Vec<Ast<'sexpr, 'context>>,
+pub struct Apply {
+    pub source: &'static Sexpr<'static>,
+    pub exprs: Vec<Ast>,
 }
 
 #[derive(Clone, Debug)]
@@ -212,11 +212,11 @@ pub enum BinaryArithmeticOperator {
 }
 
 #[derive(Clone, Debug)]
-pub struct BinaryArithmeticOperation<'sexpr, 'context> {
-    pub source: &'sexpr Sexpr<'context>,
+pub struct BinaryArithmeticOperation {
+    pub source: &'static Sexpr<'static>,
     pub operator: BinaryArithmeticOperator,
-    pub lhs: Box<Ast<'sexpr, 'context>>,
-    pub rhs: Box<Ast<'sexpr, 'context>>,
+    pub lhs: Box<Ast>,
+    pub rhs: Box<Ast>,
 }
 
 #[derive(Clone, Debug, EnumAs, EnumIs)]
@@ -227,56 +227,56 @@ pub enum ComparisonOperator {
 }
 
 #[derive(Clone, Debug)]
-pub struct ComparisonOperation<'sexpr, 'context> {
-    pub source: &'sexpr Sexpr<'context>,
+pub struct ComparisonOperation {
+    pub source: &'static Sexpr<'static>,
     pub operator: ComparisonOperator,
-    pub lhs: Box<Ast<'sexpr, 'context>>,
-    pub rhs: Box<Ast<'sexpr, 'context>>,
+    pub lhs: Box<Ast>,
+    pub rhs: Box<Ast>,
 }
 
 #[derive(Clone, Debug)]
-pub struct List<'sexpr, 'context> {
-    pub source: &'sexpr Sexpr<'context>,
-    pub exprs: Vec<Ast<'sexpr, 'context>>,
+pub struct List {
+    pub source: &'static Sexpr<'static>,
+    pub exprs: Vec<Ast>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Cons<'sexpr, 'context> {
-    pub source: &'sexpr Sexpr<'context>,
-    pub lhs: Box<Ast<'sexpr, 'context>>,
-    pub rhs: Box<Ast<'sexpr, 'context>>,
+pub struct Cons {
+    pub source: &'static Sexpr<'static>,
+    pub lhs: Box<Ast>,
+    pub rhs: Box<Ast>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Car<'sexpr, 'context> {
-    pub source: &'sexpr Sexpr<'context>,
-    pub body: Box<Ast<'sexpr, 'context>>,
+pub struct Car {
+    pub source: &'static Sexpr<'static>,
+    pub body: Box<Ast>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Cdr<'sexpr, 'context> {
-    pub source: &'sexpr Sexpr<'context>,
-    pub body: Box<Ast<'sexpr, 'context>>,
+pub struct Cdr {
+    pub source: &'static Sexpr<'static>,
+    pub body: Box<Ast>,
 }
 
 #[derive(Clone, Debug)]
-pub struct FnCall<'sexpr, 'context> {
-    pub source: &'sexpr Sexpr<'context>,
-    pub function: Box<Ast<'sexpr, 'context>>,
-    pub exprs: Vec<Ast<'sexpr, 'context>>,
+pub struct FnCall {
+    pub source: &'static Sexpr<'static>,
+    pub function: Box<Ast>,
+    pub exprs: Vec<Ast>,
 }
 
 #[derive(Clone, Debug)]
-pub struct MacroCall<'sexpr, 'context> {
-    pub source: &'sexpr Sexpr<'context>,
+pub struct MacroCall {
+    pub source: &'static Sexpr<'static>,
     pub r#macro: String,
-    pub args: Vec<Quoted<'sexpr, 'context>>,
+    pub args: Vec<Quoted>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Quote<'sexpr, 'context> {
-    pub source: &'sexpr Sexpr<'context>,
-    pub body: Quoted<'sexpr, 'context>,
+pub struct Quote {
+    pub source: &'static Sexpr<'static>,
+    pub body: Quoted,
 }
 
 #[derive(Clone, Debug)]
@@ -292,84 +292,84 @@ pub enum IsTypeParameter {
 }
 
 #[derive(Clone, Debug)]
-pub struct IsType<'sexpr, 'context> {
-    pub source: &'sexpr Sexpr<'context>,
+pub struct IsType {
+    pub source: &'static Sexpr<'static>,
     pub parameter: IsTypeParameter,
-    pub body: Box<Ast<'sexpr, 'context>>,
+    pub body: Box<Ast>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Assert<'sexpr, 'context> {
-    pub source: &'sexpr Sexpr<'context>,
-    pub body: Box<Ast<'sexpr, 'context>>,
+pub struct Assert {
+    pub source: &'static Sexpr<'static>,
+    pub body: Box<Ast>,
 }
 
 #[derive(Clone, Debug)]
-pub struct MapCreate<'sexpr, 'context> {
-    pub source: &'sexpr Sexpr<'context>,
+pub struct MapCreate {
+    pub source: &'static Sexpr<'static>,
 }
 
 #[derive(Clone, Debug)]
-pub struct MapInsert<'sexpr, 'context> {
-    pub source: &'sexpr Sexpr<'context>,
-    pub map: Box<Ast<'sexpr, 'context>>,
-    pub key: Box<Ast<'sexpr, 'context>>,
-    pub value: Box<Ast<'sexpr, 'context>>,
+pub struct MapInsert {
+    pub source: &'static Sexpr<'static>,
+    pub map: Box<Ast>,
+    pub key: Box<Ast>,
+    pub value: Box<Ast>,
 }
 
 #[derive(Clone, Debug)]
-pub struct MapRetrieve<'sexpr, 'context> {
-    pub source: &'sexpr Sexpr<'context>,
-    pub map: Box<Ast<'sexpr, 'context>>,
-    pub key: Box<Ast<'sexpr, 'context>>,
+pub struct MapRetrieve {
+    pub source: &'static Sexpr<'static>,
+    pub map: Box<Ast>,
+    pub key: Box<Ast>,
 }
 
 #[derive(Clone, Debug)]
-pub struct MapItems<'sexpr, 'context> {
-    pub source: &'sexpr Sexpr<'context>,
-    pub map: Box<Ast<'sexpr, 'context>>,
+pub struct MapItems {
+    pub source: &'static Sexpr<'static>,
+    pub map: Box<Ast>,
 }
 
 #[derive(Clone, Debug)]
-pub enum Quoted<'sexpr, 'context> {
+pub enum Quoted {
     List {
-        source: &'sexpr Sexpr<'context>,
-        list: Vec<Quoted<'sexpr, 'context>>,
+        source: &'static Sexpr<'static>,
+        list: Vec<Quoted>,
     },
     Symbol {
-        source: &'sexpr Sexpr<'context>,
+        source: &'static Sexpr<'static>,
         symbol: String,
     },
     String {
-        source: &'sexpr Sexpr<'context>,
+        source: &'static Sexpr<'static>,
         string: String,
     },
     Char {
-        source: &'sexpr Sexpr<'context>,
+        source: &'static Sexpr<'static>,
         char: char,
     },
     Int {
-        source: &'sexpr Sexpr<'context>,
+        source: &'static Sexpr<'static>,
         int: i64,
     },
     Bool {
-        source: &'sexpr Sexpr<'context>,
+        source: &'static Sexpr<'static>,
         bool: bool,
     },
     Nil {
-        source: &'sexpr Sexpr<'context>,
+        source: &'static Sexpr<'static>,
     },
 }
 
 #[derive(Clone, Debug)]
-pub struct Export<'sexpr, 'context> {
-    pub source: &'sexpr Sexpr<'context>,
+pub struct Export {
+    pub source: &'static Sexpr<'static>,
     pub symbol: String,
 }
 
 #[derive(Clone, Debug)]
-pub struct Module<'sexpr, 'context> {
-    pub source: &'sexpr Sexpr<'context>,
+pub struct Module {
+    pub source: &'static Sexpr<'static>,
     pub name: String,
 }
 
@@ -380,10 +380,7 @@ impl Compiler {
         }
     }
 
-    pub fn compile<'sexpr, 'context>(
-        &mut self,
-        sexpr: &'sexpr Sexpr<'context>,
-    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+    pub fn compile(&mut self, sexpr: &'static Sexpr<'static>) -> Result<Ast, Error> {
         use Sexpr::*;
         Ok(match sexpr {
             Sexpr::List { list, .. }
@@ -540,33 +537,33 @@ impl Compiler {
         })
     }
 
-    fn compile_module<'sexpr, 'context>(
+    fn compile_module(
         &mut self,
-        source: &'sexpr Sexpr<'context>,
+        source: &'static Sexpr<'static>,
         name: &str,
-    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+    ) -> Result<Ast, Error> {
         Ok(Ast::Module(Module {
             source,
             name: name.to_string(),
         }))
     }
 
-    fn compile_require<'sexpr, 'context>(
+    fn compile_require(
         &mut self,
-        source: &'sexpr Sexpr<'context>,
+        source: &'static Sexpr<'static>,
         module: &str,
-    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+    ) -> Result<Ast, Error> {
         Ok(Ast::Require(Require {
             source,
             module: module.to_string(),
         }))
     }
 
-    fn compile_eval_when_compile<'sexpr, 'context>(
+    fn compile_eval_when_compile(
         &mut self,
-        source: &'sexpr Sexpr<'context>,
-        args: &'sexpr [Sexpr<'context>],
-    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        source: &'static Sexpr<'static>,
+        args: &'static [Sexpr<'static>],
+    ) -> Result<Ast, Error> {
         Ok(Ast::EvalWhenCompile(EvalWhenCompile {
             source,
             exprs: args
@@ -576,13 +573,13 @@ impl Compiler {
         }))
     }
 
-    fn compile_defmacro<'sexpr, 'context>(
+    fn compile_defmacro(
         &mut self,
-        source: &'sexpr Sexpr<'context>,
+        source: &'static Sexpr<'static>,
         name: &str,
-        parameters: &'sexpr Sexpr<'context>,
-        rest: &'sexpr [Sexpr<'context>],
-    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        parameters: &'static Sexpr<'static>,
+        rest: &'static [Sexpr<'static>],
+    ) -> Result<Ast, Error> {
         self.macros.insert(name.to_string());
 
         Ok(Ast::DefMacro(DefMacro {
@@ -610,13 +607,13 @@ impl Compiler {
         }))
     }
 
-    fn compile_lambda<'sexpr, 'context>(
+    fn compile_lambda(
         &mut self,
-        source: &'sexpr Sexpr<'context>,
-        parameters: &'sexpr Sexpr<'context>,
-        r#type: Option<&'sexpr Sexpr<'context>>,
-        rest: &'sexpr [Sexpr<'context>],
-    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        source: &'static Sexpr<'static>,
+        parameters: &'static Sexpr<'static>,
+        r#type: Option<&'static Sexpr<'static>>,
+        rest: &'static [Sexpr<'static>],
+    ) -> Result<Ast, Error> {
         Ok(Ast::Lambda(Lambda {
             source,
             r#type: match r#type.map(Type::from_sexpr) {
@@ -651,12 +648,12 @@ impl Compiler {
         }))
     }
 
-    fn compile_def<'sexpr, 'context>(
+    fn compile_def(
         &mut self,
-        source: &'sexpr Sexpr<'context>,
-        parameter: &'sexpr Sexpr<'context>,
-        body: &'sexpr Sexpr<'context>,
-    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        source: &'static Sexpr<'static>,
+        parameter: &'static Sexpr<'static>,
+        body: &'static Sexpr<'static>,
+    ) -> Result<Ast, Error> {
         Ok(Ast::Def(Def {
             source,
             parameter: Parameter::from_sexpr(parameter).map_err(|_| Error {
@@ -667,12 +664,12 @@ impl Compiler {
         }))
     }
 
-    fn compile_decl<'sexpr, 'context>(
+    fn compile_decl(
         &mut self,
-        source: &'sexpr Sexpr<'context>,
-        parameter: &'sexpr Sexpr<'context>,
-        body: &'sexpr Sexpr<'context>,
-    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        source: &'static Sexpr<'static>,
+        parameter: &'static Sexpr<'static>,
+        body: &'static Sexpr<'static>,
+    ) -> Result<Ast, Error> {
         Ok(Ast::Decl(Decl {
             source,
             parameter: Parameter::from_sexpr(parameter).map_err(|_| Error {
@@ -683,12 +680,12 @@ impl Compiler {
         }))
     }
 
-    fn compile_set<'sexpr, 'context>(
+    fn compile_set(
         &mut self,
-        source: &'sexpr Sexpr<'context>,
-        parameter: &'sexpr Sexpr<'context>,
-        body: &'sexpr Sexpr<'context>,
-    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        source: &'static Sexpr<'static>,
+        parameter: &'static Sexpr<'static>,
+        body: &'static Sexpr<'static>,
+    ) -> Result<Ast, Error> {
         Ok(Ast::Set(Set {
             source,
             variable: match parameter
@@ -713,13 +710,13 @@ impl Compiler {
         }))
     }
 
-    fn compile_if<'sexpr, 'context>(
+    fn compile_if(
         &mut self,
-        source: &'sexpr Sexpr<'context>,
-        predicate: &'sexpr Sexpr<'context>,
-        then: &'sexpr Sexpr<'context>,
-        r#else: &'sexpr Sexpr<'context>,
-    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        source: &'static Sexpr<'static>,
+        predicate: &'static Sexpr<'static>,
+        then: &'static Sexpr<'static>,
+        r#else: &'static Sexpr<'static>,
+    ) -> Result<Ast, Error> {
         Ok(Ast::If(If {
             source,
             predicate: Box::new(self.compile(predicate)?),
@@ -728,11 +725,11 @@ impl Compiler {
         }))
     }
 
-    fn compile_apply<'sexpr, 'context>(
+    fn compile_apply(
         &mut self,
-        source: &'sexpr Sexpr<'context>,
-        args: &'sexpr [Sexpr<'context>],
-    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        source: &'static Sexpr<'static>,
+        args: &'static [Sexpr<'static>],
+    ) -> Result<Ast, Error> {
         Ok(Ast::Apply(Apply {
             source,
             exprs: args
@@ -742,13 +739,13 @@ impl Compiler {
         }))
     }
 
-    fn compile_binary_arithmetic_op<'sexpr, 'context>(
+    fn compile_binary_arithmetic_op(
         &mut self,
-        source: &'sexpr Sexpr<'context>,
+        source: &'static Sexpr<'static>,
         operator: &str,
-        lhs: &'sexpr Sexpr<'context>,
-        rhs: &'sexpr Sexpr<'context>,
-    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        lhs: &'static Sexpr<'static>,
+        rhs: &'static Sexpr<'static>,
+    ) -> Result<Ast, Error> {
         Ok(Ast::BinaryArithemticOperation(BinaryArithmeticOperation {
             source,
             operator: match operator {
@@ -763,13 +760,13 @@ impl Compiler {
         }))
     }
 
-    fn compile_comparison_op<'sexpr, 'context>(
+    fn compile_comparison_op(
         &mut self,
-        source: &'sexpr Sexpr<'context>,
+        source: &'static Sexpr<'static>,
         operator: &str,
-        lhs: &'sexpr Sexpr<'context>,
-        rhs: &'sexpr Sexpr<'context>,
-    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        lhs: &'static Sexpr<'static>,
+        rhs: &'static Sexpr<'static>,
+    ) -> Result<Ast, Error> {
         Ok(Ast::ComparisonOperation(ComparisonOperation {
             source,
             operator: match operator {
@@ -783,11 +780,11 @@ impl Compiler {
         }))
     }
 
-    fn compile_list<'sexpr, 'context>(
+    fn compile_list(
         &mut self,
-        source: &'sexpr Sexpr<'context>,
-        args: &'sexpr [Sexpr<'context>],
-    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        source: &'static Sexpr<'static>,
+        args: &'static [Sexpr<'static>],
+    ) -> Result<Ast, Error> {
         Ok(Ast::List(List {
             source,
             exprs: args
@@ -797,12 +794,12 @@ impl Compiler {
         }))
     }
 
-    fn compile_cons<'sexpr, 'context>(
+    fn compile_cons(
         &mut self,
-        source: &'sexpr Sexpr<'context>,
-        lhs: &'sexpr Sexpr<'context>,
-        rhs: &'sexpr Sexpr<'context>,
-    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        source: &'static Sexpr<'static>,
+        lhs: &'static Sexpr<'static>,
+        rhs: &'static Sexpr<'static>,
+    ) -> Result<Ast, Error> {
         Ok(Ast::Cons(Cons {
             source,
             lhs: Box::new(self.compile(lhs)?),
@@ -810,34 +807,34 @@ impl Compiler {
         }))
     }
 
-    fn compile_car<'sexpr, 'context>(
+    fn compile_car(
         &mut self,
-        source: &'sexpr Sexpr<'context>,
-        body: &'sexpr Sexpr<'context>,
-    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        source: &'static Sexpr<'static>,
+        body: &'static Sexpr<'static>,
+    ) -> Result<Ast, Error> {
         Ok(Ast::Car(Car {
             source,
             body: Box::new(self.compile(body)?),
         }))
     }
 
-    fn compile_cdr<'sexpr, 'context>(
+    fn compile_cdr(
         &mut self,
-        source: &'sexpr Sexpr<'context>,
-        body: &'sexpr Sexpr<'context>,
-    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        source: &'static Sexpr<'static>,
+        body: &'static Sexpr<'static>,
+    ) -> Result<Ast, Error> {
         Ok(Ast::Cdr(Cdr {
             source,
             body: Box::new(self.compile(body)?),
         }))
     }
 
-    fn compile_fncall<'sexpr, 'context>(
+    fn compile_fncall(
         &mut self,
-        source: &'sexpr Sexpr<'context>,
-        function: &'sexpr Sexpr<'context>,
-        args: &'sexpr [Sexpr<'context>],
-    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        source: &'static Sexpr<'static>,
+        function: &'static Sexpr<'static>,
+        args: &'static [Sexpr<'static>],
+    ) -> Result<Ast, Error> {
         Ok(Ast::FnCall(FnCall {
             source,
             function: Box::new(self.compile(function)?),
@@ -848,12 +845,12 @@ impl Compiler {
         }))
     }
 
-    fn compile_macro_call<'sexpr, 'context>(
+    fn compile_macro_call(
         &mut self,
-        source: &'sexpr Sexpr<'context>,
+        source: &'static Sexpr<'static>,
         r#macro: &str,
-        args: &'sexpr [Sexpr<'context>],
-    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        args: &'static [Sexpr<'static>],
+    ) -> Result<Ast, Error> {
         Ok(Ast::MacroCall(MacroCall {
             source,
             r#macro: r#macro.to_string(),
@@ -861,23 +858,23 @@ impl Compiler {
         }))
     }
 
-    fn compile_quote<'sexpr, 'context>(
+    fn compile_quote(
         &mut self,
-        source: &'sexpr Sexpr<'context>,
-        body: &'sexpr Sexpr<'context>,
-    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        source: &'static Sexpr<'static>,
+        body: &'static Sexpr<'static>,
+    ) -> Result<Ast, Error> {
         Ok(Ast::Quote(Quote {
             source,
             body: quote(source, body),
         }))
     }
 
-    fn compile_is_type<'sexpr, 'context>(
+    fn compile_is_type(
         &mut self,
-        source: &'sexpr Sexpr<'context>,
+        source: &'static Sexpr<'static>,
         parameter: &str,
-        body: &'sexpr Sexpr<'context>,
-    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        body: &'static Sexpr<'static>,
+    ) -> Result<Ast, Error> {
         Ok(Ast::IsType(IsType {
             source,
             parameter: match parameter {
@@ -895,24 +892,24 @@ impl Compiler {
         }))
     }
 
-    fn compile_assert<'sexpr, 'context>(
+    fn compile_assert(
         &mut self,
-        source: &'sexpr Sexpr<'context>,
-        body: &'sexpr Sexpr<'context>,
-    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        source: &'static Sexpr<'static>,
+        body: &'static Sexpr<'static>,
+    ) -> Result<Ast, Error> {
         Ok(Ast::Assert(Assert {
             source,
             body: Box::new(self.compile(body)?),
         }))
     }
 
-    fn compile_map_insert<'sexpr, 'context>(
+    fn compile_map_insert(
         &mut self,
-        source: &'sexpr Sexpr<'context>,
-        map: &'sexpr Sexpr<'context>,
-        key: &'sexpr Sexpr<'context>,
-        value: &'sexpr Sexpr<'context>,
-    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        source: &'static Sexpr<'static>,
+        map: &'static Sexpr<'static>,
+        key: &'static Sexpr<'static>,
+        value: &'static Sexpr<'static>,
+    ) -> Result<Ast, Error> {
         Ok(Ast::MapInsert(MapInsert {
             source,
             map: Box::new(self.compile(map)?),
@@ -921,12 +918,12 @@ impl Compiler {
         }))
     }
 
-    fn compile_map_retrieve<'sexpr, 'context>(
+    fn compile_map_retrieve(
         &mut self,
-        source: &'sexpr Sexpr<'context>,
-        map: &'sexpr Sexpr<'context>,
-        key: &'sexpr Sexpr<'context>,
-    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        source: &'static Sexpr<'static>,
+        map: &'static Sexpr<'static>,
+        key: &'static Sexpr<'static>,
+    ) -> Result<Ast, Error> {
         Ok(Ast::MapRetrieve(MapRetrieve {
             source,
             map: Box::new(self.compile(map)?),
@@ -934,22 +931,22 @@ impl Compiler {
         }))
     }
 
-    fn compile_map_items<'sexpr, 'context>(
+    fn compile_map_items(
         &mut self,
-        source: &'sexpr Sexpr<'context>,
-        map: &'sexpr Sexpr<'context>,
-    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+        source: &'static Sexpr<'static>,
+        map: &'static Sexpr<'static>,
+    ) -> Result<Ast, Error> {
         Ok(Ast::MapItems(MapItems {
             source,
             map: Box::new(self.compile(map)?),
         }))
     }
 
-    fn compile_export<'sexpr, 'context>(
+    fn compile_export(
         &mut self,
-        source: &'sexpr Sexpr<'context>,
+        source: &'static Sexpr<'static>,
         item: &str,
-    ) -> Result<Ast<'sexpr, 'context>, Error<'sexpr, 'context>> {
+    ) -> Result<Ast, Error> {
         Ok(Ast::Export(Export {
             source,
             symbol: match parse_variable(source, item) {
@@ -971,14 +968,14 @@ impl Compiler {
     }
 }
 
-impl<'sexpr, 'context> fmt::Display for Error<'sexpr, 'context> {
+impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "error: {}\n{}", self.message, self.sexpr)
     }
 }
 
-impl<'sexpr, 'context> Ast<'sexpr, 'context> {
-    pub fn source_sexpr(&self) -> &'sexpr Sexpr<'context> {
+impl Ast {
+    pub fn source_sexpr(&self) -> &'static Sexpr<'static> {
         match self {
             Self::Module(Module { source, .. })
             | Self::Require(Require { source, .. })
@@ -1063,10 +1060,10 @@ impl Parameters {
     }
 }
 
-fn parse_parameters<'sexpr, 'context>(
-    source: &'sexpr Sexpr<'context>,
-    list: &'sexpr [Sexpr<'context>],
-) -> Result<Parameters, Error<'sexpr, 'context>> {
+fn parse_parameters(
+    source: &'static Sexpr<'static>,
+    list: &'static [Sexpr<'static>],
+) -> Result<Parameters, Error> {
     let parameters = list
         .iter()
         .map(Parameter::from_sexpr)
@@ -1107,10 +1104,7 @@ fn parse_parameters<'sexpr, 'context>(
     Ok(p)
 }
 
-fn quote<'sexpr, 'context>(
-    source: &'sexpr Sexpr<'context>,
-    sexpr: &'sexpr Sexpr<'context>,
-) -> Quoted<'sexpr, 'context> {
+fn quote(source: &'static Sexpr<'static>, sexpr: &'static Sexpr<'static>) -> Quoted {
     match sexpr {
         Sexpr::List { list, .. } => quote_list(source, list.as_slice()),
         Sexpr::Symbol { symbol, .. } => Quoted::Symbol {
@@ -1134,10 +1128,7 @@ fn quote<'sexpr, 'context>(
     }
 }
 
-fn quote_list<'sexpr, 'context>(
-    source: &'sexpr Sexpr<'context>,
-    list: &'sexpr [Sexpr<'context>],
-) -> Quoted<'sexpr, 'context> {
+fn quote_list(source: &'static Sexpr<'static>, list: &'static [Sexpr<'static>]) -> Quoted {
     Quoted::List {
         source,
         list: list
@@ -1167,10 +1158,7 @@ fn quote_list<'sexpr, 'context>(
     }
 }
 
-fn parse_variable<'sexpr, 'context>(
-    source: &'sexpr Sexpr<'context>,
-    variable: &str,
-) -> Result<Variable<'sexpr, 'context>, ()> {
+fn parse_variable(source: &'static Sexpr<'static>, variable: &str) -> Result<Variable, ()> {
     use micro_nom::{branch, map, pair, separated, take_one_if, take_while1};
 
     let separator = pair::<&str, _, _, _, _>(
@@ -1214,11 +1202,14 @@ mod tests {
     #[test]
     fn test_parse_parameters() {
         let input = "(a b &rest c)";
-        let context = reader::Context::new(input, "test_parse_parameters");
-        let mut reader = Reader::new(&context);
-        let sexpr = reader.next().unwrap().unwrap();
+        let context = Box::leak(Box::new(reader::Context::new(
+            input,
+            "test_parse_parameters",
+        )));
+        let mut reader = Reader::new(context);
+        let sexpr = Box::leak(Box::new(reader.next().unwrap().unwrap()));
         let list = sexpr.as_list().unwrap();
-        let parameters = parse_parameters(&sexpr, list).unwrap();
+        let parameters = parse_parameters(sexpr, list).unwrap();
 
         match parameters {
             Parameters::Rest(..) => (),
@@ -1229,29 +1220,18 @@ mod tests {
     #[test]
     fn test_parse_only_rest_parameters() {
         let input = "(&rest c)";
-        let context = reader::Context::new(input, "test_parse_parameters");
-        let mut reader = Reader::new(&context);
-        let sexpr = reader.next().unwrap().unwrap();
+        let context = Box::leak(Box::new(reader::Context::new(
+            input,
+            "test_parse_parameters",
+        )));
+        let mut reader = Reader::new(context);
+        let sexpr = Box::leak(Box::new(reader.next().unwrap().unwrap()));
         let list = sexpr.as_list().unwrap();
-        let parameters = parse_parameters(&sexpr, list).unwrap();
+        let parameters = parse_parameters(sexpr, list).unwrap();
 
         match parameters {
             Parameters::Rest(params, _) if params.is_empty() => (),
             _ => panic!(),
         };
-    }
-
-    #[test]
-    fn test_parse_variable_with_module() {
-        let input = "a::b";
-
-        assert!(matches!(parse_variable(input), Ok(("a", Some("b")))));
-    }
-
-    #[test]
-    fn test_parse_variable_without_module() {
-        let input = "a";
-
-        assert!(matches!(parse_variable(input), Ok(("a", None))));
     }
 }

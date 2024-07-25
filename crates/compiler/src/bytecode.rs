@@ -7,23 +7,20 @@ use reader::Sexpr;
 use vm::{OpCode, OpCodeTable};
 
 #[derive(Clone, Debug)]
-pub struct Error<'il, 'ast, 'sexpr, 'context> {
-    il: &'il Il<'ast, 'sexpr, 'context>,
+pub struct Error {
+    il: Il,
     message: String,
 }
 
-impl<'il, 'ast, 'sexpr, 'context> fmt::Display for Error<'il, 'ast, 'sexpr, 'context> {
+impl fmt::Display for Error {
     fn fmt(&self, _: &mut fmt::Formatter<'_>) -> fmt::Result {
         todo!()
     }
 }
 
-impl<'il, 'ast, 'sexpr, 'context> std::error::Error for Error<'il, 'ast, 'sexpr, 'context> {}
+impl std::error::Error for Error {}
 
-pub fn compile<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
-    il: &'il Il<'ast, 'sexpr, 'context>,
-    opcodes: &'opcodes mut OpCodeTable<&'sexpr Sexpr<'context>>,
-) -> Result<(), Error<'il, 'ast, 'sexpr, 'context>> {
+pub fn compile(il: &Il, opcodes: &mut OpCodeTable<&'static Sexpr<'static>>) -> Result<(), Error> {
     match il {
         Il::Module(module) => compile_module(module, opcodes),
         Il::Lambda(lambda) => compile_lambda(lambda, opcodes),
@@ -49,10 +46,10 @@ pub fn compile<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
     }
 }
 
-fn compile_module<'il, 'ast, 'sexpr, 'context>(
-    module: &'il il::Module<'ast, 'sexpr, 'context>,
-    opcodes: &mut OpCodeTable<&'sexpr Sexpr<'context>>,
-) -> Result<(), Error<'il, 'ast, 'sexpr, 'context>> {
+fn compile_module(
+    module: &il::Module,
+    opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
+) -> Result<(), Error> {
     opcodes.push(
         OpCode::CreateModule(Gc::new(module.name.clone())),
         module.source.source_sexpr(),
@@ -66,10 +63,10 @@ fn compile_module<'il, 'ast, 'sexpr, 'context>(
     Ok(())
 }
 
-fn compile_varref<'il, 'ast, 'sexpr, 'context>(
-    varref: &'il il::VarRef<'ast, 'sexpr, 'context>,
-    opcodes: &mut OpCodeTable<&'sexpr Sexpr<'context>>,
-) -> Result<(), Error<'il, 'ast, 'sexpr, 'context>> {
+fn compile_varref(
+    varref: &il::VarRef,
+    opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
+) -> Result<(), Error> {
     match varref {
         il::VarRef::Local { index, .. } => {
             opcodes.push(OpCode::GetLocal(*index), varref.source().source_sexpr());
@@ -96,10 +93,10 @@ fn compile_varref<'il, 'ast, 'sexpr, 'context>(
     Ok(())
 }
 
-fn compile_constant<'il, 'ast, 'sexpr, 'context>(
-    constant: &'il il::Constant<'ast, 'sexpr, 'context>,
-    opcodes: &mut OpCodeTable<&'sexpr Sexpr<'context>>,
-) -> Result<(), Error<'il, 'ast, 'sexpr, 'context>> {
+fn compile_constant(
+    constant: &il::Constant,
+    opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
+) -> Result<(), Error> {
     let op = match constant {
         il::Constant::Symbol { symbol, .. } => OpCode::PushSymbol(Gc::new(symbol.clone())),
         il::Constant::String { string, .. } => OpCode::PushString(Gc::new(string.clone())),
@@ -114,10 +111,10 @@ fn compile_constant<'il, 'ast, 'sexpr, 'context>(
     Ok(())
 }
 
-fn compile_lambda<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
-    lambda: &'il il::Lambda<'ast, 'sexpr, 'context>,
-    opcodes: &'opcodes mut OpCodeTable<&'sexpr Sexpr<'context>>,
-) -> Result<(), Error<'il, 'ast, 'sexpr, 'context>> {
+fn compile_lambda(
+    lambda: &il::Lambda,
+    opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
+) -> Result<(), Error> {
     let mut lambda_opcode_table = OpCodeTable::new();
 
     for expr in &lambda.body {
@@ -146,10 +143,10 @@ fn compile_lambda<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
     Ok(())
 }
 
-fn compile_if<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
-    r#if: &'il il::If<'ast, 'sexpr, 'context>,
-    opcodes: &'opcodes mut OpCodeTable<&'sexpr Sexpr<'context>>,
-) -> Result<(), Error<'il, 'ast, 'sexpr, 'context>> {
+fn compile_if(
+    r#if: &il::If,
+    opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
+) -> Result<(), Error> {
     let mut then_opcodes = OpCodeTable::new();
     let mut else_opcodes = OpCodeTable::new();
 
@@ -173,10 +170,10 @@ fn compile_if<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
     Ok(())
 }
 
-fn compile_def<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
-    def: &'il il::Def<'ast, 'sexpr, 'context>,
-    opcodes: &'opcodes mut OpCodeTable<&'sexpr Sexpr<'context>>,
-) -> Result<(), Error<'il, 'ast, 'sexpr, 'context>> {
+fn compile_def(
+    def: &il::Def,
+    opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
+) -> Result<(), Error> {
     compile(def.body(), opcodes)?;
 
     match def {
@@ -201,10 +198,10 @@ fn compile_def<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
     Ok(())
 }
 
-fn compile_set<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
-    set: &'il il::Set<'ast, 'sexpr, 'context>,
-    opcodes: &'opcodes mut OpCodeTable<&'sexpr Sexpr<'context>>,
-) -> Result<(), Error<'il, 'ast, 'sexpr, 'context>> {
+fn compile_set(
+    set: &il::Set,
+    opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
+) -> Result<(), Error> {
     compile(&set.body, opcodes)?;
 
     match &set.target {
@@ -235,10 +232,10 @@ fn compile_set<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
     Ok(())
 }
 
-fn compile_arithmetic_operation<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
-    arithmetic_op: &'il il::ArithmeticOperation<'ast, 'sexpr, 'context>,
-    opcodes: &'opcodes mut OpCodeTable<&'sexpr Sexpr<'context>>,
-) -> Result<(), Error<'il, 'ast, 'sexpr, 'context>> {
+fn compile_arithmetic_operation(
+    arithmetic_op: &il::ArithmeticOperation,
+    opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
+) -> Result<(), Error> {
     compile(&arithmetic_op.lhs, opcodes)?;
     compile(&arithmetic_op.rhs, opcodes)?;
 
@@ -255,10 +252,10 @@ fn compile_arithmetic_operation<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 
     Ok(())
 }
 
-fn compile_comparison_operation<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
-    comparison_op: &'il il::ComparisonOperation<'ast, 'sexpr, 'context>,
-    opcodes: &'opcodes mut OpCodeTable<&'sexpr Sexpr<'context>>,
-) -> Result<(), Error<'il, 'ast, 'sexpr, 'context>> {
+fn compile_comparison_operation(
+    comparison_op: &il::ComparisonOperation,
+    opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
+) -> Result<(), Error> {
     compile(&comparison_op.lhs, opcodes)?;
     compile(&comparison_op.rhs, opcodes)?;
 
@@ -274,10 +271,10 @@ fn compile_comparison_operation<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 
     Ok(())
 }
 
-fn compile_list<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
-    list: &'il il::List<'ast, 'sexpr, 'context>,
-    opcodes: &'opcodes mut OpCodeTable<&'sexpr Sexpr<'context>>,
-) -> Result<(), Error<'il, 'ast, 'sexpr, 'context>> {
+fn compile_list(
+    list: &il::List,
+    opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
+) -> Result<(), Error> {
     for expr in &list.exprs {
         compile(expr, opcodes)?;
     }
@@ -287,10 +284,10 @@ fn compile_list<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
     Ok(())
 }
 
-fn compile_fncall<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
-    fncall: &'il il::FnCall<'ast, 'sexpr, 'context>,
-    opcodes: &'opcodes mut OpCodeTable<&'sexpr Sexpr<'context>>,
-) -> Result<(), Error<'il, 'ast, 'sexpr, 'context>> {
+fn compile_fncall(
+    fncall: &il::FnCall,
+    opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
+) -> Result<(), Error> {
     compile(&fncall.function, opcodes)?;
 
     for arg in &fncall.args {
@@ -305,10 +302,10 @@ fn compile_fncall<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
     Ok(())
 }
 
-fn compile_cons<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
-    cons: &'il il::Cons<'ast, 'sexpr, 'context>,
-    opcodes: &'opcodes mut OpCodeTable<&'sexpr Sexpr<'context>>,
-) -> Result<(), Error<'il, 'ast, 'sexpr, 'context>> {
+fn compile_cons(
+    cons: &il::Cons,
+    opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
+) -> Result<(), Error> {
     compile(&cons.lhs, opcodes)?;
     compile(&cons.rhs, opcodes)?;
 
@@ -317,10 +314,10 @@ fn compile_cons<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
     Ok(())
 }
 
-fn compile_car<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
-    car: &'il il::Car<'ast, 'sexpr, 'context>,
-    opcodes: &'opcodes mut OpCodeTable<&'sexpr Sexpr<'context>>,
-) -> Result<(), Error<'il, 'ast, 'sexpr, 'context>> {
+fn compile_car(
+    car: &il::Car,
+    opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
+) -> Result<(), Error> {
     compile(&car.body, opcodes)?;
 
     opcodes.push(OpCode::Car, car.source.source_sexpr());
@@ -328,10 +325,10 @@ fn compile_car<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
     Ok(())
 }
 
-fn compile_cdr<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
-    cdr: &'il il::Cdr<'ast, 'sexpr, 'context>,
-    opcodes: &'opcodes mut OpCodeTable<&'sexpr Sexpr<'context>>,
-) -> Result<(), Error<'il, 'ast, 'sexpr, 'context>> {
+fn compile_cdr(
+    cdr: &il::Cdr,
+    opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
+) -> Result<(), Error> {
     compile(&cdr.body, opcodes)?;
 
     opcodes.push(OpCode::Cdr, cdr.source.source_sexpr());
@@ -339,10 +336,10 @@ fn compile_cdr<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
     Ok(())
 }
 
-fn compile_is_type<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
-    is_type: &'il il::IsType<'ast, 'sexpr, 'context>,
-    opcodes: &'opcodes mut OpCodeTable<&'sexpr Sexpr<'context>>,
-) -> Result<(), Error<'il, 'ast, 'sexpr, 'context>> {
+fn compile_is_type(
+    is_type: &il::IsType,
+    opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
+) -> Result<(), Error> {
     compile(&is_type.body, opcodes)?;
 
     let vm_type = match is_type.r#type {
@@ -362,10 +359,10 @@ fn compile_is_type<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
     Ok(())
 }
 
-fn compile_apply<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
-    apply: &'il il::Apply<'ast, 'sexpr, 'context>,
-    opcodes: &'opcodes mut OpCodeTable<&'sexpr Sexpr<'context>>,
-) -> Result<(), Error<'il, 'ast, 'sexpr, 'context>> {
+fn compile_apply(
+    apply: &il::Apply,
+    opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
+) -> Result<(), Error> {
     for expr in &apply.exprs {
         compile(expr, opcodes)?;
     }
@@ -375,10 +372,10 @@ fn compile_apply<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
     Ok(())
 }
 
-fn compile_assert<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
-    assert: &'il il::Assert<'ast, 'sexpr, 'context>,
-    opcodes: &'opcodes mut OpCodeTable<&'sexpr Sexpr<'context>>,
-) -> Result<(), Error<'il, 'ast, 'sexpr, 'context>> {
+fn compile_assert(
+    assert: &il::Assert,
+    opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
+) -> Result<(), Error> {
     compile(&assert.body, opcodes)?;
 
     opcodes.push(OpCode::Assert, assert.source.source_sexpr());
@@ -386,19 +383,19 @@ fn compile_assert<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
     Ok(())
 }
 
-fn compile_map_create<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
-    map_create: &'il il::MapCreate<'ast, 'sexpr, 'context>,
-    opcodes: &'opcodes mut OpCodeTable<&'sexpr Sexpr<'context>>,
-) -> Result<(), Error<'il, 'ast, 'sexpr, 'context>> {
+fn compile_map_create(
+    map_create: &il::MapCreate,
+    opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
+) -> Result<(), Error> {
     opcodes.push(OpCode::MapCreate, map_create.source.source_sexpr());
 
     Ok(())
 }
 
-fn compile_map_insert<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
-    map_insert: &'il il::MapInsert<'ast, 'sexpr, 'context>,
-    opcodes: &'opcodes mut OpCodeTable<&'sexpr Sexpr<'context>>,
-) -> Result<(), Error<'il, 'ast, 'sexpr, 'context>> {
+fn compile_map_insert(
+    map_insert: &il::MapInsert,
+    opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
+) -> Result<(), Error> {
     compile(&map_insert.map, opcodes)?;
     compile(&map_insert.key, opcodes)?;
     compile(&map_insert.value, opcodes)?;
@@ -408,10 +405,10 @@ fn compile_map_insert<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
     Ok(())
 }
 
-fn compile_map_retrieve<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
-    map_retrieve: &'il il::MapRetrieve<'ast, 'sexpr, 'context>,
-    opcodes: &'opcodes mut OpCodeTable<&'sexpr Sexpr<'context>>,
-) -> Result<(), Error<'il, 'ast, 'sexpr, 'context>> {
+fn compile_map_retrieve(
+    map_retrieve: &il::MapRetrieve,
+    opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
+) -> Result<(), Error> {
     compile(&map_retrieve.map, opcodes)?;
     compile(&map_retrieve.key, opcodes)?;
 
@@ -420,10 +417,10 @@ fn compile_map_retrieve<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>
     Ok(())
 }
 
-fn compile_map_items<'opcodes, 'il, 'ast, 'sexpr: 'static, 'context: 'static>(
-    map_items: &'il il::MapItems<'ast, 'sexpr, 'context>,
-    opcodes: &'opcodes mut OpCodeTable<&'sexpr Sexpr<'context>>,
-) -> Result<(), Error<'il, 'ast, 'sexpr, 'context>> {
+fn compile_map_items(
+    map_items: &il::MapItems,
+    opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
+) -> Result<(), Error> {
     compile(&map_items.map, opcodes)?;
 
     opcodes.push(OpCode::MapItems, map_items.source.source_sexpr());

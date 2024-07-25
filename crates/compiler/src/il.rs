@@ -10,21 +10,18 @@ use unwrap_enum::{EnumAs, EnumIs};
 use vm::{Arity, OpCodeTable, UpValue, Vm};
 
 #[derive(Debug, thiserror::Error)]
-pub enum Error<'ast, 'sexpr, 'context> {
+pub enum Error {
     #[error("il compiler error: {message}")]
-    Il {
-        ast: &'ast Ast<'sexpr, 'context>,
-        message: String,
-    },
+    Il { ast: Ast, message: String },
 
     #[error("reader error: {0}")]
     Reader(#[from] reader::Error<'static>),
 
     #[error("ast error: {0}")]
-    Ast(#[from] ast::Error<'static, 'static>),
+    Ast(#[from] ast::Error),
 
     #[error("bytecode compiler error: {0}")]
-    Bytecode(#[from] bytecode::Error<'static, 'static, 'static, 'static>),
+    Bytecode(#[from] bytecode::Error),
 
     #[error("vm error: {0}")]
     Vm(#[from] vm::Error),
@@ -32,7 +29,7 @@ pub enum Error<'ast, 'sexpr, 'context> {
     #[error("vm error: {sexpr}")]
     VmWithDebug {
         error: vm::Error,
-        sexpr: &'sexpr Sexpr<'context>,
+        sexpr: &'static Sexpr<'static>,
     },
 }
 
@@ -51,84 +48,67 @@ pub enum Type {
 }
 
 #[derive(Clone, Debug, EnumAs, EnumIs)]
-pub enum Il<'ast, 'sexpr, 'context> {
-    Module(Module<'ast, 'sexpr, 'context>),
-    Lambda(Lambda<'ast, 'sexpr, 'context>),
-    If(If<'ast, 'sexpr, 'context>),
-    Apply(Apply<'ast, 'sexpr, 'context>),
-    Def(Def<'ast, 'sexpr, 'context>),
-    Set(Set<'ast, 'sexpr, 'context>),
-    FnCall(FnCall<'ast, 'sexpr, 'context>),
-    ArithmeticOperation(ArithmeticOperation<'ast, 'sexpr, 'context>),
-    ComparisonOperation(ComparisonOperation<'ast, 'sexpr, 'context>),
-    List(List<'ast, 'sexpr, 'context>),
-    Cons(Cons<'ast, 'sexpr, 'context>),
-    Car(Car<'ast, 'sexpr, 'context>),
-    Cdr(Cdr<'ast, 'sexpr, 'context>),
-    MapCreate(MapCreate<'ast, 'sexpr, 'context>),
-    MapInsert(MapInsert<'ast, 'sexpr, 'context>),
-    MapRetrieve(MapRetrieve<'ast, 'sexpr, 'context>),
-    MapItems(MapItems<'ast, 'sexpr, 'context>),
-    IsType(IsType<'ast, 'sexpr, 'context>),
-    Assert(Assert<'ast, 'sexpr, 'context>),
-    VarRef(VarRef<'ast, 'sexpr, 'context>),
-    Constant(Constant<'ast, 'sexpr, 'context>),
+pub enum Il {
+    Module(Module),
+    Lambda(Lambda),
+    If(If),
+    Apply(Apply),
+    Def(Def),
+    Set(Set),
+    FnCall(FnCall),
+    ArithmeticOperation(ArithmeticOperation),
+    ComparisonOperation(ComparisonOperation),
+    List(List),
+    Cons(Cons),
+    Car(Car),
+    Cdr(Cdr),
+    MapCreate(MapCreate),
+    MapInsert(MapInsert),
+    MapRetrieve(MapRetrieve),
+    MapItems(MapItems),
+    IsType(IsType),
+    Assert(Assert),
+    VarRef(VarRef),
+    Constant(Constant),
 }
 
 #[derive(Clone, Debug)]
-pub struct Module<'ast, 'sexpr, 'context> {
-    pub source: &'ast Ast<'sexpr, 'context>,
+pub struct Module {
+    pub source: Ast,
     pub name: String,
 }
 
 #[derive(Clone, Debug)]
-pub enum Constant<'ast, 'sexpr, 'context> {
-    Symbol {
-        source: &'ast Ast<'sexpr, 'context>,
-        symbol: String,
-    },
-    String {
-        source: &'ast Ast<'sexpr, 'context>,
-        string: String,
-    },
-    Char {
-        source: &'ast Ast<'sexpr, 'context>,
-        char: char,
-    },
-    Int {
-        source: &'ast Ast<'sexpr, 'context>,
-        int: i64,
-    },
-    Bool {
-        source: &'ast Ast<'sexpr, 'context>,
-        bool: bool,
-    },
-    Nil {
-        source: &'ast Ast<'sexpr, 'context>,
-    },
+pub enum Constant {
+    Symbol { source: Ast, symbol: String },
+    String { source: Ast, string: String },
+    Char { source: Ast, char: char },
+    Int { source: Ast, int: i64 },
+    Bool { source: Ast, bool: bool },
+    Nil { source: Ast },
 }
 
 #[derive(Clone, Debug)]
-pub enum VarRef<'ast, 'sexpr, 'context> {
+pub enum VarRef {
     Local {
-        source: &'ast Ast<'sexpr, 'context>,
+        source: Ast,
         name: String,
         index: usize,
         r#type: Option<Type>,
     },
     UpValue {
-        source: &'ast Ast<'sexpr, 'context>,
+        source: Ast,
         name: String,
         index: usize,
         r#type: Option<Type>,
     },
     Global {
-        source: &'ast Ast<'sexpr, 'context>,
+        source: Ast,
         name: String,
         r#type: Option<Type>,
     },
     Module {
-        source: &'ast Ast<'sexpr, 'context>,
+        source: Ast,
         name: String,
         module: String,
         r#type: Option<Type>,
@@ -136,72 +116,72 @@ pub enum VarRef<'ast, 'sexpr, 'context> {
 }
 
 #[derive(Clone, Debug)]
-pub struct Parameter<'ast, 'sexpr, 'context> {
-    pub source: &'ast Ast<'sexpr, 'context>,
+pub struct Parameter {
+    pub source: Ast,
     pub name: String,
     pub r#type: Option<Type>,
 }
 
 #[derive(Clone, Debug)]
-pub enum Parameters<'ast, 'sexpr, 'context> {
-    Nary(Vec<Parameter<'ast, 'sexpr, 'context>>),
-    Variadic(Vec<Parameter<'ast, 'sexpr, 'context>>),
+pub enum Parameters {
+    Nary(Vec<Parameter>),
+    Variadic(Vec<Parameter>),
 }
 
 #[derive(Clone, Debug)]
-pub struct Lambda<'ast, 'sexpr, 'context> {
-    pub source: &'ast Ast<'sexpr, 'context>,
-    pub parameters: Parameters<'ast, 'sexpr, 'context>,
+pub struct Lambda {
+    pub source: Ast,
+    pub parameters: Parameters,
     pub r#type: Option<Type>,
     pub arity: Arity,
     pub upvalues: Vec<UpValue>,
-    pub body: Vec<Il<'ast, 'sexpr, 'context>>,
+    pub body: Vec<Il>,
 }
 
 #[derive(Clone, Debug)]
-pub struct If<'ast, 'sexpr, 'context> {
-    pub source: &'ast Ast<'sexpr, 'context>,
-    pub predicate: Box<Il<'ast, 'sexpr, 'context>>,
-    pub then: Box<Il<'ast, 'sexpr, 'context>>,
-    pub r#else: Box<Il<'ast, 'sexpr, 'context>>,
+pub struct If {
+    pub source: Ast,
+    pub predicate: Box<Il>,
+    pub then: Box<Il>,
+    pub r#else: Box<Il>,
 }
 
 #[derive(Clone, Debug)]
-pub struct FnCall<'ast, 'sexpr, 'context> {
-    pub source: &'ast Ast<'sexpr, 'context>,
-    pub function: Box<Il<'ast, 'sexpr, 'context>>,
-    pub args: Vec<Il<'ast, 'sexpr, 'context>>,
+pub struct FnCall {
+    pub source: Ast,
+    pub function: Box<Il>,
+    pub args: Vec<Il>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Apply<'ast, 'sexpr, 'context> {
-    pub source: &'ast Ast<'sexpr, 'context>,
-    pub exprs: Vec<Il<'ast, 'sexpr, 'context>>,
+pub struct Apply {
+    pub source: Ast,
+    pub exprs: Vec<Il>,
 }
 
 #[derive(Clone, Debug)]
-pub struct List<'ast, 'sexpr, 'context> {
-    pub source: &'ast Ast<'sexpr, 'context>,
-    pub exprs: Vec<Il<'ast, 'sexpr, 'context>>,
+pub struct List {
+    pub source: Ast,
+    pub exprs: Vec<Il>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Cons<'ast, 'sexpr, 'context> {
-    pub source: &'ast Ast<'sexpr, 'context>,
-    pub lhs: Box<Il<'ast, 'sexpr, 'context>>,
-    pub rhs: Box<Il<'ast, 'sexpr, 'context>>,
+pub struct Cons {
+    pub source: Ast,
+    pub lhs: Box<Il>,
+    pub rhs: Box<Il>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Car<'ast, 'sexpr, 'context> {
-    pub source: &'ast Ast<'sexpr, 'context>,
-    pub body: Box<Il<'ast, 'sexpr, 'context>>,
+pub struct Car {
+    pub source: Ast,
+    pub body: Box<Il>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Cdr<'ast, 'sexpr, 'context> {
-    pub source: &'ast Ast<'sexpr, 'context>,
-    pub body: Box<Il<'ast, 'sexpr, 'context>>,
+pub struct Cdr {
+    pub source: Ast,
+    pub body: Box<Il>,
 }
 
 #[derive(Clone, Debug)]
@@ -213,11 +193,11 @@ pub enum ArithmeticOperator {
 }
 
 #[derive(Clone, Debug)]
-pub struct ArithmeticOperation<'ast, 'sexpr, 'context> {
-    pub source: &'ast Ast<'sexpr, 'context>,
+pub struct ArithmeticOperation {
+    pub source: Ast,
     pub operator: ArithmeticOperator,
-    pub lhs: Box<Il<'ast, 'sexpr, 'context>>,
-    pub rhs: Box<Il<'ast, 'sexpr, 'context>>,
+    pub lhs: Box<Il>,
+    pub rhs: Box<Il>,
 }
 
 #[derive(Clone, Debug)]
@@ -228,80 +208,80 @@ pub enum ComparisonOperator {
 }
 
 #[derive(Clone, Debug)]
-pub struct ComparisonOperation<'ast, 'sexpr, 'context> {
-    pub source: &'ast Ast<'sexpr, 'context>,
+pub struct ComparisonOperation {
+    pub source: Ast,
     pub operator: ComparisonOperator,
-    pub lhs: Box<Il<'ast, 'sexpr, 'context>>,
-    pub rhs: Box<Il<'ast, 'sexpr, 'context>>,
+    pub lhs: Box<Il>,
+    pub rhs: Box<Il>,
 }
 
 #[derive(Clone, Debug)]
-pub enum Def<'ast, 'sexpr, 'context> {
+pub enum Def {
     Global {
-        source: &'ast Ast<'sexpr, 'context>,
-        parameter: Parameter<'ast, 'sexpr, 'context>,
-        body: Box<Il<'ast, 'sexpr, 'context>>,
+        source: Ast,
+        parameter: Parameter,
+        body: Box<Il>,
     },
     Module {
-        source: &'ast Ast<'sexpr, 'context>,
-        parameter: Parameter<'ast, 'sexpr, 'context>,
+        source: Ast,
+        parameter: Parameter,
         module: String,
-        body: Box<Il<'ast, 'sexpr, 'context>>,
+        body: Box<Il>,
     },
 }
 
 #[derive(Clone, Debug)]
-pub struct Set<'ast, 'sexpr, 'context> {
-    pub source: &'ast Ast<'sexpr, 'context>,
-    pub target: VarRef<'ast, 'sexpr, 'context>,
-    pub body: Box<Il<'ast, 'sexpr, 'context>>,
+pub struct Set {
+    pub source: Ast,
+    pub target: VarRef,
+    pub body: Box<Il>,
 }
 
 #[derive(Clone, Debug)]
-pub struct MapCreate<'ast, 'sexpr, 'context> {
-    pub source: &'ast Ast<'sexpr, 'context>,
+pub struct MapCreate {
+    pub source: Ast,
 }
 
 #[derive(Clone, Debug)]
-pub struct MapInsert<'ast, 'sexpr, 'context> {
-    pub source: &'ast Ast<'sexpr, 'context>,
-    pub map: Box<Il<'ast, 'sexpr, 'context>>,
-    pub key: Box<Il<'ast, 'sexpr, 'context>>,
-    pub value: Box<Il<'ast, 'sexpr, 'context>>,
+pub struct MapInsert {
+    pub source: Ast,
+    pub map: Box<Il>,
+    pub key: Box<Il>,
+    pub value: Box<Il>,
 }
 
 #[derive(Clone, Debug)]
-pub struct MapRetrieve<'ast, 'sexpr, 'context> {
-    pub source: &'ast Ast<'sexpr, 'context>,
-    pub map: Box<Il<'ast, 'sexpr, 'context>>,
-    pub key: Box<Il<'ast, 'sexpr, 'context>>,
+pub struct MapRetrieve {
+    pub source: Ast,
+    pub map: Box<Il>,
+    pub key: Box<Il>,
 }
 
 #[derive(Clone, Debug)]
-pub struct MapItems<'ast, 'sexpr, 'context> {
-    pub source: &'ast Ast<'sexpr, 'context>,
-    pub map: Box<Il<'ast, 'sexpr, 'context>>,
+pub struct MapItems {
+    pub source: Ast,
+    pub map: Box<Il>,
 }
 
 #[derive(Clone, Debug)]
-pub struct IsType<'ast, 'sexpr, 'context> {
-    pub source: &'ast Ast<'sexpr, 'context>,
+pub struct IsType {
+    pub source: Ast,
     pub r#type: Type,
-    pub body: Box<Il<'ast, 'sexpr, 'context>>,
+    pub body: Box<Il>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Assert<'ast, 'sexpr, 'context> {
-    pub source: &'ast Ast<'sexpr, 'context>,
-    pub body: Box<Il<'ast, 'sexpr, 'context>>,
+pub struct Assert {
+    pub source: Ast,
+    pub body: Box<Il>,
 }
 
 pub struct Compiler {
     environment: Environment,
 }
 
-impl<'ast, 'sexpr, 'context> VarRef<'ast, 'sexpr, 'context> {
-    pub fn source(&self) -> &'ast Ast<'sexpr, 'context> {
+impl VarRef {
+    pub fn source(&self) -> &Ast {
         match self {
             Self::Local { source, .. }
             | Self::UpValue { source, .. }
@@ -311,8 +291,8 @@ impl<'ast, 'sexpr, 'context> VarRef<'ast, 'sexpr, 'context> {
     }
 }
 
-impl<'ast, 'sexpr, 'context> Constant<'ast, 'sexpr, 'context> {
-    pub fn source(&self) -> &'ast Ast<'sexpr, 'context> {
+impl Constant {
+    pub fn source(&self) -> &Ast {
         match self {
             Self::Symbol { source, .. }
             | Self::String { source, .. }
@@ -324,8 +304,8 @@ impl<'ast, 'sexpr, 'context> Constant<'ast, 'sexpr, 'context> {
     }
 }
 
-impl<'ast, 'sexpr, 'context> Il<'ast, 'sexpr, 'context> {
-    pub fn source_ast(&self) -> &Ast<'sexpr, 'context> {
+impl Il {
+    pub fn source_ast(&self) -> &Ast {
         match self {
             Self::Module(Module { source, .. })
             | Self::Lambda(Lambda { source, .. })
@@ -388,13 +368,10 @@ impl Type {
     }
 }
 
-impl<'ast, 'sexpr, 'context> Parameter<'ast, 'sexpr, 'context> {
-    pub fn from_ast(
-        source: &'ast Ast<'sexpr, 'context>,
-        parameter: &'ast ast::Parameter,
-    ) -> Result<Self, ()> {
+impl Parameter {
+    pub fn from_ast(source: &Ast, parameter: &ast::Parameter) -> Result<Self, ()> {
         Ok(Self {
-            source,
+            source: source.clone(),
             name: parameter.name.clone(),
             r#type: match parameter.r#type.as_ref().map(Type::from_ast) {
                 Some(Ok(t)) => Some(t),
@@ -405,11 +382,8 @@ impl<'ast, 'sexpr, 'context> Parameter<'ast, 'sexpr, 'context> {
     }
 }
 
-impl<'ast, 'sexpr, 'context> Parameters<'ast, 'sexpr, 'context> {
-    pub fn from_ast(
-        source: &'ast Ast<'sexpr, 'context>,
-        parameters: &'ast ast::Parameters,
-    ) -> Result<Self, ()> {
+impl Parameters {
+    pub fn from_ast(source: &Ast, parameters: &ast::Parameters) -> Result<Self, ()> {
         Ok(match parameters {
             ast::Parameters::Normal(params) => Parameters::Nary(
                 params
@@ -432,14 +406,14 @@ impl<'ast, 'sexpr, 'context> Parameters<'ast, 'sexpr, 'context> {
     }
 }
 
-impl<'ast, 'sexpr, 'context> Def<'ast, 'sexpr, 'context> {
-    pub(crate) fn source(&self) -> &'ast Ast<'sexpr, 'context> {
+impl Def {
+    pub(crate) fn source(&self) -> &Ast {
         match self {
             Self::Global { source, .. } | Self::Module { source, .. } => source,
         }
     }
 
-    pub(crate) fn body(&self) -> &Il<'ast, 'sexpr, 'context> {
+    pub(crate) fn body(&self) -> &Il {
         match self {
             Self::Global { body, .. } | Self::Module { body, .. } => &*body,
         }
@@ -457,12 +431,12 @@ impl Compiler {
         self.environment.set_current_module(module);
     }
 
-    pub fn compile<'ast_compiler, 'vm, 'ast: 'static, 'sexpr, 'context>(
+    pub fn compile(
         &mut self,
-        ast: &'ast Ast<'sexpr, 'context>,
-        vm: &'vm mut Vm<&'sexpr Sexpr<'context>>,
-        ast_compiler: &'ast_compiler mut ast::Compiler,
-    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
+        ast: &Ast,
+        vm: &mut Vm<&'static Sexpr<'static>>,
+        ast_compiler: &mut ast::Compiler,
+    ) -> Result<Il, Error> {
         match ast {
             Ast::Module(module) => self.compile_module(ast, module),
             Ast::Require(_) => panic!("requires should be handled outside of the il compiler"),
@@ -505,27 +479,23 @@ impl Compiler {
         }
     }
 
-    fn compile_module<'ast: 'static, 'sexpr, 'context>(
-        &mut self,
-        source: &'ast Ast<'sexpr, 'context>,
-        module: &'ast ast::Module<'sexpr, 'context>,
-    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
+    fn compile_module(&mut self, source: &Ast, module: &ast::Module) -> Result<Il, Error> {
         self.environment.create_module(module.name.as_str());
         self.set_current_module(Some(module.name.as_str()));
 
         Ok(Il::Module(Module {
-            source,
+            source: source.clone(),
             name: module.name.clone(),
         }))
     }
 
-    fn eval_when_compile<'ast_compiler, 'ast: 'static, 'sexpr, 'context>(
+    fn eval_when_compile(
         &mut self,
-        source: &'ast Ast<'sexpr, 'context>,
-        eval_when_compile: &'ast ast::EvalWhenCompile<'sexpr, 'context>,
-        vm: &mut Vm<&'sexpr Sexpr<'context>>,
-        ast_compiler: &'ast_compiler mut ast::Compiler,
-    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
+        source: &Ast,
+        eval_when_compile: &ast::EvalWhenCompile,
+        vm: &mut Vm<&'static Sexpr<'static>>,
+        ast_compiler: &mut ast::Compiler,
+    ) -> Result<Il, Error> {
         let mut opcode_table = OpCodeTable::new();
 
         for expr in &eval_when_compile.exprs {
@@ -537,43 +507,46 @@ impl Compiler {
         vm.eval(&opcode_table)
             .map_err(|(error, sexpr)| Error::VmWithDebug { error, sexpr })?;
 
-        Ok(Il::Constant(Constant::Nil { source }))
+        Ok(Il::Constant(Constant::Nil {
+            source: source.clone(),
+        }))
     }
 
-    fn compile_constant<'ast, 'sexpr, 'context>(
-        &mut self,
-        source: &'ast Ast<'sexpr, 'context>,
-        constant: &'ast ast::Constant<'sexpr, 'context>,
-    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
+    fn compile_constant(&mut self, source: &Ast, constant: &ast::Constant) -> Result<Il, Error> {
         Ok(match constant {
             ast::Constant::String { string, .. } => Il::Constant(Constant::String {
-                source,
+                source: source.clone(),
                 string: string.clone(),
             }),
             ast::Constant::Char { char, .. } => Il::Constant(Constant::Char {
-                source,
+                source: source.clone(),
                 char: *char,
             }),
-            ast::Constant::Int { int, .. } => Il::Constant(Constant::Int { source, int: *int }),
+            ast::Constant::Int { int, .. } => Il::Constant(Constant::Int {
+                source: source.clone(),
+                int: *int,
+            }),
             ast::Constant::Bool { bool, .. } => Il::Constant(Constant::Bool {
-                source,
+                source: source.clone(),
                 bool: *bool,
             }),
-            ast::Constant::Nil { .. } => Il::Constant(Constant::Nil { source }),
+            ast::Constant::Nil { .. } => Il::Constant(Constant::Nil {
+                source: source.clone(),
+            }),
         })
     }
 
-    fn compile_variable_reference<'ast, 'sexpr, 'context>(
+    fn compile_variable_reference(
         &mut self,
-        source: &'ast Ast<'sexpr, 'context>,
-        variable: &'ast ast::Variable<'sexpr, 'context>,
-    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
+        source: &Ast,
+        variable: &ast::Variable,
+    ) -> Result<Il, Error> {
         Ok(match variable {
             ast::Variable::WithoutModule { name, .. } => {
                 match self.environment.resolve(name.as_str()) {
                     Some(environment::Variable::Local(index, r#type)) => {
                         Il::VarRef(VarRef::Local {
-                            source,
+                            source: source.clone(),
                             name: name.clone(),
                             index,
                             r#type,
@@ -581,19 +554,19 @@ impl Compiler {
                     }
                     Some(environment::Variable::Upvalue(index, r#type)) => {
                         Il::VarRef(VarRef::UpValue {
-                            source,
+                            source: source.clone(),
                             name: name.clone(),
                             index,
                             r#type,
                         })
                     }
                     Some(environment::Variable::Global(r#type)) => Il::VarRef(VarRef::Global {
-                        source,
+                        source: source.clone(),
                         name: name.clone(),
                         r#type,
                     }),
                     Some(environment::Variable::Module(r#type)) => Il::VarRef(VarRef::Module {
-                        source,
+                        source: source.clone(),
                         name: name.clone(),
                         module: self
                             .environment
@@ -604,7 +577,7 @@ impl Compiler {
                     }),
                     None => {
                         return Err(Error::Il {
-                            ast: source,
+                            ast: source.clone(),
                             message: format!("unknown variable referenced: {}", name),
                         })
                     }
@@ -616,20 +589,20 @@ impl Compiler {
                     .resolve_module_var(module.as_str(), name.as_str())
                 {
                     Some(ModuleVar { r#type, visible }) if visible => Il::VarRef(VarRef::Module {
-                        source,
+                        source: source.clone(),
                         name: name.clone(),
                         module: module.to_string(),
                         r#type,
                     }),
                     Some(ModuleVar { .. }) => {
                         return Err(Error::Il {
-                            ast: source,
+                            ast: source.clone(),
                             message: "private module variable referenced".to_string(),
                         })
                     }
                     None => {
                         return Err(Error::Il {
-                            ast: source,
+                            ast: source.clone(),
                             message: "unknown module variable referenced".to_string(),
                         })
                     }
@@ -638,13 +611,13 @@ impl Compiler {
         })
     }
 
-    fn compile_defmacro<'ast_compiler, 'vm, 'ast: 'static, 'sexpr, 'context>(
+    fn compile_defmacro(
         &mut self,
-        source: &'ast Ast<'sexpr, 'context>,
-        defmacro: &'ast ast::DefMacro<'sexpr, 'context>,
-        vm: &'vm mut Vm<&'sexpr Sexpr<'context>>,
-        ast_compiler: &'ast_compiler mut ast::Compiler,
-    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
+        source: &Ast,
+        defmacro: &ast::DefMacro,
+        vm: &mut Vm<&'static Sexpr<'static>>,
+        ast_compiler: &mut ast::Compiler,
+    ) -> Result<Il, Error> {
         let arity = match &defmacro.parameters {
             ast::Parameters::Normal(_) if defmacro.parameters.len() == 0 => Arity::Nullary,
             ast::Parameters::Normal(_) => Arity::Nary(defmacro.parameters.len()),
@@ -653,7 +626,7 @@ impl Compiler {
 
         let parameters =
             Parameters::from_ast(source, &defmacro.parameters).map_err(|_| Error::Il {
-                ast: source,
+                ast: source.clone(),
                 message: "failed to compile parameters".to_string(),
             })?;
 
@@ -667,7 +640,7 @@ impl Compiler {
             .collect::<Result<Vec<Il>, Error>>()?;
 
         let lambda = Box::leak(Box::new(Il::Lambda(il::Lambda {
-            source,
+            source: source.clone(),
             parameters,
             r#type: None,
             upvalues: Vec::new(),
@@ -684,16 +657,18 @@ impl Compiler {
 
         vm.def_global(defmacro.name.as_str())?;
 
-        Ok(Il::Constant(Constant::Nil { source }))
+        Ok(Il::Constant(Constant::Nil {
+            source: source.clone(),
+        }))
     }
 
-    fn eval_macro<'ast, 'sexpr, 'context>(
+    fn eval_macro(
         &mut self,
-        source: &'ast Ast<'sexpr, 'context>,
-        macro_call: &'ast ast::MacroCall<'sexpr, 'context>,
-        vm: &mut Vm<&'sexpr Sexpr<'context>>,
+        source: &Ast,
+        macro_call: &ast::MacroCall,
+        vm: &mut Vm<&'static Sexpr<'static>>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
+    ) -> Result<Il, Error> {
         let mut opcode_table = OpCodeTable::new();
 
         for arg in &macro_call.args {
@@ -712,13 +687,15 @@ impl Compiler {
             .map_err(|(error, sexpr)| Error::VmWithDebug { error, sexpr })?;
 
         let Some(object) = vm.pop().map(|local| local.into_object()) else {
-            return Ok(Il::Constant(Constant::Nil { source }));
+            return Ok(Il::Constant(Constant::Nil {
+                source: source.clone(),
+            }));
         };
 
         let mut buff = String::new();
 
         object.print(&mut buff).map_err(|_| Error::Il {
-            ast: source,
+            ast: source.clone(),
             message: "failed to print macro result".to_string(),
         })?;
 
@@ -728,18 +705,18 @@ impl Compiler {
         )));
         let mut reader = Reader::new(context);
         let sexpr: &'static _ = Box::leak(Box::new(reader.next().unwrap()?));
-        let ast: &'static _ = Box::leak(Box::new(ast_compiler.compile(sexpr)?));
+        let ast = ast_compiler.compile(sexpr)?;
 
-        self.compile(ast, vm, ast_compiler)
+        self.compile(&ast, vm, ast_compiler)
     }
 
-    fn compile_lambda<'ast_compiler, 'vm, 'ast: 'static, 'sexpr, 'context>(
+    fn compile_lambda(
         &mut self,
-        source: &'ast Ast<'sexpr, 'context>,
-        lambda: &'ast ast::Lambda<'sexpr, 'context>,
-        vm: &'vm mut Vm<&'sexpr Sexpr<'context>>,
-        ast_compiler: &'ast_compiler mut ast::Compiler,
-    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
+        source: &Ast,
+        lambda: &ast::Lambda,
+        vm: &mut Vm<&'static Sexpr<'static>>,
+        ast_compiler: &mut ast::Compiler,
+    ) -> Result<Il, Error> {
         let arity = match &lambda.parameters {
             ast::Parameters::Normal(_) if lambda.parameters.len() == 0 => Arity::Nullary,
             ast::Parameters::Normal(_) => Arity::Nary(lambda.parameters.len()),
@@ -748,7 +725,7 @@ impl Compiler {
 
         let parameters =
             Parameters::from_ast(source, &lambda.parameters).map_err(|_| Error::Il {
-                ast: source,
+                ast: source.clone(),
                 message: "failed to compile parameters".to_string(),
             })?;
 
@@ -767,7 +744,7 @@ impl Compiler {
             Some(Ok(t)) => Some(t),
             Some(Err(_)) => {
                 return Err(Error::Il {
-                    ast: source,
+                    ast: source.clone(),
                     message: "failed to compile type".to_string(),
                 })
             }
@@ -777,7 +754,7 @@ impl Compiler {
         self.environment.pop_scope();
 
         Ok(Il::Lambda(Lambda {
-            source,
+            source: source.clone(),
             parameters,
             r#type,
             arity,
@@ -786,30 +763,30 @@ impl Compiler {
         }))
     }
 
-    fn compile_if<'ast_compiler, 'vm, 'ast: 'static, 'sexpr, 'context>(
+    fn compile_if(
         &mut self,
-        source: &'ast Ast<'sexpr, 'context>,
-        r#if: &'ast ast::If<'sexpr, 'context>,
-        vm: &'vm mut Vm<&'sexpr Sexpr<'context>>,
-        ast_compiler: &'ast_compiler mut ast::Compiler,
-    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
+        source: &Ast,
+        r#if: &ast::If,
+        vm: &mut Vm<&'static Sexpr<'static>>,
+        ast_compiler: &mut ast::Compiler,
+    ) -> Result<Il, Error> {
         Ok(Il::If(If {
-            source,
+            source: source.clone(),
             predicate: Box::new(self.compile(&r#if.predicate, vm, ast_compiler)?),
             then: Box::new(self.compile(&r#if.then, vm, ast_compiler)?),
             r#else: Box::new(self.compile(&r#if.r#else, vm, ast_compiler)?),
         }))
     }
 
-    fn compile_def<'ast_compiler, 'vm, 'ast: 'static, 'sexpr, 'context>(
+    fn compile_def(
         &mut self,
-        source: &'ast Ast<'sexpr, 'context>,
-        def: &'ast ast::Def<'sexpr, 'context>,
-        vm: &'vm mut Vm<&'sexpr Sexpr<'context>>,
-        ast_compiler: &'ast_compiler mut ast::Compiler,
-    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
+        source: &Ast,
+        def: &ast::Def,
+        vm: &mut Vm<&'static Sexpr<'static>>,
+        ast_compiler: &mut ast::Compiler,
+    ) -> Result<Il, Error> {
         let parameter = Parameter::from_ast(source, &def.parameter).map_err(|_| Error::Il {
-            ast: source,
+            ast: source.clone(),
             message: "failed to parse parameter".to_string(),
         })?;
 
@@ -817,7 +794,7 @@ impl Compiler {
             Some(Ok(t)) => Some(t),
             Some(Err(_)) => {
                 return Err(Error::Il {
-                    ast: source,
+                    ast: source.clone(),
                     message: "failed to parse type".to_string(),
                 })
             }
@@ -833,7 +810,7 @@ impl Compiler {
                 );
 
                 Il::Def(Def::Module {
-                    source,
+                    source: source.clone(),
                     parameter,
                     module: self
                         .environment
@@ -847,7 +824,7 @@ impl Compiler {
                     .insert_global(def.parameter.name.as_str(), r#type);
 
                 Il::Def(Def::Global {
-                    source,
+                    source: source.clone(),
                     parameter,
                     body: Box::new(self.compile(&def.body, vm, ast_compiler)?),
                 })
@@ -855,18 +832,14 @@ impl Compiler {
         )
     }
 
-    fn compile_decl<'ast, 'sexpr, 'context>(
-        &mut self,
-        source: &'ast Ast<'sexpr, 'context>,
-        decl: &'ast ast::Decl<'sexpr, 'context>,
-    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
+    fn compile_decl(&mut self, source: &Ast, decl: &ast::Decl) -> Result<Il, Error> {
         self.environment.insert_global(
             decl.parameter.name.as_str(),
             match decl.parameter.r#type.as_ref().map(Type::from_ast) {
                 Some(Ok(t)) => Some(t),
                 Some(Err(_)) => {
                     return Err(Error::Il {
-                        ast: source,
+                        ast: source.clone(),
                         message: "failed to parse type".to_string(),
                     })
                 }
@@ -874,47 +847,49 @@ impl Compiler {
             },
         );
 
-        Ok(Il::Constant(Constant::Nil { source }))
+        Ok(Il::Constant(Constant::Nil {
+            source: source.clone(),
+        }))
     }
 
-    fn compile_set<'ast_compiler, 'vm, 'ast: 'static, 'sexpr, 'context>(
+    fn compile_set(
         &mut self,
-        source: &'ast Ast<'sexpr, 'context>,
-        set: &'ast ast::Set<'sexpr, 'context>,
-        vm: &'vm mut Vm<&'sexpr Sexpr<'context>>,
-        ast_compiler: &'ast_compiler mut ast::Compiler,
-    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
+        source: &Ast,
+        set: &ast::Set,
+        vm: &mut Vm<&'static Sexpr<'static>>,
+        ast_compiler: &mut ast::Compiler,
+    ) -> Result<Il, Error> {
         Ok(Il::Set(Set {
-            source,
+            source: source.clone(),
             target: match &set.variable {
                 ast::Variable::WithoutModule { name, .. } => {
                     match self.environment.resolve(name.as_str()) {
                         Some(Variable::Local(index, r#type)) => VarRef::Local {
-                            source,
+                            source: source.clone(),
                             name: name.clone(),
                             r#type,
                             index,
                         },
                         Some(Variable::Upvalue(index, r#type)) => VarRef::UpValue {
-                            source,
+                            source: source.clone(),
                             name: name.clone(),
                             r#type,
                             index,
                         },
                         Some(Variable::Global(r#type)) => VarRef::Global {
-                            source,
+                            source: source.clone(),
                             name: name.clone(),
                             r#type,
                         },
                         Some(Variable::Module(r#type)) => VarRef::Module {
-                            source,
+                            source: source.clone(),
                             name: name.clone(),
                             module: self.environment.current_module().unwrap().to_string(),
                             r#type,
                         },
                         None => {
                             return Err(Error::Il {
-                                ast: source,
+                                ast: source.clone(),
                                 message: "unknown variable".to_string(),
                             })
                         }
@@ -923,20 +898,20 @@ impl Compiler {
                 ast::Variable::WithModule { name, module, .. } => {
                     match self.environment.resolve_module_var(module, name.as_str()) {
                         Some(ModuleVar { r#type, visible }) if visible => VarRef::Module {
-                            source,
+                            source: source.clone(),
                             name: name.clone(),
                             module: module.to_string(),
                             r#type,
                         },
                         Some(_) => {
                             return Err(Error::Il {
-                                ast: source,
+                                ast: source.clone(),
                                 message: "referenced private symbol".to_string(),
                             })
                         }
                         None => {
                             return Err(Error::Il {
-                                ast: source,
+                                ast: source.clone(),
                                 message: "referenced unknown variable".to_string(),
                             })
                         }
@@ -947,42 +922,39 @@ impl Compiler {
         }))
     }
 
-    fn compile_quoted<'ast, 'sexpr, 'context>(
-        &mut self,
-        source: &'ast Ast<'sexpr, 'context>,
-        quoted: &'ast ast::Quoted<'sexpr, 'context>,
-    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
+    fn compile_quoted(&mut self, source: &Ast, quoted: &ast::Quoted) -> Result<Il, Error> {
         Ok(match &quoted {
             Quoted::List { list, .. } => self.compile_quoted_list(source, list.as_slice())?,
             Quoted::Symbol { symbol, .. } => Il::Constant(Constant::Symbol {
-                source,
+                source: source.clone(),
                 symbol: symbol.clone(),
             }),
             Quoted::String { string, .. } => Il::Constant(Constant::String {
-                source,
+                source: source.clone(),
                 string: string.clone(),
             }),
             Quoted::Char { char, .. } => Il::Constant(Constant::Char {
-                source,
+                source: source.clone(),
                 char: *char,
             }),
-            Quoted::Int { int, .. } => Il::Constant(Constant::Int { source, int: *int }),
+            Quoted::Int { int, .. } => Il::Constant(Constant::Int {
+                source: source.clone(),
+                int: *int,
+            }),
             Quoted::Bool { bool, .. } => Il::Constant(Constant::Bool {
-                source,
+                source: source.clone(),
                 bool: *bool,
             }),
-            Quoted::Nil { .. } => Il::Constant(Constant::Nil { source }),
+            Quoted::Nil { .. } => Il::Constant(Constant::Nil {
+                source: source.clone(),
+            }),
         })
     }
 
     #[allow(clippy::only_used_in_recursion)]
-    fn compile_quoted_list<'ast, 'sexpr, 'context>(
-        &mut self,
-        source: &'ast Ast<'sexpr, 'context>,
-        list: &'ast [Quoted<'sexpr, 'context>],
-    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
+    fn compile_quoted_list(&mut self, source: &Ast, list: &[Quoted]) -> Result<Il, Error> {
         Ok(Il::List(List {
-            source,
+            source: source.clone(),
             exprs: list
                 .iter()
                 .map(|quoted| {
@@ -991,40 +963,43 @@ impl Compiler {
                             self.compile_quoted_list(source, list.as_slice())?
                         }
                         Quoted::Symbol { symbol, .. } => Il::Constant(Constant::Symbol {
-                            source,
+                            source: source.clone(),
                             symbol: symbol.clone(),
                         }),
                         Quoted::String { string, .. } => Il::Constant(Constant::String {
-                            source,
+                            source: source.clone(),
                             string: string.clone(),
                         }),
                         Quoted::Char { char, .. } => Il::Constant(Constant::Char {
-                            source,
+                            source: source.clone(),
                             char: *char,
                         }),
-                        Quoted::Int { int, .. } => {
-                            Il::Constant(Constant::Int { source, int: *int })
-                        }
+                        Quoted::Int { int, .. } => Il::Constant(Constant::Int {
+                            source: source.clone(),
+                            int: *int,
+                        }),
                         Quoted::Bool { bool, .. } => Il::Constant(Constant::Bool {
-                            source,
+                            source: source.clone(),
                             bool: *bool,
                         }),
-                        Quoted::Nil { .. } => Il::Constant(Constant::Nil { source }),
+                        Quoted::Nil { .. } => Il::Constant(Constant::Nil {
+                            source: source.clone(),
+                        }),
                     })
                 })
-                .collect::<Result<Vec<_>, Error<'ast, 'sexpr, 'context>>>()?,
+                .collect::<Result<Vec<_>, Error>>()?,
         }))
     }
 
-    fn compile_fncall<'ast_compiler, 'ast: 'static, 'sexpr, 'context>(
+    fn compile_fncall(
         &mut self,
-        source: &'ast Ast<'sexpr, 'context>,
-        fncall: &'ast ast::FnCall<'sexpr, 'context>,
-        vm: &mut Vm<&'sexpr Sexpr<'context>>,
-        ast_compiler: &'ast_compiler mut ast::Compiler,
-    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
+        source: &Ast,
+        fncall: &ast::FnCall,
+        vm: &mut Vm<&'static Sexpr<'static>>,
+        ast_compiler: &mut ast::Compiler,
+    ) -> Result<Il, Error> {
         Ok(Il::FnCall(FnCall {
-            source,
+            source: source.clone(),
             function: Box::new(self.compile(&fncall.function, vm, ast_compiler)?),
             args: fncall
                 .exprs
@@ -1034,15 +1009,15 @@ impl Compiler {
         }))
     }
 
-    fn compile_apply<'ast_compiler, 'ast: 'static, 'sexpr, 'context>(
+    fn compile_apply(
         &mut self,
-        source: &'ast Ast<'sexpr, 'context>,
-        apply: &'ast ast::Apply<'sexpr, 'context>,
-        vm: &mut Vm<&'sexpr Sexpr<'context>>,
-        ast_compiler: &'ast_compiler mut ast::Compiler,
-    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
+        source: &Ast,
+        apply: &ast::Apply,
+        vm: &mut Vm<&'static Sexpr<'static>>,
+        ast_compiler: &mut ast::Compiler,
+    ) -> Result<Il, Error> {
         Ok(Il::Apply(Apply {
-            source,
+            source: source.clone(),
             exprs: apply
                 .exprs
                 .iter()
@@ -1051,15 +1026,15 @@ impl Compiler {
         }))
     }
 
-    fn compile_arithmetic_operation<'ast_compiler, 'ast: 'static, 'sexpr, 'context>(
+    fn compile_arithmetic_operation(
         &mut self,
-        source: &'ast Ast<'sexpr, 'context>,
-        op: &'ast ast::BinaryArithmeticOperation<'sexpr, 'context>,
-        vm: &mut Vm<&'sexpr Sexpr<'context>>,
-        ast_compiler: &'ast_compiler mut ast::Compiler,
-    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
+        source: &Ast,
+        op: &ast::BinaryArithmeticOperation,
+        vm: &mut Vm<&'static Sexpr<'static>>,
+        ast_compiler: &mut ast::Compiler,
+    ) -> Result<Il, Error> {
         Ok(Il::ArithmeticOperation(ArithmeticOperation {
-            source,
+            source: source.clone(),
             operator: match op.operator {
                 ast::BinaryArithmeticOperator::Add => ArithmeticOperator::Add,
                 ast::BinaryArithmeticOperator::Sub => ArithmeticOperator::Sub,
@@ -1071,15 +1046,15 @@ impl Compiler {
         }))
     }
 
-    fn compile_comparison_operation<'ast_compiler, 'ast: 'static, 'sexpr, 'context>(
+    fn compile_comparison_operation(
         &mut self,
-        source: &'ast Ast<'sexpr, 'context>,
-        op: &'ast ast::ComparisonOperation<'sexpr, 'context>,
-        vm: &mut Vm<&'sexpr Sexpr<'context>>,
-        ast_compiler: &'ast_compiler mut ast::Compiler,
-    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
+        source: &Ast,
+        op: &ast::ComparisonOperation,
+        vm: &mut Vm<&'static Sexpr<'static>>,
+        ast_compiler: &mut ast::Compiler,
+    ) -> Result<Il, Error> {
         Ok(Il::ComparisonOperation(ComparisonOperation {
-            source,
+            source: source.clone(),
             operator: match op.operator {
                 ast::ComparisonOperator::Eq => ComparisonOperator::Eq,
                 ast::ComparisonOperator::Lt => ComparisonOperator::Lt,
@@ -1090,15 +1065,15 @@ impl Compiler {
         }))
     }
 
-    fn compile_list<'ast_compiler, 'ast: 'static, 'sexpr, 'context>(
+    fn compile_list(
         &mut self,
-        source: &'ast Ast<'sexpr, 'context>,
-        list: &'ast ast::List<'sexpr, 'context>,
-        vm: &mut Vm<&'sexpr Sexpr<'context>>,
-        ast_compiler: &'ast_compiler mut ast::Compiler,
-    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
+        source: &Ast,
+        list: &ast::List,
+        vm: &mut Vm<&'static Sexpr<'static>>,
+        ast_compiler: &mut ast::Compiler,
+    ) -> Result<Il, Error> {
         Ok(Il::List(List {
-            source,
+            source: source.clone(),
             exprs: list
                 .exprs
                 .iter()
@@ -1107,55 +1082,55 @@ impl Compiler {
         }))
     }
 
-    fn compile_cons<'ast_compiler, 'ast: 'static, 'sexpr, 'context>(
+    fn compile_cons(
         &mut self,
-        source: &'ast Ast<'sexpr, 'context>,
-        cons: &'ast ast::Cons<'sexpr, 'context>,
-        vm: &mut Vm<&'sexpr Sexpr<'context>>,
-        ast_compiler: &'ast_compiler mut ast::Compiler,
-    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
+        source: &Ast,
+        cons: &ast::Cons,
+        vm: &mut Vm<&'static Sexpr<'static>>,
+        ast_compiler: &mut ast::Compiler,
+    ) -> Result<Il, Error> {
         Ok(Il::Cons(Cons {
-            source,
+            source: source.clone(),
             lhs: Box::new(self.compile(&cons.lhs, vm, ast_compiler)?),
             rhs: Box::new(self.compile(&cons.rhs, vm, ast_compiler)?),
         }))
     }
 
-    fn compile_car<'ast_compiler, 'ast: 'static, 'sexpr, 'context>(
+    fn compile_car(
         &mut self,
-        source: &'ast Ast<'sexpr, 'context>,
-        car: &'ast ast::Car<'sexpr, 'context>,
-        vm: &mut Vm<&'sexpr Sexpr<'context>>,
-        ast_compiler: &'ast_compiler mut ast::Compiler,
-    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
+        source: &Ast,
+        car: &ast::Car,
+        vm: &mut Vm<&'static Sexpr<'static>>,
+        ast_compiler: &mut ast::Compiler,
+    ) -> Result<Il, Error> {
         Ok(Il::Car(Car {
-            source,
+            source: source.clone(),
             body: Box::new(self.compile(&car.body, vm, ast_compiler)?),
         }))
     }
 
-    fn compile_cdr<'ast_compiler, 'ast: 'static, 'sexpr, 'context>(
+    fn compile_cdr(
         &mut self,
-        source: &'ast Ast<'sexpr, 'context>,
-        cdr: &'ast ast::Cdr<'sexpr, 'context>,
-        vm: &mut Vm<&'sexpr Sexpr<'context>>,
-        ast_compiler: &'ast_compiler mut ast::Compiler,
-    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
+        source: &Ast,
+        cdr: &ast::Cdr,
+        vm: &mut Vm<&'static Sexpr<'static>>,
+        ast_compiler: &mut ast::Compiler,
+    ) -> Result<Il, Error> {
         Ok(Il::Cdr(Cdr {
-            source,
+            source: source.clone(),
             body: Box::new(self.compile(&cdr.body, vm, ast_compiler)?),
         }))
     }
 
-    fn compile_is_type<'ast_compiler, 'ast: 'static, 'sexpr, 'context>(
+    fn compile_is_type(
         &mut self,
-        source: &'ast Ast<'sexpr, 'context>,
-        is_type: &'ast ast::IsType<'sexpr, 'context>,
-        vm: &mut Vm<&'sexpr Sexpr<'context>>,
-        ast_compiler: &'ast_compiler mut ast::Compiler,
-    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
+        source: &Ast,
+        is_type: &ast::IsType,
+        vm: &mut Vm<&'static Sexpr<'static>>,
+        ast_compiler: &mut ast::Compiler,
+    ) -> Result<Il, Error> {
         Ok(Il::IsType(IsType {
-            source,
+            source: source.clone(),
             r#type: match is_type.parameter {
                 ast::IsTypeParameter::Function => Type::Function,
                 ast::IsTypeParameter::Cons => Type::Cons,
@@ -1170,78 +1145,73 @@ impl Compiler {
         }))
     }
 
-    fn compile_assert<'ast: 'static, 'sexpr, 'context>(
+    fn compile_assert(
         &mut self,
-        source: &'ast Ast<'sexpr, 'context>,
-        assert: &'ast ast::Assert<'sexpr, 'context>,
-        vm: &mut Vm<&'sexpr Sexpr<'context>>,
+        source: &Ast,
+        assert: &ast::Assert,
+        vm: &mut Vm<&'static Sexpr<'static>>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
+    ) -> Result<Il, Error> {
         Ok(Il::Assert(Assert {
-            source,
+            source: source.clone(),
             body: Box::new(self.compile(&assert.body, vm, ast_compiler)?),
         }))
     }
 
-    fn compile_map_create<'ast: 'static, 'sexpr, 'context>(
-        &mut self,
-        source: &'ast Ast<'sexpr, 'context>,
-    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
-        Ok(Il::MapCreate(MapCreate { source }))
+    fn compile_map_create(&mut self, source: &Ast) -> Result<Il, Error> {
+        Ok(Il::MapCreate(MapCreate {
+            source: source.clone(),
+        }))
     }
 
-    fn compile_map_insert<'ast: 'static, 'sexpr, 'context>(
+    fn compile_map_insert(
         &mut self,
-        source: &'ast Ast<'sexpr, 'context>,
-        map_insert: &'ast ast::MapInsert<'sexpr, 'context>,
-        vm: &mut Vm<&'sexpr Sexpr<'context>>,
+        source: &Ast,
+        map_insert: &ast::MapInsert,
+        vm: &mut Vm<&'static Sexpr<'static>>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
+    ) -> Result<Il, Error> {
         Ok(Il::MapInsert(MapInsert {
-            source,
+            source: source.clone(),
             map: Box::new(self.compile(&map_insert.map, vm, ast_compiler)?),
             key: Box::new(self.compile(&map_insert.key, vm, ast_compiler)?),
             value: Box::new(self.compile(&map_insert.value, vm, ast_compiler)?),
         }))
     }
 
-    fn compile_map_retrieve<'ast: 'static, 'sexpr, 'context>(
+    fn compile_map_retrieve(
         &mut self,
-        source: &'ast Ast<'sexpr, 'context>,
-        map_retrieve: &'ast ast::MapRetrieve<'sexpr, 'context>,
-        vm: &mut Vm<&'sexpr Sexpr<'context>>,
+        source: &Ast,
+        map_retrieve: &ast::MapRetrieve,
+        vm: &mut Vm<&'static Sexpr<'static>>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
+    ) -> Result<Il, Error> {
         Ok(Il::MapRetrieve(MapRetrieve {
-            source,
+            source: source.clone(),
             map: Box::new(self.compile(&map_retrieve.map, vm, ast_compiler)?),
             key: Box::new(self.compile(&map_retrieve.key, vm, ast_compiler)?),
         }))
     }
 
-    fn compile_map_items<'ast: 'static, 'sexpr, 'context>(
+    fn compile_map_items(
         &mut self,
-        source: &'ast Ast<'sexpr, 'context>,
-        map_items: &'ast ast::MapItems<'sexpr, 'context>,
-        vm: &mut Vm<&'sexpr Sexpr<'context>>,
+        source: &Ast,
+        map_items: &ast::MapItems,
+        vm: &mut Vm<&'static Sexpr<'static>>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
+    ) -> Result<Il, Error> {
         Ok(Il::MapItems(MapItems {
-            source,
+            source: source.clone(),
             map: Box::new(self.compile(&map_items.map, vm, ast_compiler)?),
         }))
     }
 
-    fn compile_export<'ast, 'sexpr, 'context>(
-        &mut self,
-        source: &'ast Ast<'sexpr, 'context>,
-        export: &'ast ast::Export<'sexpr, 'context>,
-    ) -> Result<Il<'ast, 'sexpr, 'context>, Error<'ast, 'sexpr, 'context>> {
+    fn compile_export(&mut self, source: &Ast, export: &ast::Export) -> Result<Il, Error> {
         let current_module = self
             .environment
             .current_module()
             .ok_or(Error::Il {
-                ast: source,
+                ast: source.clone(),
                 message: "can't export symbol at global scope".to_string(),
             })?
             .to_string();
@@ -1249,14 +1219,14 @@ impl Compiler {
         self.environment
             .export_module_var(current_module.as_str(), export.symbol.as_str());
 
-        Ok(Il::Constant(Constant::Nil { source }))
+        Ok(Il::Constant(Constant::Nil {
+            source: source.clone(),
+        }))
     }
 }
 
-impl<'parameters, 'ast, 'sexpr, 'context> IntoIterator
-    for &'parameters Parameters<'ast, 'sexpr, 'context>
-{
-    type Item = Parameter<'ast, 'sexpr, 'context>;
+impl<'parameters> IntoIterator for &'parameters Parameters {
+    type Item = Parameter;
     type IntoIter = impl Iterator<Item = Self::Item>;
 
     fn into_iter(self) -> Self::IntoIter {
