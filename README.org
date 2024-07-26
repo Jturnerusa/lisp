@@ -33,7 +33,7 @@ Currently, the core lib is passed as an environment variable.
 export CARPET_LISP_PATH="$PWD/lib/lisp"
 #+end_src
 
-Now you're ready to run some carpet lisp. Here's a sample snippet for testing:
+Sample lisp for testing:
 #+begin_example
 (require list)
 
