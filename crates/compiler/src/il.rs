@@ -265,9 +265,21 @@ pub struct MapItems {
 }
 
 #[derive(Clone, Debug)]
+pub enum IsTypeParameter {
+    Function,
+    Cons,
+    Symbol,
+    String,
+    Char,
+    Int,
+    Bool,
+    Nil,
+}
+
+#[derive(Clone, Debug)]
 pub struct IsType {
     pub source: Ast,
-    pub r#type: Type,
+    pub r#type: IsTypeParameter,
     pub body: Box<Il>,
 }
 
@@ -1130,14 +1142,14 @@ impl Compiler {
         Ok(Il::IsType(IsType {
             source: source.clone(),
             r#type: match is_type.parameter {
-                ast::IsTypeParameter::Function => Type::Function,
-                ast::IsTypeParameter::Cons => Type::Cons,
-                ast::IsTypeParameter::Symbol => Type::Symbol,
-                ast::IsTypeParameter::String => Type::String,
-                ast::IsTypeParameter::Char => Type::Char,
-                ast::IsTypeParameter::Int => Type::Int,
-                ast::IsTypeParameter::Bool => Type::Bool,
-                ast::IsTypeParameter::Nil => Type::Nil,
+                ast::IsTypeParameter::Function => IsTypeParameter::Function,
+                ast::IsTypeParameter::Cons => IsTypeParameter::Cons,
+                ast::IsTypeParameter::Symbol => IsTypeParameter::Symbol,
+                ast::IsTypeParameter::String => IsTypeParameter::String,
+                ast::IsTypeParameter::Char => IsTypeParameter::Char,
+                ast::IsTypeParameter::Int => IsTypeParameter::Int,
+                ast::IsTypeParameter::Bool => IsTypeParameter::Bool,
+                ast::IsTypeParameter::Nil => IsTypeParameter::Nil,
             },
             body: Box::new(self.compile(&is_type.body, vm, ast_compiler)?),
         }))

@@ -343,15 +343,14 @@ fn compile_is_type(
     compile(&is_type.body, opcodes)?;
 
     let vm_type = match is_type.r#type {
-        il::Type::Function => vm::object::Type::Function,
-        il::Type::Cons => vm::object::Type::Cons,
-        il::Type::Symbol => vm::object::Type::Symbol,
-        il::Type::String => vm::object::Type::String,
-        il::Type::Char => vm::object::Type::Char,
-        il::Type::Int => vm::object::Type::Int,
-        il::Type::Bool => vm::object::Type::Bool,
-        il::Type::Nil => vm::object::Type::Nil,
-        _ => unreachable!(),
+        il::IsTypeParameter::Function => vm::object::Type::Function,
+        il::IsTypeParameter::Cons => vm::object::Type::Cons,
+        il::IsTypeParameter::Symbol => vm::object::Type::Symbol,
+        il::IsTypeParameter::String => vm::object::Type::String,
+        il::IsTypeParameter::Char => vm::object::Type::Char,
+        il::IsTypeParameter::Int => vm::object::Type::Int,
+        il::IsTypeParameter::Bool => vm::object::Type::Bool,
+        il::IsTypeParameter::Nil => vm::object::Type::Nil,
     };
 
     opcodes.push(OpCode::IsType(vm_type), is_type.source.source_sexpr());
