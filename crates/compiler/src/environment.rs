@@ -1,4 +1,4 @@
-use crate::il::Type;
+use crate::types::Type;
 use std::collections::HashMap;
 use vm::UpValue;
 
