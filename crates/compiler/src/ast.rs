@@ -200,7 +200,8 @@ pub struct If {
 #[derive(Clone, Debug)]
 pub struct Apply {
     pub source: &'static Sexpr<'static>,
-    pub exprs: Vec<Ast>,
+    pub function: Box<Ast>,
+    pub list: Box<Ast>,
 }
 
 #[derive(Clone, Debug)]
@@ -426,8 +427,8 @@ impl Compiler {
                     [Symbol { symbol, .. }, predicate, then, r#else] if symbol == "if" => {
                         self.compile_if(sexpr, predicate, then, r#else)?
                     }
-                    [Symbol { symbol, .. }, rest @ ..] if symbol == "apply" => {
-                        self.compile_apply(sexpr, rest)?
+                    [Symbol { symbol, .. }, function, list] if symbol == "apply" => {
+                        self.compile_apply(sexpr, function, list)?
                     }
                     [Symbol { symbol, .. }, lhs, rhs]
                         if matches!(symbol.as_str(), "+" | "-" | "*" | "/") =>
@@ -728,14 +729,13 @@ impl Compiler {
     fn compile_apply(
         &mut self,
         source: &'static Sexpr<'static>,
-        args: &'static [Sexpr<'static>],
+        function: &'static Sexpr<'static>,
+        list: &'static Sexpr<'static>,
     ) -> Result<Ast, Error> {
         Ok(Ast::Apply(Apply {
             source,
-            exprs: args
-                .iter()
-                .map(|arg| self.compile(arg))
-                .collect::<Result<Vec<_>, _>>()?,
+            function: Box::new(self.compile(function)?),
+            list: Box::new(self.compile(list)?),
         }))
     }
 

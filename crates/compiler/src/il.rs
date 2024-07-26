@@ -156,7 +156,8 @@ pub struct FnCall {
 #[derive(Clone, Debug)]
 pub struct Apply {
     pub source: Ast,
-    pub exprs: Vec<Il>,
+    pub function: Box<Il>,
+    pub list: Box<Il>,
 }
 
 #[derive(Clone, Debug)]
@@ -1018,11 +1019,8 @@ impl Compiler {
     ) -> Result<Il, Error> {
         Ok(Il::Apply(Apply {
             source: source.clone(),
-            exprs: apply
-                .exprs
-                .iter()
-                .map(|expr| self.compile(expr, vm, ast_compiler))
-                .collect::<Result<Vec<_>, _>>()?,
+            function: Box::new(self.compile(&apply.function, vm, ast_compiler)?),
+            list: Box::new(self.compile(&apply.list, vm, ast_compiler)?),
         }))
     }
 

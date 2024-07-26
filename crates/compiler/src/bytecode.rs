@@ -363,9 +363,8 @@ fn compile_apply(
     apply: &il::Apply,
     opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
 ) -> Result<(), Error> {
-    for expr in &apply.exprs {
-        compile(expr, opcodes)?;
-    }
+    compile(&apply.function, opcodes)?;
+    compile(&apply.list, opcodes)?;
 
     opcodes.push(OpCode::Apply, apply.source.source_sexpr());
 
