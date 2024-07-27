@@ -3,7 +3,6 @@ use crate::{
     bytecode,
     environment::{self, Environment, ModuleVar, Variable},
     il,
-    types::Type,
 };
 use reader::{Reader, Sexpr};
 use unwrap_enum::{EnumAs, EnumIs};
@@ -59,6 +58,12 @@ pub enum Il {
 }
 
 #[derive(Clone, Debug)]
+pub enum Type {
+    Scalar(String),
+    Composite(Vec<Type>),
+}
+
+#[derive(Clone, Debug)]
 pub struct Module {
     pub source: Ast,
     pub name: String,
@@ -80,24 +85,20 @@ pub enum VarRef {
         source: Ast,
         name: String,
         index: usize,
-        r#type: Option<Type>,
     },
     UpValue {
         source: Ast,
         name: String,
         index: usize,
-        r#type: Option<Type>,
     },
     Global {
         source: Ast,
         name: String,
-        r#type: Option<Type>,
     },
     Module {
         source: Ast,
         name: String,
         module: String,
-        r#type: Option<Type>,
     },
 }
 
@@ -279,6 +280,17 @@ pub struct Compiler {
     environment: Environment,
 }
 
+impl Type {
+    fn from_ast(ast: &ast::Type) -> Self {
+        match ast {
+            ast::Type::Scalar(scalar) => Self::Scalar(scalar.clone()),
+            ast::Type::Composite(composite) => {
+                Self::Composite(composite.iter().map(Type::from_ast).collect())
+            }
+        }
+    }
+}
+
 impl VarRef {
     pub fn source(&self) -> &Ast {
         match self {
@@ -345,11 +357,7 @@ impl Parameter {
         Ok(Self {
             source: source.clone(),
             name: parameter.name.clone(),
-            r#type: match parameter.r#type.as_ref().map(Type::from_ast) {
-                Some(Ok(t)) => Some(t),
-                Some(Err(_)) => return Err(()),
-                None => None,
-            },
+            r#type: parameter.r#type.as_ref().map(Type::from_ast),
         })
     }
 }
@@ -516,28 +524,21 @@ impl Compiler {
         Ok(match variable {
             ast::Variable::WithoutModule { name, .. } => {
                 match self.environment.resolve(name.as_str()) {
-                    Some(environment::Variable::Local(index, r#type)) => {
-                        Il::VarRef(VarRef::Local {
-                            source: source.clone(),
-                            name: name.clone(),
-                            index,
-                            r#type,
-                        })
-                    }
-                    Some(environment::Variable::Upvalue(index, r#type)) => {
-                        Il::VarRef(VarRef::UpValue {
-                            source: source.clone(),
-                            name: name.clone(),
-                            index,
-                            r#type,
-                        })
-                    }
-                    Some(environment::Variable::Global(r#type)) => Il::VarRef(VarRef::Global {
+                    Some(environment::Variable::Local(index)) => Il::VarRef(VarRef::Local {
                         source: source.clone(),
                         name: name.clone(),
-                        r#type,
+                        index,
                     }),
-                    Some(environment::Variable::Module(r#type)) => Il::VarRef(VarRef::Module {
+                    Some(environment::Variable::Upvalue(index)) => Il::VarRef(VarRef::UpValue {
+                        source: source.clone(),
+                        name: name.clone(),
+                        index,
+                    }),
+                    Some(environment::Variable::Global) => Il::VarRef(VarRef::Global {
+                        source: source.clone(),
+                        name: name.clone(),
+                    }),
+                    Some(environment::Variable::Module) => Il::VarRef(VarRef::Module {
                         source: source.clone(),
                         name: name.clone(),
                         module: self
@@ -545,7 +546,6 @@ impl Compiler {
                             .current_module()
                             .map(|s| s.to_string())
                             .unwrap(),
-                        r#type,
                     }),
                     None => {
                         return Err(Error::Il {
@@ -560,11 +560,10 @@ impl Compiler {
                     .environment
                     .resolve_module_var(module.as_str(), name.as_str())
                 {
-                    Some(ModuleVar { r#type, visible }) if visible => Il::VarRef(VarRef::Module {
+                    Some(ModuleVar { visible, .. }) if visible => Il::VarRef(VarRef::Module {
                         source: source.clone(),
                         name: name.clone(),
                         module: module.to_string(),
-                        r#type,
                     }),
                     Some(ModuleVar { .. }) => {
                         return Err(Error::Il {
@@ -603,7 +602,7 @@ impl Compiler {
             })?;
 
         self.environment
-            .push_scope(parameters.iter().map(|param| (param.name, param.r#type)));
+            .push_scope(parameters.iter().map(|param| param.name));
 
         let body = defmacro
             .body
@@ -702,7 +701,7 @@ impl Compiler {
             })?;
 
         self.environment
-            .push_scope(parameters.iter().map(|param| (param.name, param.r#type)));
+            .push_scope(parameters.iter().map(|param| param.name));
 
         let body = lambda
             .body
@@ -713,13 +712,7 @@ impl Compiler {
         let upvalues = self.environment.upvalues().collect::<Vec<UpValue>>();
 
         let r#type = match lambda.r#type.as_ref().map(Type::from_ast) {
-            Some(Ok(t)) => Some(t),
-            Some(Err(_)) => {
-                return Err(Error::Il {
-                    ast: source.clone(),
-                    message: "failed to compile type".to_string(),
-                })
-            }
+            Some(t) => Some(t),
             None => None,
         };
 
@@ -763,23 +756,14 @@ impl Compiler {
         })?;
 
         let r#type = match def.parameter.r#type.as_ref().map(Type::from_ast) {
-            Some(Ok(t)) => Some(t),
-            Some(Err(_)) => {
-                return Err(Error::Il {
-                    ast: source.clone(),
-                    message: "failed to parse type".to_string(),
-                })
-            }
+            Some(t) => Some(t),
             None => None,
         };
 
         Ok(
             if let Some(module) = self.environment.current_module().map(|s| s.to_string()) {
-                self.environment.insert_module_var(
-                    module.as_str(),
-                    def.parameter.name.as_str(),
-                    r#type,
-                );
+                self.environment
+                    .insert_module_var(module.as_str(), def.parameter.name.as_str());
 
                 Il::Def(Def::Module {
                     source: source.clone(),
@@ -792,8 +776,7 @@ impl Compiler {
                     body: Box::new(self.compile(&def.body, vm, ast_compiler)?),
                 })
             } else {
-                self.environment
-                    .insert_global(def.parameter.name.as_str(), r#type);
+                self.environment.insert_global(def.parameter.name.as_str());
 
                 Il::Def(Def::Global {
                     source: source.clone(),
@@ -805,19 +788,7 @@ impl Compiler {
     }
 
     fn compile_decl(&mut self, source: &Ast, decl: &ast::Decl) -> Result<Il, Error> {
-        self.environment.insert_global(
-            decl.parameter.name.as_str(),
-            match decl.parameter.r#type.as_ref().map(Type::from_ast) {
-                Some(Ok(t)) => Some(t),
-                Some(Err(_)) => {
-                    return Err(Error::Il {
-                        ast: source.clone(),
-                        message: "failed to parse type".to_string(),
-                    })
-                }
-                None => None,
-            },
-        );
+        self.environment.insert_global(decl.parameter.name.as_str());
 
         Ok(Il::Constant(Constant::Nil {
             source: source.clone(),
@@ -836,28 +807,24 @@ impl Compiler {
             target: match &set.variable {
                 ast::Variable::WithoutModule { name, .. } => {
                     match self.environment.resolve(name.as_str()) {
-                        Some(Variable::Local(index, r#type)) => VarRef::Local {
+                        Some(Variable::Local(index)) => VarRef::Local {
                             source: source.clone(),
                             name: name.clone(),
-                            r#type,
                             index,
                         },
-                        Some(Variable::Upvalue(index, r#type)) => VarRef::UpValue {
+                        Some(Variable::Upvalue(index)) => VarRef::UpValue {
                             source: source.clone(),
                             name: name.clone(),
-                            r#type,
                             index,
                         },
-                        Some(Variable::Global(r#type)) => VarRef::Global {
+                        Some(Variable::Global) => VarRef::Global {
                             source: source.clone(),
                             name: name.clone(),
-                            r#type,
                         },
-                        Some(Variable::Module(r#type)) => VarRef::Module {
+                        Some(Variable::Module) => VarRef::Module {
                             source: source.clone(),
                             name: name.clone(),
                             module: self.environment.current_module().unwrap().to_string(),
-                            r#type,
                         },
                         None => {
                             return Err(Error::Il {
@@ -869,11 +836,10 @@ impl Compiler {
                 }
                 ast::Variable::WithModule { name, module, .. } => {
                     match self.environment.resolve_module_var(module, name.as_str()) {
-                        Some(ModuleVar { r#type, visible }) if visible => VarRef::Module {
+                        Some(ModuleVar { visible, .. }) if visible => VarRef::Module {
                             source: source.clone(),
                             name: name.clone(),
                             module: module.to_string(),
-                            r#type,
                         },
                         Some(_) => {
                             return Err(Error::Il {
