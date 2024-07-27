@@ -13,3 +13,101 @@ There is only one equality function, "=", no eq, eql, equal, etc.
 
 * Limitations
 This language is very unstable and many things are not implemented yet.
+
+
+* Working with Carpet Lisp
+
+*NOTE*: You will need rust's nightly toolchain installed to build this project.
+
+** Building
+#+begin_src bash
+git clone https://github.com/Jturnerusa/lisp
+cd lisp
+cargo build
+#+end_src
+
+** Running
+
+Currently, the core lib is passed as an environment variable.
+#+begin_src bash
+export CARPET_LISP_PATH="$PWD/lib/lisp"
+#+end_src
+
+Sample lisp for testing:
+#+begin_example
+(require list)
+
+(def fib (lambda (n)
+           (if (< n 2)
+               n
+               (+ (fib (- n 1)) (fib (- n 2))))))
+
+(named-let loop ((n 1))
+  (print (fib n))
+  (if (< n 10)
+      (loop (+ n 1))
+    nil))
+#+end_example
+
+Run the sample:
+#+begin_src bash
+cargo run --bin eval sample.lisp
+#+end_src
+
+This should result in a fibonaci sequence up to 10 indices:
+#+begin_example
+1
+1
+2
+3
+5
+8
+13
+21
+34
+55
+#+end_example
+
+* Features
+
+List of native functions:
+- =+=
+- =-=
+- =*=
+- =/=
+- =cons=
+- =car=
+- =cdr=
+- =list=
+- =apply=
+- =cons?=
+- =function?=
+- =symbol?=
+- =string?=
+- =int?=
+- =char?=
+- =nil?=
+- =apply=
+- =lambda=
+- =defmacro=
+- =def=
+- =set!=
+- =eval-when-compile=
+- =quote=
+- =if=
+- ===
+- =>=
+- =<=
+- =assert=
+- =decl=
+- =map-create=
+- =map-insert!=
+- =map-retrieve=
+- =map-items=
+- =module=
+- =export=
+- =require=
+
+* Roadmap
+- Native Functions (string slicing, utils, etc.)
+- control flow graph for type system
