@@ -1,6 +1,11 @@
+use std::char;
+
 use crate::{check_arity, check_type};
 use gc::Gc;
-use vm::{object::Type, Error, Local, Object};
+use vm::{
+    object::{self, Type},
+    Error, Local, Object,
+};
 
 pub fn split<D: Clone>(objects: &mut [Local<D>]) -> Result<Object<D>, Error> {
     check_arity!("string-split", 2, objects);
@@ -89,4 +94,61 @@ pub fn is_digit<D: Clone>(objects: &mut [Local<D>]) -> Result<Object<D>, Error> 
     } else {
         Ok(Object::Bool(false))
     }
+}
+
+pub fn contains<D: Clone>(objects: &mut [Local<D>]) -> Result<Object<D>, Error> {
+    check_arity!("string-contains?", 2, objects);
+
+    let string = check_type!(objects[0], String);
+
+    let contains = match objects[1].clone().into_object() {
+        Object::String(pattern) => string.contains(pattern.as_str()),
+        Object::Char(pattern) => string.contains(pattern),
+        object => {
+            return Err(Error::Type {
+                expected: Type::String,
+                recieved: Type::from(&object),
+            })
+        }
+    };
+
+    Ok(if contains {
+        Object::Bool(true)
+    } else {
+        Object::Bool(false)
+    })
+}
+
+pub fn substr<D: Clone>(objects: &mut [Local<D>]) -> Result<Object<D>, Error> {
+    check_arity!("string-substr", 3, objects);
+
+    let string = check_type!(objects[0], String);
+    let start = check_type!(objects[1], Int).try_into().unwrap();
+    let stop = check_type!(objects[2], Int).try_into().unwrap();
+
+    let substr = string.as_str()[start..stop].to_string();
+
+    Ok(Object::String(Gc::new(substr)))
+}
+
+pub fn find<D: Clone>(objects: &mut [Local<D>]) -> Result<Object<D>, Error> {
+    check_arity!("string-find", 2, objects);
+
+    let string = check_type!(&objects[0], String);
+
+    let index = match &objects[1].clone().into_object() {
+        Object::String(pattern) => string.find(pattern.as_str()),
+        Object::Char(pattern) => string.find(*pattern),
+        object => {
+            return Err(Error::Type {
+                expected: Type::String,
+                recieved: Type::from(object),
+            })
+        }
+    };
+
+    Ok(match index {
+        Some(index) => Object::Int(index.try_into().unwrap()),
+        None => Object::Nil,
+    })
 }

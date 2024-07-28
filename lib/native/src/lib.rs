@@ -78,4 +78,7 @@ pub fn load_module<D: Clone + PartialEq + PartialOrd + Hash + Debug>(vm: &mut Vm
     vm.load_native_function("list->string", string::from_list);
     vm.load_native_function("string->int", string::parse);
     vm.load_native_function("string-split-whitespace", string::split_ascii_whitespace);
+    vm.load_native_function("string-contains?", string::contains);
+    vm.load_native_function("string-substr", string::substr);
+    vm.load_native_function("string-find", string::find);
 }
