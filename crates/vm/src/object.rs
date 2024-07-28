@@ -181,6 +181,7 @@ impl<D: PartialEq> PartialEq for Object<D> {
             (Object::Cons(a), Object::Cons(b)) => *a.borrow() == *b.borrow(),
             (Object::String(a), Object::String(b)) => a == b,
             (Object::Symbol(a), Object::Symbol(b)) => a == b,
+            (Object::Char(a), Object::Char(b)) => a == b,
             (Object::Int(a), Object::Int(b)) => a == b,
             (Object::Bool(a), Object::Bool(b)) => a == b,
             (Object::Nil, Object::Nil) => true,
@@ -430,13 +431,13 @@ impl<D: Clone> Object<D> {
     pub fn print(&self, buffer: &mut String) -> Result<(), ()> {
         match self {
             Self::Cons(cons) => cons.borrow().print(buffer)?,
-            Self::Symbol(symbol) => write!(buffer, " {symbol} ").map_err(|_| ())?,
-            Self::String(string) => write!(buffer, r#" "{string}" "#).map_err(|_| ())?,
-            Self::Char(char) => write!(buffer, r#" '{char}' "#).map_err(|_| ())?,
-            Self::Int(int) => write!(buffer, " {int} ").map_err(|_| ())?,
-            Self::Bool(true) => write!(buffer, " true ").map_err(|_| ())?,
-            Self::Bool(false) => write!(buffer, " false ").map_err(|_| ())?,
-            Self::Nil => write!(buffer, " nil ").map_err(|_| ())?,
+            Self::Symbol(symbol) => write!(buffer, "{symbol}").map_err(|_| ())?,
+            Self::String(string) => write!(buffer, r#""{string}""#).map_err(|_| ())?,
+            Self::Char(char) => write!(buffer, r#"'{char}'"#).map_err(|_| ())?,
+            Self::Int(int) => write!(buffer, "{int}").map_err(|_| ())?,
+            Self::Bool(true) => write!(buffer, "true").map_err(|_| ())?,
+            Self::Bool(false) => write!(buffer, "false").map_err(|_| ())?,
+            Self::Nil => write!(buffer, "nil").map_err(|_| ())?,
             _ => return Err(()),
         }
 
@@ -446,13 +447,16 @@ impl<D: Clone> Object<D> {
 
 impl<D: Clone> Cons<D> {
     pub fn print(&self, buffer: &mut String) -> Result<(), ()> {
-        write!(buffer, " ( ").map_err(|_| ())?;
+        write!(buffer, "(").map_err(|_| ())?;
 
-        for e in self.iter_cars() {
+        for (i, e) in self.iter_cars().enumerate() {
             e.print(buffer)?;
+            if i < self.iter_cars().count() - 1 {
+                write!(buffer, " ").map_err(|_| ())?;
+            }
         }
 
-        write!(buffer, " ) ").map_err(|_| ())?;
+        write!(buffer, ")").map_err(|_| ())?;
 
         Ok(())
     }
