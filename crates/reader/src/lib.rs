@@ -52,7 +52,7 @@ enum Token {
     #[regex(r#""[^"]*""#)]
     String,
 
-    #[regex(r#"'[^']{1}'"#)]
+    #[regex(r#"\?."#)]
     Char,
 
     #[regex("[0-9]+")]
@@ -300,7 +300,7 @@ fn read<'context>(
             span: lexer.span(),
         },
         Ok(Token::Char) => Sexpr::Char {
-            char: lexer.slice().parse().unwrap(),
+            char: lexer.slice()[1..lexer.slice().len()].parse().unwrap(),
             context,
             span: lexer.span(),
         },
@@ -366,7 +366,7 @@ fn read_list<'context>(
                 span: lexer.span(),
             }),
             Some(Ok(Token::Char)) => list.push(Sexpr::Char {
-                char: lexer.slice().parse().unwrap(),
+                char: lexer.slice()[1..lexer.slice().len()].parse().unwrap(),
                 context,
                 span: lexer.span(),
             }),
