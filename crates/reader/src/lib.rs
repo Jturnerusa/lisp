@@ -473,7 +473,7 @@ impl<'context> fmt::Debug for Sexpr<'context> {
 
         write!(
             f,
-            "{}:{}: {}",
+            "{}:{}:\n{}\n",
             self.context().display,
             line,
             &self.context().source[span]
