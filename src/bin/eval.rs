@@ -1,7 +1,18 @@
 #![feature(let_chains)]
 
-use std::{env, path::PathBuf};
+use reader::Sexpr;
+use std::{env, ops::Range, path::PathBuf};
 use vm::{OpCodeTable, Vm};
+
+static BOOTSTRAP_SOURCE: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/lib/bootstrap/bootstrap.lisp"
+));
+
+static NATIVE_DECL_SOURCE: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/lib/native/decl/native.lisp"
+));
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut il_compiler = compiler::il::Compiler::new();
@@ -11,16 +22,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     native_functions::load_module(&mut vm);
 
-    lisp::compile_file(
-        PathBuf::from("lib/bootstrap/bootstrap.lisp").as_path(),
+    lisp::compile_source(
+        BOOTSTRAP_SOURCE,
+        "bootstrap.lisp",
         &mut il_compiler,
         &mut ast_compiler,
         &mut vm,
         &mut opcode_table,
     )?;
 
-    lisp::compile_file(
-        PathBuf::from("lib/native/decl/native.lisp").as_path(),
+    lisp::compile_source(
+        NATIVE_DECL_SOURCE,
+        "native.lisp",
         &mut il_compiler,
         &mut ast_compiler,
         &mut vm,

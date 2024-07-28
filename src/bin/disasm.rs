@@ -9,22 +9,34 @@ use compiler::{ast, bytecode, il};
 use reader::{Reader, Sexpr};
 use vm::{OpCode, OpCodeTable, Vm};
 
+static BOOTSTRAP_SOURCE: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/lib/bootstrap/bootstrap.lisp"
+));
+
+static NATIVE_DECL_SOURCE: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/lib/native/decl/native.lisp"
+));
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut il_compiler = il::Compiler::new();
     let mut ast_compiler = ast::Compiler::new();
     let mut vm: Vm<&Sexpr<'_>> = Vm::new();
     let mut opcode_table = OpCodeTable::new();
 
-    lisp::compile_file(
-        PathBuf::from("lib/bootstrap/bootstrap.lisp").as_path(),
+    lisp::compile_source(
+        BOOTSTRAP_SOURCE,
+        "bootstrap.lisp",
         &mut il_compiler,
         &mut ast_compiler,
         &mut vm,
         &mut opcode_table,
     )?;
 
-    lisp::compile_file(
-        PathBuf::from("lib/native/decl/native.lisp").as_path(),
+    lisp::compile_source(
+        NATIVE_DECL_SOURCE,
+        "native.lisp",
         &mut il_compiler,
         &mut ast_compiler,
         &mut vm,
