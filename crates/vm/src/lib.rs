@@ -721,13 +721,13 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
     }
 
     pub fn is_type(&mut self, ty: Type) -> Result<(), Error> {
-        self.stack.push(
-            if Type::from(&self.stack.last().unwrap().clone().into_object()) == ty {
-                Local::Value(Object::Bool(true))
-            } else {
-                Local::Value(Object::Bool(false))
-            },
-        );
+        let object = self.stack.pop().unwrap().into_object();
+
+        self.stack.push(if Type::from(&object) == ty {
+            Local::Value(Object::Bool(true))
+        } else {
+            Local::Value(Object::Bool(false))
+        });
         Ok(())
     }
 
