@@ -3,10 +3,10 @@ use compiler::{
     bytecode, il,
 };
 use reader::{Reader, Sexpr};
-use std::env;
 use std::fs::{self, File};
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::{env, error::Error};
 use vm::{OpCodeTable, Vm};
 
 pub fn compile_file(
@@ -26,10 +26,25 @@ pub fn compile_file(
 
     file.read_to_string(&mut source)?;
 
-    let context = Box::leak(Box::new(reader::Context::new(
+    compile_source(
         source.as_str(),
         path.to_str().unwrap(),
-    )));
+        il_compiler,
+        ast_compiler,
+        vm,
+        opcode_table,
+    )
+}
+
+pub fn compile_source(
+    source: &str,
+    context: &str,
+    il_compiler: &mut il::Compiler,
+    ast_compiler: &mut ast::Compiler,
+    vm: &mut Vm<&'static Sexpr<'static>>,
+    opcode_table: &mut OpCodeTable<&'static Sexpr<'static>>,
+) -> Result<(), Box<dyn Error>> {
+    let context = Box::leak(Box::new(reader::Context::new(source, context)));
 
     let reader = Reader::new(context);
 
