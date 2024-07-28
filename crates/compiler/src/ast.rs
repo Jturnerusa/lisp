@@ -1023,6 +1023,7 @@ impl Type {
                     .collect::<Result<Vec<_>, _>>()?,
             ),
             Sexpr::Symbol { symbol, .. } => Type::Scalar(symbol.clone()),
+            Sexpr::Nil { .. } => Type::Scalar("nil".to_string()),
             _ => return Err(()),
         })
     }
