@@ -145,11 +145,11 @@
                        ,@body)))))
      (,name ,@(map cadr bindings))))
 
-(defmacro if-let* (bindings &rest body)
+(defmacro when-let* (bindings &rest body)
   `(let ((,(caar bindings) ,(car (cdr (car bindings)))))
      ,(named-let loop ((bindings bindings))
         (if (= (length bindings) 1)
-            `(if (nil? ,(caar bindings)) nil ,@body)
+            `(if (nil? ,(caar bindings)) nil (progn ,@body))
             `(let ((,(car (car (cdr bindings))) (if (nil? ,(caar bindings))
                                                     nil
                                                     ,(car (cdar (cdr bindings))))))
