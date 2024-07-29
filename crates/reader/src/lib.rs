@@ -67,7 +67,7 @@ enum Macro {
     Splice,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, EnumIs)]
+#[derive(Clone, PartialEq, Eq, Hash, EnumIs)]
 pub enum Sexpr<'context> {
     List {
         list: Vec<Sexpr<'context>>,
@@ -453,4 +453,15 @@ impl<'context> fmt::Debug for Error<'context> {
             Self::UnbalancedParens => write!(f, "unbalanced parens"),
         }
     }
+}
+
+impl<'context> fmt::Debug for Sexpr<'context> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let source = get_source(self, self.span());
+        write!(f, "{source}")
+    }
+}
+
+fn get_source<'sexpr>(sexpr: &'sexpr Sexpr, span: Range<usize>) -> &'sexpr str {
+    &sexpr.context().source()[span]
 }
