@@ -23,8 +23,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     native_functions::load_module(&mut vm);
 
     lisp::compile_source(
-        BOOTSTRAP_SOURCE,
-        "bootstrap.lisp",
+        NATIVE_DECL_SOURCE,
+        "native.lisp",
         &mut il_compiler,
         &mut ast_compiler,
         &mut vm,
@@ -32,8 +32,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
 
     lisp::compile_source(
-        NATIVE_DECL_SOURCE,
-        "native.lisp",
+        BOOTSTRAP_SOURCE,
+        "bootstrap.lisp",
         &mut il_compiler,
         &mut ast_compiler,
         &mut vm,
