@@ -433,7 +433,7 @@ impl<D: Clone> Object<D> {
             Self::Cons(cons) => cons.borrow().print(buffer)?,
             Self::Symbol(symbol) => write!(buffer, "{symbol}").map_err(|_| ())?,
             Self::String(string) => write!(buffer, r#""{string}""#).map_err(|_| ())?,
-            Self::Char(char) => write!(buffer, r#"'{char}'"#).map_err(|_| ())?,
+            Self::Char(char) => write!(buffer, r#"?{char}"#).map_err(|_| ())?,
             Self::Int(int) => write!(buffer, "{int}").map_err(|_| ())?,
             Self::Bool(true) => write!(buffer, "true").map_err(|_| ())?,
             Self::Bool(false) => write!(buffer, "false").map_err(|_| ())?,
