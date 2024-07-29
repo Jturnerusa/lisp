@@ -24,3 +24,11 @@
                     -> (union int nil)))
 
 (decl string->list (lambda ((s string)) -> (list char)))
+
+(decl string-lines (lambda ((s string)) -> (list string)))
+
+(decl list->string (lambda ((l list)) -> string))
+
+(decl string-starts-with? (lambda ((s string)
+                                   (prefix (union string char)))
+                            -> bool))
