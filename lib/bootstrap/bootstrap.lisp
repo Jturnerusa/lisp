@@ -86,12 +86,12 @@
                             (cons (car (car lists))
                                   (apply append (cdr lists)))
                             (cons (car (car lists))
-                                  (apply append (cons (cdr (car lists)) (cdr lists))))))))))
+                                  (apply append (cons (cdr (car lists)) (cdr lists)))))))))
 
-(def Z (lambda (f)
-         ((lambda (g) (g g)) (lambda (g)
-                               (f (lambda (&rest args)
-                                    (apply (g g) args)))))))
+  (def Z (lambda (f)
+           ((lambda (g) (g g)) (lambda (g)
+                                 (f (lambda (&rest args)
+                                      (apply (g g) args))))))))
 
 (defmacro progn (&rest body)
   (list (cons 'lambda (cons '() body))))
