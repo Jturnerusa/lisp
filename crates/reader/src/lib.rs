@@ -332,6 +332,7 @@ fn read_list<'context>(
     context: &'context Context,
 ) -> Result<Sexpr<'context>, Error<'context>> {
     let mut list = Vec::new();
+    let start = lexer.span().start;
 
     loop {
         match lexer.next() {
@@ -346,7 +347,7 @@ fn read_list<'context>(
                 return Ok(Sexpr::List {
                     list,
                     context,
-                    span: lexer.span(),
+                    span: start..lexer.span().end,
                 })
             }
             Some(Ok(Token::Quote)) => list.push(expand_macro(lexer, context, Macro::Quote)?),
