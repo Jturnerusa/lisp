@@ -152,3 +152,26 @@ pub fn find<D: Clone>(objects: &mut [Local<D>]) -> Result<Object<D>, Error> {
         None => Object::Nil,
     })
 }
+
+pub fn starts_with<D: Clone>(objects: &mut [Local<D>]) -> Result<Object<D>, Error> {
+    check_arity!("string-starts-with?", 2, objects);
+
+    let string = check_type!(&objects[0], String);
+
+    let starts_with = match objects[1].clone().into_object() {
+        Object::String(prefix) => string.starts_with(prefix.as_str()),
+        Object::Char(prefix) => string.starts_with(prefix),
+        object => {
+            return Err(Error::Type {
+                expected: Type::String,
+                recieved: Type::from(&object),
+            })
+        }
+    };
+
+    Ok(if starts_with {
+        Object::Bool(true)
+    } else {
+        Object::Bool(false)
+    })
+}

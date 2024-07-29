@@ -81,4 +81,5 @@ pub fn load_module<D: Clone + PartialEq + PartialOrd + Hash + Debug>(vm: &mut Vm
     vm.load_native_function("string-contains?", string::contains);
     vm.load_native_function("string-substr", string::substr);
     vm.load_native_function("string-find", string::find);
+    vm.load_native_function("string-starts-with?", string::starts_with);
 }
