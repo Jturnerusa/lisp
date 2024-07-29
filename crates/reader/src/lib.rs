@@ -446,9 +446,7 @@ impl<'context> fmt::Debug for Error<'context> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Lexer(remainder) => {
-                let mut buff = remainder.to_string();
-                buff.truncate(10);
-                write!(f, "lexer error: {buff}...")
+                write!(f, "lexer error: {}", remainder)
             }
             Self::UnExpectedEof => write!(f, "unexpected eof"),
             Self::UnbalancedParens => write!(f, "unbalanced parens"),
