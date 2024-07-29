@@ -155,6 +155,11 @@
                                                     ,(car (cdar (cdr bindings))))))
                ,(loop (cdr bindings)))))))
 
+(defmacro when (pred body)
+  `(if ,pred ,body nil))
+
+(defmacro unless (pred body)
+  `(if ,pred nil ,body))
 
 (def fold (lambda (fn list)
             (let ((acc (car list)))
