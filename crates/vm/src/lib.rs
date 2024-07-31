@@ -429,6 +429,8 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
             .into_object()
         {
             Object::Function(function) => {
+                self.check_arity(args, function.clone())?;
+
                 self.frames.push(Frame {
                     function: self.current_function.clone(),
                     bp: self.bp,
@@ -461,6 +463,8 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
             .into_object()
         {
             Object::Function(function) => {
+                self.check_arity(args, function.clone())?;
+
                 self.stack.drain(self.bp..self.stack.len() - args);
 
                 self.current_function = Some(function.clone());
