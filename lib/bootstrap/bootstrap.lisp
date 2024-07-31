@@ -15,6 +15,9 @@
   (def + (lambda (a b)
            (+ a b)))
 
+  (def not (lambda (t)
+             (= t false)))
+
   (def cadr (lambda (cons)
               (car (cdr cons))))
 
