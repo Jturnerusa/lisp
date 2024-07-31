@@ -114,7 +114,7 @@
             (cons 'cond (cdr clauses)))))
 
 (defmacro and (&rest exprs)
-  (cond ((nil? exprs) true)
+  (cond ((nil? exprs) false)
         ((nil? (cdr exprs)) (car exprs))
         (true (list 'if (car exprs)
                  (cons 'and (cdr exprs))
