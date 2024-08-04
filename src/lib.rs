@@ -55,7 +55,9 @@ pub fn compile_source(
         if let Ast::Require(ast::Require { module, .. }) = ast {
             match find_module(module.as_str()) {
                 Some(Ok(m)) => {
+                    let current_module = il_compiler.current_module();
                     compile_file(m.as_path(), il_compiler, ast_compiler, vm, opcode_table)?;
+                    il_compiler.set_current_module(current_module);
                     continue;
                 }
                 Some(Err(e)) => return Err(e),
