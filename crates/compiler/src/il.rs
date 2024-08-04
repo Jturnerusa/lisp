@@ -1,3 +1,5 @@
+use std::borrow::Borrow;
+
 use crate::{
     ast::{self, Ast, Quoted},
     bytecode,
@@ -407,8 +409,12 @@ impl Compiler {
         }
     }
 
-    pub fn set_current_module(&mut self, module: Option<&str>) {
+    pub fn set_current_module(&mut self, module: Option<String>) {
         self.environment.set_current_module(module);
+    }
+
+    pub fn current_module(&self) -> Option<String> {
+        self.environment.current_module()
     }
 
     pub fn compile(
@@ -461,7 +467,7 @@ impl Compiler {
 
     fn compile_module(&mut self, source: &Ast, module: &ast::Module) -> Result<Il, Error> {
         self.environment.create_module(module.name.as_str());
-        self.set_current_module(Some(module.name.as_str()));
+        self.set_current_module(Some(module.name.clone()));
 
         Ok(Il::Module(Module {
             source: source.clone(),
@@ -589,6 +595,9 @@ impl Compiler {
         vm: &mut Vm<&'static Sexpr<'static>>,
         ast_compiler: &mut ast::Compiler,
     ) -> Result<Il, Error> {
+        let current_module = self.environment.current_module();
+        self.set_current_module(None);
+
         let arity = match &defmacro.parameters {
             ast::Parameters::Normal(_) if defmacro.parameters.len() == 0 => Arity::Nullary,
             ast::Parameters::Normal(_) => Arity::Nary(defmacro.parameters.len()),
@@ -628,6 +637,8 @@ impl Compiler {
 
         vm.def_global(defmacro.name.as_str())?;
 
+        self.set_current_module(current_module);
+
         Ok(Il::Constant(Constant::Nil {
             source: source.clone(),
         }))
@@ -640,6 +651,9 @@ impl Compiler {
         vm: &mut Vm<&'static Sexpr<'static>>,
         ast_compiler: &mut ast::Compiler,
     ) -> Result<Il, Error> {
+        let current_module = self.environment.current_module();
+        self.set_current_module(None);
+
         let mut opcode_table = OpCodeTable::new();
 
         for arg in &macro_call.args {
@@ -677,6 +691,8 @@ impl Compiler {
         let mut reader = Reader::new(context);
         let sexpr: &'static _ = Box::leak(Box::new(reader.next().unwrap()?));
         let ast = ast_compiler.compile(sexpr)?;
+
+        self.set_current_module(current_module);
 
         self.compile(&ast, vm, ast_compiler)
     }

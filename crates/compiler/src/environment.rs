@@ -162,12 +162,12 @@ impl Environment {
             .visible = true;
     }
 
-    pub(crate) fn set_current_module(&mut self, module: Option<&str>) {
-        self.current_module = module.map(|s| s.to_string());
+    pub(crate) fn set_current_module(&mut self, module: Option<String>) {
+        self.current_module = module;
     }
 
-    pub(crate) fn current_module(&self) -> Option<&str> {
-        self.current_module.as_deref()
+    pub(crate) fn current_module(&self) -> Option<String> {
+        self.current_module.clone()
     }
 }
 
