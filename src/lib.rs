@@ -51,28 +51,14 @@ pub fn compile_source(
     for expr in reader {
         let sexpr: &'static _ = Box::leak(Box::new(expr?));
         let ast = ast_compiler.compile(sexpr)?;
-
-        if let Ast::Require(ast::Require { module, .. }) = ast {
-            match find_module(module.as_str()) {
-                Some(Ok(m)) => {
-                    let current_module = il_compiler.current_module();
-                    compile_file(m.as_path(), il_compiler, ast_compiler, vm, opcode_table)?;
-                    il_compiler.set_current_module(current_module);
-                    continue;
-                }
-                Some(Err(e)) => return Err(e),
-                None => return Err(format!("failed to find module: {module}").into()),
-            }
-        }
-
-        let il = il_compiler.compile(&ast, vm, ast_compiler)?;
+        let il = il_compiler.compile(&ast, vm, ast_compiler, &find_module as _)?;
         bytecode::compile(&il, opcode_table)?;
     }
 
     Ok(())
 }
 
-pub fn find_module(name: &str) -> Option<Result<PathBuf, Box<dyn std::error::Error>>> {
+pub fn find_module(name: &Path) -> Option<Result<PathBuf, Box<dyn std::error::Error>>> {
     match env::var("CARPET_LISP_PATH") {
         Ok(paths) => {
             for path in paths.split(':') {
@@ -91,7 +77,7 @@ pub fn find_module(name: &str) -> Option<Result<PathBuf, Box<dyn std::error::Err
 
                     dbg!(&entry.file_name());
 
-                    if entry.path().as_path().file_stem()?.to_str().unwrap() == name {
+                    if entry.path().as_path().file_stem()? == name {
                         return Some(Ok(entry.path()));
                     }
                 }

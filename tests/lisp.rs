@@ -49,7 +49,12 @@ fn compile(
 
         let ast: &'static _ = Box::leak(Box::new(ast_compiler.compile(sexpr)?));
 
-        let il: &'static _ = Box::leak(Box::new(il_compiler.compile(ast, vm, ast_compiler)?));
+        let il: &'static _ = Box::leak(Box::new(il_compiler.compile(
+            ast,
+            vm,
+            ast_compiler,
+            &|_| None,
+        )?));
 
         bytecode::compile(il, opcode_table)?;
     }
