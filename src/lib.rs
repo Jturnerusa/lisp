@@ -1,5 +1,5 @@
 use compiler::{
-    ast::{self, Ast},
+    ast::{self},
     bytecode, il,
 };
 use reader::{Reader, Sexpr};

@@ -1,7 +1,5 @@
 use std::{
-    borrow::Borrow,
-    env,
-    fs::{self, File},
+    fs::{File},
     io::{self, Read},
     path::{Path, PathBuf},
 };

@@ -1,5 +1,4 @@
 use crate::Trace;
-use std::borrow::BorrowMut;
 use std::cell::Cell;
 use std::fmt;
 use std::hash::Hash;

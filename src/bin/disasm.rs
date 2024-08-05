@@ -1,12 +1,10 @@
 use std::{
     env,
-    fs::File,
-    io::Read,
-    path::{Path, PathBuf},
+    path::{PathBuf},
 };
 
-use compiler::{ast, bytecode, il};
-use reader::{Reader, Sexpr};
+use compiler::{ast, il};
+use reader::{Sexpr};
 use vm::{OpCode, OpCodeTable, Vm};
 
 static BOOTSTRAP_SOURCE: &str = include_str!(concat!(

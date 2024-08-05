@@ -2,7 +2,7 @@ use crate::{check_arity, check_type};
 use gc::Gc;
 use std::{fs::File, io::Read};
 use vm::{
-    object::{self, Type},
+    object::{Type},
     Error, Local, Object,
 };
 
