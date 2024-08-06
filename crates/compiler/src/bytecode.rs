@@ -22,7 +22,6 @@ impl std::error::Error for Error {}
 
 pub fn compile(il: &Il, opcodes: &mut OpCodeTable<&'static Sexpr<'static>>) -> Result<(), Error> {
     match il {
-        Il::Module(module) => compile_module(module, opcodes),
         Il::Lambda(lambda) => compile_lambda(lambda, opcodes),
         Il::Def(def) => compile_def(def, opcodes),
         Il::Set(set) => compile_set(set, opcodes),
@@ -46,23 +45,6 @@ pub fn compile(il: &Il, opcodes: &mut OpCodeTable<&'static Sexpr<'static>>) -> R
     }
 }
 
-fn compile_module(
-    module: &il::Module,
-    opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
-) -> Result<(), Error> {
-    opcodes.push(
-        OpCode::CreateModule(Gc::new(module.name.clone())),
-        module.source.source_sexpr(),
-    );
-
-    opcodes.push(
-        OpCode::DefGlobal(Gc::new(module.name.clone())),
-        module.source.source_sexpr(),
-    );
-
-    Ok(())
-}
-
 fn compile_varref(
     varref: &il::VarRef,
     opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
@@ -78,16 +60,6 @@ fn compile_varref(
             OpCode::GetGlobal(Gc::new(name.clone())),
             varref.source().source_sexpr(),
         ),
-        il::VarRef::Module { name, module, .. } => {
-            opcodes.push(
-                OpCode::GetGlobal(Gc::new(module.clone())),
-                varref.source().source_sexpr(),
-            );
-            opcodes.push(
-                OpCode::GetModuleVar(Gc::new(name.clone())),
-                varref.source().source_sexpr(),
-            );
-        }
     };
 
     Ok(())
@@ -174,26 +146,12 @@ fn compile_def(
     def: &il::Def,
     opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
 ) -> Result<(), Error> {
-    compile(def.body(), opcodes)?;
+    compile(&def.body, opcodes)?;
 
-    match def {
-        il::Def::Global { parameter, .. } => opcodes.push(
-            OpCode::DefGlobal(Gc::new(parameter.name.clone())),
-            def.source().source_sexpr(),
-        ),
-        il::Def::Module {
-            parameter, module, ..
-        } => {
-            opcodes.push(
-                OpCode::GetGlobal(Gc::new(module.clone())),
-                def.source().source_sexpr(),
-            );
-            opcodes.push(
-                OpCode::DefModuleVar(Gc::new(parameter.name.clone())),
-                def.source().source_sexpr(),
-            );
-        }
-    }
+    opcodes.push(
+        OpCode::DefGlobal(Gc::new(def.parameter.name.clone())),
+        def.source.source_sexpr(),
+    );
 
     Ok(())
 }
@@ -214,16 +172,6 @@ fn compile_set(
         il::VarRef::Global { name, .. } => {
             opcodes.push(
                 OpCode::SetGlobal(Gc::new(name.clone())),
-                set.source.source_sexpr(),
-            );
-        }
-        il::VarRef::Module { name, module, .. } => {
-            opcodes.push(
-                OpCode::GetGlobal(Gc::new(module.clone())),
-                set.source.source_sexpr(),
-            );
-            opcodes.push(
-                OpCode::SetModuleVar(Gc::new(name.clone())),
                 set.source.source_sexpr(),
             );
         }

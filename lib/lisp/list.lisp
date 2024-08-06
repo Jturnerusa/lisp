@@ -1,5 +1,3 @@
-(module list)
-
 (def take (lambda (list n)
             (cond ((nil? list)
                    nil)
@@ -36,7 +34,3 @@
                           (l (take list mid))
                           (r (drop list mid)))
                      (merge (sort l pred) (sort r pred) pred))))))
-
-(export take)
-(export drop)
-(export sort)

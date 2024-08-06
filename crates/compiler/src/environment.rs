@@ -1,11 +1,10 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use vm::UpValue;
 
 #[derive(Clone, Debug)]
 pub(crate) enum Variable {
     Local(usize),
     Upvalue(usize),
-    Module,
     Global,
 }
 
@@ -16,18 +15,8 @@ struct Scope {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct ModuleVar {
-    pub visible: bool,
-}
-
-#[derive(Clone, Debug)]
-struct Module(HashMap<String, ModuleVar>);
-
-#[derive(Clone, Debug)]
 pub(crate) struct Environment {
     globals: HashSet<String>,
-    modules: HashMap<String, Module>,
-    current_module: Option<String>,
     scopes: Vec<Scope>,
 }
 
@@ -64,8 +53,7 @@ impl Environment {
     pub(crate) fn new() -> Self {
         Self {
             globals: HashSet::new(),
-            modules: HashMap::new(),
-            current_module: None,
+
             scopes: Vec::new(),
         }
     }
@@ -106,14 +94,6 @@ impl Environment {
             let i = self.scopes.last().unwrap().upvalues.len() - 1;
 
             Some(Variable::Upvalue(i))
-        } else if let Some(module) = &self.current_module {
-            self.modules
-                .get(module)
-                .unwrap()
-                .0
-                .get(name)
-                .map(|_| Variable::Module)
-                .or_else(|| self.globals.get(name).map(|_| Variable::Global))
         } else {
             self.globals.get(name).map(|_| Variable::Global)
         }
@@ -130,44 +110,6 @@ impl Environment {
 
     pub(crate) fn is_global_scope(&self) -> bool {
         self.scopes.is_empty()
-    }
-
-    pub(crate) fn create_module(&mut self, name: &str) {
-        self.modules
-            .insert(name.to_string(), Module(HashMap::new()));
-    }
-
-    pub(crate) fn insert_module_var(&mut self, module: &str, name: &str) {
-        self.modules
-            .get_mut(module)
-            .unwrap()
-            .0
-            .insert(name.to_string(), ModuleVar { visible: false });
-    }
-
-    pub(crate) fn resolve_module_var(&self, module: &str, name: &str) -> Option<ModuleVar> {
-        self.modules
-            .get(module)
-            .cloned()
-            .and_then(|module| module.0.get(name).cloned())
-    }
-
-    pub(crate) fn export_module_var(&mut self, module: &str, name: &str) {
-        self.modules
-            .get_mut(module)
-            .unwrap()
-            .0
-            .get_mut(name)
-            .unwrap()
-            .visible = true;
-    }
-
-    pub(crate) fn set_current_module(&mut self, module: Option<String>) {
-        self.current_module = module;
-    }
-
-    pub(crate) fn current_module(&self) -> Option<String> {
-        self.current_module.clone()
     }
 }
 

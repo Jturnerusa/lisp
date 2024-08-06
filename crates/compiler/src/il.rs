@@ -1,5 +1,5 @@
 use std::{
-    fs::{File},
+    fs::File,
     io::{self, Read},
     path::{Path, PathBuf},
 };
@@ -7,7 +7,7 @@ use std::{
 use crate::{
     ast::{self, Ast, Quoted},
     bytecode,
-    environment::{self, Environment, ModuleVar, Variable},
+    environment::{self, Environment, Variable},
     il,
 };
 use reader::{Reader, Sexpr};
@@ -43,7 +43,6 @@ pub enum Error {
 
 #[derive(Clone, Debug, EnumAs, EnumIs)]
 pub enum Il {
-    Module(Module),
     Lambda(Lambda),
     If(If),
     Apply(Apply),
@@ -103,11 +102,6 @@ pub enum VarRef {
     Global {
         source: Ast,
         name: String,
-    },
-    Module {
-        source: Ast,
-        name: String,
-        module: String,
     },
 }
 
@@ -213,18 +207,10 @@ pub struct ComparisonOperation {
 }
 
 #[derive(Clone, Debug)]
-pub enum Def {
-    Global {
-        source: Ast,
-        parameter: Parameter,
-        body: Box<Il>,
-    },
-    Module {
-        source: Ast,
-        parameter: Parameter,
-        module: String,
-        body: Box<Il>,
-    },
+pub struct Def {
+    pub source: Ast,
+    pub parameter: Parameter,
+    pub body: Box<Il>,
 }
 
 #[derive(Clone, Debug)]
@@ -305,8 +291,7 @@ impl VarRef {
         match self {
             Self::Local { source, .. }
             | Self::UpValue { source, .. }
-            | Self::Global { source, .. }
-            | Self::Module { source, .. } => source,
+            | Self::Global { source, .. } => source,
         }
     }
 }
@@ -327,12 +312,10 @@ impl Constant {
 impl Il {
     pub fn source_ast(&self) -> &Ast {
         match self {
-            Self::Module(Module { source, .. })
-            | Self::Lambda(Lambda { source, .. })
+            Self::Lambda(Lambda { source, .. })
             | Self::ArithmeticOperation(ArithmeticOperation { source, .. })
             | Self::ComparisonOperation(ComparisonOperation { source, .. })
-            | Self::Def(Def::Global { source, .. })
-            | Self::Def(Def::Module { source, .. })
+            | Self::Def(Def { source, .. })
             | Self::Set(Set { source, .. })
             | Self::If(If { source, .. })
             | Self::FnCall(FnCall { source, .. })
@@ -350,7 +333,6 @@ impl Il {
             | Self::VarRef(VarRef::Local { source, .. })
             | Self::VarRef(VarRef::UpValue { source, .. })
             | Self::VarRef(VarRef::Global { source, .. })
-            | Self::VarRef(VarRef::Module { source, .. })
             | Self::Constant(Constant::Symbol { source, .. })
             | Self::Constant(Constant::String { source, .. })
             | Self::Constant(Constant::Char { source, .. })
@@ -395,33 +377,11 @@ impl Parameters {
     }
 }
 
-impl Def {
-    pub(crate) fn source(&self) -> &Ast {
-        match self {
-            Self::Global { source, .. } | Self::Module { source, .. } => source,
-        }
-    }
-
-    pub(crate) fn body(&self) -> &Il {
-        match self {
-            Self::Global { body, .. } | Self::Module { body, .. } => &*body,
-        }
-    }
-}
-
 impl Compiler {
     pub fn new() -> Self {
         Self {
             environment: Environment::new(),
         }
-    }
-
-    pub fn set_current_module(&mut self, module: Option<String>) {
-        self.environment.set_current_module(module);
-    }
-
-    pub fn current_module(&self) -> Option<String> {
-        self.environment.current_module()
     }
 
     pub fn compile(
@@ -432,7 +392,6 @@ impl Compiler {
         find_module: &dyn Fn(&Path) -> Option<Result<PathBuf, Box<dyn std::error::Error>>>,
     ) -> Result<Il, Error> {
         match ast {
-            Ast::Module(module) => self.compile_module(ast, module),
             Ast::Require(require) => {
                 self.compile_require(ast, require, vm, ast_compiler, find_module)
             }
@@ -477,20 +436,9 @@ impl Compiler {
                 self.compile_map_items(ast, map_items, vm, ast_compiler, find_module)
             }
             Ast::Assert(assert) => self.compile_assert(ast, assert, vm, ast_compiler, find_module),
-            Ast::Export(export) => self.compile_export(ast, export),
             Ast::Constant(constant) => self.compile_constant(ast, constant),
             Ast::Variable(variable) => self.compile_variable_reference(ast, variable),
         }
-    }
-
-    fn compile_module(&mut self, source: &Ast, module: &ast::Module) -> Result<Il, Error> {
-        self.environment.create_module(module.name.as_str());
-        self.set_current_module(Some(module.name.clone()));
-
-        Ok(Il::Module(Module {
-            source: source.clone(),
-            name: module.name.clone(),
-        }))
     }
 
     fn compile_require(
@@ -501,9 +449,6 @@ impl Compiler {
         ast_compiler: &mut ast::Compiler,
         find_module: &dyn Fn(&Path) -> Option<Result<PathBuf, Box<dyn std::error::Error>>>,
     ) -> Result<Il, Error> {
-        let current_module = self.environment.current_module();
-        self.set_current_module(None);
-
         let module = PathBuf::from(require.module.as_str());
 
         let path = match find_module(module.as_path()) {
@@ -546,8 +491,6 @@ impl Compiler {
 
         vm.eval(&opcode_table)
             .map_err(|(error, sexpr)| Error::VmWithDebug { error, sexpr })?;
-
-        self.set_current_module(current_module);
 
         Ok(Il::Constant(Constant::Nil {
             source: source.clone(),
@@ -612,63 +555,26 @@ impl Compiler {
         source: &Ast,
         variable: &ast::Variable,
     ) -> Result<Il, Error> {
-        Ok(match variable {
-            ast::Variable::WithoutModule { name, .. } => {
-                match self.environment.resolve(name.as_str()) {
-                    Some(environment::Variable::Local(index)) => Il::VarRef(VarRef::Local {
-                        source: source.clone(),
-                        name: name.clone(),
-                        index,
-                    }),
-                    Some(environment::Variable::Upvalue(index)) => Il::VarRef(VarRef::UpValue {
-                        source: source.clone(),
-                        name: name.clone(),
-                        index,
-                    }),
-                    Some(environment::Variable::Global) => Il::VarRef(VarRef::Global {
-                        source: source.clone(),
-                        name: name.clone(),
-                    }),
-                    Some(environment::Variable::Module) => Il::VarRef(VarRef::Module {
-                        source: source.clone(),
-                        name: name.clone(),
-                        module: self
-                            .environment
-                            .current_module()
-                            .map(|s| s.to_string())
-                            .unwrap(),
-                    }),
-                    None => {
-                        return Err(Error::Il {
-                            ast: source.clone(),
-                            message: format!("unknown variable referenced: {}", name),
-                        })
-                    }
-                }
-            }
-            ast::Variable::WithModule { name, module, .. } => {
-                match self
-                    .environment
-                    .resolve_module_var(module.as_str(), name.as_str())
-                {
-                    Some(ModuleVar { visible, .. }) if visible => Il::VarRef(VarRef::Module {
-                        source: source.clone(),
-                        name: name.clone(),
-                        module: module.to_string(),
-                    }),
-                    Some(ModuleVar { .. }) => {
-                        return Err(Error::Il {
-                            ast: source.clone(),
-                            message: "private module variable referenced".to_string(),
-                        })
-                    }
-                    None => {
-                        return Err(Error::Il {
-                            ast: source.clone(),
-                            message: "unknown module variable referenced".to_string(),
-                        })
-                    }
-                }
+        Ok(match self.environment.resolve(variable.name.as_str()) {
+            Some(environment::Variable::Local(index)) => Il::VarRef(VarRef::Local {
+                source: source.clone(),
+                name: variable.name.clone(),
+                index,
+            }),
+            Some(environment::Variable::Upvalue(index)) => Il::VarRef(VarRef::UpValue {
+                source: source.clone(),
+                name: variable.name.clone(),
+                index,
+            }),
+            Some(environment::Variable::Global) => Il::VarRef(VarRef::Global {
+                source: source.clone(),
+                name: variable.name.clone(),
+            }),
+            None => {
+                return Err(Error::Il {
+                    ast: source.clone(),
+                    message: format!("unknown variable referenced: {}", variable.name.as_str()),
+                })
             }
         })
     }
@@ -681,9 +587,6 @@ impl Compiler {
         ast_compiler: &mut ast::Compiler,
         find_module: &dyn Fn(&Path) -> Option<Result<PathBuf, Box<dyn std::error::Error>>>,
     ) -> Result<Il, Error> {
-        let current_module = self.environment.current_module();
-        self.set_current_module(None);
-
         let arity = match &defmacro.parameters {
             ast::Parameters::Normal(_) if defmacro.parameters.len() == 0 => Arity::Nullary,
             ast::Parameters::Normal(_) => Arity::Nary(defmacro.parameters.len()),
@@ -723,8 +626,6 @@ impl Compiler {
 
         vm.def_global(defmacro.name.as_str())?;
 
-        self.set_current_module(current_module);
-
         Ok(Il::Constant(Constant::Nil {
             source: source.clone(),
         }))
@@ -738,9 +639,6 @@ impl Compiler {
         ast_compiler: &mut ast::Compiler,
         find_module: &dyn Fn(&Path) -> Option<Result<PathBuf, Box<dyn std::error::Error>>>,
     ) -> Result<Il, Error> {
-        let current_module = self.environment.current_module();
-        self.set_current_module(None);
-
         let mut opcode_table = OpCodeTable::new();
 
         for arg in &macro_call.args {
@@ -778,8 +676,6 @@ impl Compiler {
         let mut reader = Reader::new(context);
         let sexpr: &'static _ = Box::leak(Box::new(reader.next().unwrap()?));
         let ast = ast_compiler.compile(sexpr)?;
-
-        self.set_current_module(current_module);
 
         self.compile(&ast, vm, ast_compiler, find_module)
     }
@@ -856,41 +752,18 @@ impl Compiler {
         ast_compiler: &mut ast::Compiler,
         find_module: &dyn Fn(&Path) -> Option<Result<PathBuf, Box<dyn std::error::Error>>>,
     ) -> Result<Il, Error> {
+        self.environment.insert_global(def.parameter.name.as_str());
+
         let parameter = Parameter::from_ast(source, &def.parameter).map_err(|_| Error::Il {
             ast: source.clone(),
             message: "failed to parse parameter".to_string(),
         })?;
 
-        let r#type = match def.parameter.r#type.as_ref().map(Type::from_ast) {
-            Some(t) => Some(t),
-            None => None,
-        };
-
-        Ok(
-            if let Some(module) = self.environment.current_module().map(|s| s.to_string()) {
-                self.environment
-                    .insert_module_var(module.as_str(), def.parameter.name.as_str());
-
-                Il::Def(Def::Module {
-                    source: source.clone(),
-                    parameter,
-                    module: self
-                        .environment
-                        .current_module()
-                        .map(|s| s.to_string())
-                        .unwrap(),
-                    body: Box::new(self.compile(&def.body, vm, ast_compiler, find_module)?),
-                })
-            } else {
-                self.environment.insert_global(def.parameter.name.as_str());
-
-                Il::Def(Def::Global {
-                    source: source.clone(),
-                    parameter,
-                    body: Box::new(self.compile(&def.body, vm, ast_compiler, find_module)?),
-                })
-            },
-        )
+        Ok(Il::Def(Def {
+            source: source.clone(),
+            parameter,
+            body: Box::new(self.compile(&def.body, vm, ast_compiler, find_module)?),
+        }))
     }
 
     fn compile_decl(&mut self, source: &Ast, decl: &ast::Decl) -> Result<Il, Error> {
@@ -911,58 +784,29 @@ impl Compiler {
     ) -> Result<Il, Error> {
         Ok(Il::Set(Set {
             source: source.clone(),
-            target: match &set.variable {
-                ast::Variable::WithoutModule { name, .. } => {
-                    match self.environment.resolve(name.as_str()) {
-                        Some(Variable::Local(index)) => VarRef::Local {
-                            source: source.clone(),
-                            name: name.clone(),
-                            index,
-                        },
-                        Some(Variable::Upvalue(index)) => VarRef::UpValue {
-                            source: source.clone(),
-                            name: name.clone(),
-                            index,
-                        },
-                        Some(Variable::Global) => VarRef::Global {
-                            source: source.clone(),
-                            name: name.clone(),
-                        },
-                        Some(Variable::Module) => VarRef::Module {
-                            source: source.clone(),
-                            name: name.clone(),
-                            module: self.environment.current_module().unwrap().to_string(),
-                        },
-                        None => {
-                            return Err(Error::Il {
-                                ast: source.clone(),
-                                message: "unknown variable".to_string(),
-                            })
-                        }
-                    }
-                }
-                ast::Variable::WithModule { name, module, .. } => {
-                    match self.environment.resolve_module_var(module, name.as_str()) {
-                        Some(ModuleVar { visible, .. }) if visible => VarRef::Module {
-                            source: source.clone(),
-                            name: name.clone(),
-                            module: module.to_string(),
-                        },
-                        Some(_) => {
-                            return Err(Error::Il {
-                                ast: source.clone(),
-                                message: "referenced private symbol".to_string(),
-                            })
-                        }
-                        None => {
-                            return Err(Error::Il {
-                                ast: source.clone(),
-                                message: "referenced unknown variable".to_string(),
-                            })
-                        }
-                    }
+            target: match self.environment.resolve(&set.target.as_str()) {
+                Some(Variable::Local(index)) => VarRef::Local {
+                    source: source.clone(),
+                    name: set.target.clone(),
+                    index,
+                },
+                Some(Variable::Upvalue(index)) => VarRef::UpValue {
+                    source: source.clone(),
+                    name: set.target.clone(),
+                    index,
+                },
+                Some(Variable::Global) => VarRef::Global {
+                    source: source.clone(),
+                    name: set.target.clone(),
+                },
+                None => {
+                    return Err(Error::Il {
+                        ast: source.clone(),
+                        message: "unknown variable".to_string(),
+                    })
                 }
             },
+
             body: Box::new(self.compile(&set.body, vm, ast_compiler, find_module)?),
         }))
     }
@@ -1258,24 +1102,6 @@ impl Compiler {
         Ok(Il::MapItems(MapItems {
             source: source.clone(),
             map: Box::new(self.compile(&map_items.map, vm, ast_compiler, find_module)?),
-        }))
-    }
-
-    fn compile_export(&mut self, source: &Ast, export: &ast::Export) -> Result<Il, Error> {
-        let current_module = self
-            .environment
-            .current_module()
-            .ok_or(Error::Il {
-                ast: source.clone(),
-                message: "can't export symbol at global scope".to_string(),
-            })?
-            .to_string();
-
-        self.environment
-            .export_module_var(current_module.as_str(), export.symbol.as_str());
-
-        Ok(Il::Constant(Constant::Nil {
-            source: source.clone(),
         }))
     }
 }

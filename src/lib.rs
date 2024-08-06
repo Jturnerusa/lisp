@@ -16,8 +16,6 @@ pub fn compile_file(
     vm: &mut Vm<&'static Sexpr<'static>>,
     opcode_table: &mut OpCodeTable<&'static Sexpr<'static>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    il_compiler.set_current_module(None);
-
     let mut source = String::new();
     let mut file = match File::open(path) {
         Ok(f) => f,

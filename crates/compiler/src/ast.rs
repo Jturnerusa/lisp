@@ -38,8 +38,6 @@ static BUILT_INS: &[&str] = &[
     "map-insert!",
     "map-retrieve",
     "map-items",
-    "module",
-    "export",
     "require",
 ];
 
@@ -57,7 +55,6 @@ pub struct Compiler {
 #[derive(Clone, Debug, EnumAs, EnumIs)]
 pub enum Ast {
     Require(Require),
-    Module(Module),
     EvalWhenCompile(EvalWhenCompile),
     DefMacro(DefMacro),
     Lambda(Lambda),
@@ -83,13 +80,18 @@ pub enum Ast {
     Variable(Variable),
     Constant(Constant),
     Assert(Assert),
-    Export(Export),
 }
 
 #[derive(Clone, Debug)]
 pub struct EvalWhenCompile {
     pub source: &'static Sexpr<'static>,
     pub exprs: Vec<Ast>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Variable {
+    pub source: &'static Sexpr<'static>,
+    pub name: String,
 }
 
 #[derive(Clone, Debug)]
@@ -119,19 +121,6 @@ pub enum Constant {
 pub enum Type {
     Scalar(String),
     Composite(Vec<Type>),
-}
-
-#[derive(Clone, Debug)]
-pub enum Variable {
-    WithoutModule {
-        source: &'static Sexpr<'static>,
-        name: String,
-    },
-    WithModule {
-        source: &'static Sexpr<'static>,
-        name: String,
-        module: String,
-    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -185,7 +174,7 @@ pub struct Decl {
 #[derive(Clone, Debug)]
 pub struct Set {
     pub source: &'static Sexpr<'static>,
-    pub variable: Variable,
+    pub target: String,
     pub body: Box<Ast>,
 }
 
@@ -362,18 +351,6 @@ pub enum Quoted {
     },
 }
 
-#[derive(Clone, Debug)]
-pub struct Export {
-    pub source: &'static Sexpr<'static>,
-    pub symbol: String,
-}
-
-#[derive(Clone, Debug)]
-pub struct Module {
-    pub source: &'static Sexpr<'static>,
-    pub name: String,
-}
-
 impl Compiler {
     pub fn new() -> Self {
         Self {
@@ -391,9 +368,6 @@ impl Compiler {
                     .is_some_and(|symbol| BUILT_INS.iter().any(|b| symbol == *b)) =>
             {
                 match list.as_slice() {
-                    [Symbol { symbol, .. }, Symbol { symbol: name, .. }] if symbol == "module" => {
-                        self.compile_module(sexpr, name)?
-                    }
                     [Symbol { symbol, .. }, Symbol { symbol: module, .. }]
                         if symbol == "require" =>
                     {
@@ -421,8 +395,10 @@ impl Compiler {
                     [Symbol { symbol, .. }, parameter, body] if symbol == "decl" => {
                         self.compile_decl(sexpr, parameter, body)?
                     }
-                    [Symbol { symbol, .. }, parameter, body] if symbol == "set!" => {
-                        self.compile_set(sexpr, parameter, body)?
+                    [Symbol { symbol, .. }, Symbol { symbol: target, .. }, body]
+                        if symbol == "set!" =>
+                    {
+                        self.compile_set(sexpr, target, body)?
                     }
                     [Symbol { symbol, .. }, predicate, then, r#else] if symbol == "if" => {
                         self.compile_if(sexpr, predicate, then, r#else)?
@@ -485,9 +461,6 @@ impl Compiler {
                     [Symbol { symbol, .. }, map] if symbol == "map-items" => {
                         self.compile_map_items(sexpr, map)?
                     }
-                    [Symbol { symbol, .. }, Symbol { symbol: item, .. }] if symbol == "export" => {
-                        self.compile_export(sexpr, item)?
-                    }
                     _ => {
                         return Err(Error {
                             sexpr,
@@ -511,12 +484,10 @@ impl Compiler {
             List { list, .. } if !list.is_empty() => {
                 self.compile_fncall(sexpr, list.first().unwrap(), &list.as_slice()[1..])?
             }
-            Symbol { symbol, .. } => {
-                Ast::Variable(parse_variable(sexpr, symbol.as_str()).map_err(|_| Error {
-                    sexpr,
-                    message: "failed to parse variable".to_string(),
-                })?)
-            }
+            Symbol { symbol, .. } => Ast::Variable(Variable {
+                source: sexpr,
+                name: symbol.clone(),
+            }),
             String { string, .. } => Ast::Constant(Constant::String {
                 source: sexpr,
                 string: string.clone(),
@@ -536,17 +507,6 @@ impl Compiler {
             Nil { .. } => Ast::Constant(Constant::Nil { source: sexpr }),
             _ => unreachable!(),
         })
-    }
-
-    fn compile_module(
-        &mut self,
-        source: &'static Sexpr<'static>,
-        name: &str,
-    ) -> Result<Ast, Error> {
-        Ok(Ast::Module(Module {
-            source,
-            name: name.to_string(),
-        }))
     }
 
     fn compile_require(
@@ -684,29 +644,12 @@ impl Compiler {
     fn compile_set(
         &mut self,
         source: &'static Sexpr<'static>,
-        parameter: &'static Sexpr<'static>,
+        target: &str,
         body: &'static Sexpr<'static>,
     ) -> Result<Ast, Error> {
         Ok(Ast::Set(Set {
             source,
-            variable: match parameter
-                .as_symbol()
-                .map(|symbol| parse_variable(source, symbol))
-            {
-                Some(Ok(variable)) => variable,
-                Some(Err(())) => {
-                    return Err(Error {
-                        sexpr: source,
-                        message: "failed to parse variable".to_string(),
-                    })
-                }
-                None => {
-                    return Err(Error {
-                        sexpr: source,
-                        message: "expected symbol".to_string(),
-                    })
-                }
-            },
+            target: target.to_string(),
             body: Box::new(self.compile(body)?),
         }))
     }
@@ -941,31 +884,6 @@ impl Compiler {
             map: Box::new(self.compile(map)?),
         }))
     }
-
-    fn compile_export(
-        &mut self,
-        source: &'static Sexpr<'static>,
-        item: &str,
-    ) -> Result<Ast, Error> {
-        Ok(Ast::Export(Export {
-            source,
-            symbol: match parse_variable(source, item) {
-                Ok(Variable::WithoutModule { name, .. }) => name,
-                Ok(_) => {
-                    return Err(Error {
-                        sexpr: source,
-                        message: "expected non-module variable".to_string(),
-                    })
-                }
-                Err(()) => {
-                    return Err(Error {
-                        sexpr: source,
-                        message: "failed to parse variable".to_string(),
-                    })
-                }
-            },
-        }))
-    }
 }
 
 impl fmt::Display for Error {
@@ -977,8 +895,7 @@ impl fmt::Display for Error {
 impl Ast {
     pub fn source_sexpr(&self) -> &'static Sexpr<'static> {
         match self {
-            Self::Module(Module { source, .. })
-            | Self::Require(Require { source, .. })
+            Self::Require(Require { source, .. })
             | Self::EvalWhenCompile(EvalWhenCompile { source, .. })
             | Self::DefMacro(DefMacro { source, .. })
             | Self::Lambda(Lambda { source, .. })
@@ -1002,9 +919,7 @@ impl Ast {
             | Self::MapInsert(MapInsert { source, .. })
             | Self::MapRetrieve(MapRetrieve { source, .. })
             | Self::MapItems(MapItems { source, .. })
-            | Self::Export(Export { source, .. })
-            | Self::Variable(Variable::WithoutModule { source, .. })
-            | Self::Variable(Variable::WithModule { source, .. })
+            | Self::Variable(Variable { source, .. })
             | Self::Constant(Constant::String { source, .. })
             | Self::Constant(Constant::Char { source, .. })
             | Self::Constant(Constant::Int { source, .. })
@@ -1156,40 +1071,6 @@ fn quote_list(source: &'static Sexpr<'static>, list: &'static [Sexpr<'static>]) 
                 Sexpr::Nil { .. } => Quoted::Nil { source },
             })
             .collect(),
-    }
-}
-
-fn parse_variable(source: &'static Sexpr<'static>, variable: &str) -> Result<Variable, ()> {
-    use micro_nom::{branch, map, pair, separated, take_one_if, take_while1};
-
-    let separator = pair::<&str, _, _, _, _>(
-        take_one_if(|c: &char| *c == ':'),
-        take_one_if(|c: &char| *c == ':'),
-    );
-
-    let with_module = map(
-        separated::<&str, _, _, _, _, _, _>(
-            take_while1(|c: char| c != ':'),
-            separator,
-            take_while1(|_| true),
-        ),
-        |(module, name)| Variable::WithModule {
-            source,
-            name: name.to_string(),
-            module: module.to_string(),
-        },
-    );
-
-    let without_module = map(take_while1::<&str, _>(|_| true), |name| {
-        Variable::WithoutModule {
-            source,
-            name: name.to_string(),
-        }
-    });
-
-    match branch(with_module, without_module)(variable) {
-        Ok((_, var)) => Ok(var),
-        Err(_) => Err(()),
     }
 }
 
