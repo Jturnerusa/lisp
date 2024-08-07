@@ -42,6 +42,7 @@ static BUILT_INS: &[&str] = &[
     "box",
     "set-box!",
     "unbox",
+    "gensym",
 ];
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -86,6 +87,7 @@ pub enum Ast {
     Variable(Variable),
     Constant(Constant),
     Assert(Assert),
+    GenSym(GenSym),
 }
 
 #[derive(Clone, Debug)]
@@ -376,6 +378,11 @@ pub enum Quoted {
     },
 }
 
+#[derive(Clone, Debug)]
+pub struct GenSym {
+    pub source: &'static Sexpr<'static>,
+}
+
 impl Compiler {
     pub fn new() -> Self {
         Self {
@@ -494,6 +501,9 @@ impl Compiler {
                     }
                     [Symbol { symbol, .. }, map] if symbol == "map-items" => {
                         self.compile_map_items(sexpr, map)?
+                    }
+                    [Symbol { symbol, .. }] if symbol == "gensym" => {
+                        Ast::GenSym(GenSym { source: sexpr })
                     }
                     _ => {
                         return Err(Error {
@@ -991,6 +1001,7 @@ impl Ast {
             | Self::MapInsert(MapInsert { source, .. })
             | Self::MapRetrieve(MapRetrieve { source, .. })
             | Self::MapItems(MapItems { source, .. })
+            | Self::GenSym(GenSym { source })
             | Self::Variable(Variable { source, .. })
             | Self::Constant(Constant::String { source, .. })
             | Self::Constant(Constant::Char { source, .. })

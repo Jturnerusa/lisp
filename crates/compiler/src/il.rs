@@ -467,6 +467,7 @@ impl Compiler {
                 self.compile_map_items(ast, map_items, vm, ast_compiler, find_module)
             }
             Ast::Assert(assert) => self.compile_assert(ast, assert, vm, ast_compiler, find_module),
+            Ast::GenSym(_) => self.compile_gensym(ast),
             Ast::Constant(constant) => self.compile_constant(ast, constant),
             Ast::Variable(variable) => self.compile_variable_reference(ast, variable),
         }
@@ -1231,6 +1232,17 @@ impl Compiler {
                 ast_compiler,
                 find_module,
             )?),
+        }))
+    }
+
+    fn compile_gensym(&mut self, source: &Ast) -> Result<Il, Error> {
+        let suffix = rand::random::<u32>();
+
+        let symbol = format!("e{suffix}");
+
+        Ok(Il::Constant(Constant::Symbol {
+            source: source.clone(),
+            symbol,
         }))
     }
 
