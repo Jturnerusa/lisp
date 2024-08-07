@@ -48,6 +48,9 @@ pub enum Il {
     Apply(Apply),
     Def(Def),
     Set(Set),
+    SetBox(SetBox),
+    Box(Box),
+    UnBox(UnBox),
     FnCall(FnCall),
     ArithmeticOperation(ArithmeticOperation),
     ComparisonOperation(ComparisonOperation),
@@ -131,23 +134,23 @@ pub struct Lambda {
 #[derive(Clone, Debug)]
 pub struct If {
     pub source: Ast,
-    pub predicate: Box<Il>,
-    pub then: Box<Il>,
-    pub r#else: Box<Il>,
+    pub predicate: std::boxed::Box<Il>,
+    pub then: std::boxed::Box<Il>,
+    pub r#else: std::boxed::Box<Il>,
 }
 
 #[derive(Clone, Debug)]
 pub struct FnCall {
     pub source: Ast,
-    pub function: Box<Il>,
+    pub function: std::boxed::Box<Il>,
     pub args: Vec<Il>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Apply {
     pub source: Ast,
-    pub function: Box<Il>,
-    pub list: Box<Il>,
+    pub function: std::boxed::Box<Il>,
+    pub list: std::boxed::Box<Il>,
 }
 
 #[derive(Clone, Debug)]
@@ -159,20 +162,20 @@ pub struct List {
 #[derive(Clone, Debug)]
 pub struct Cons {
     pub source: Ast,
-    pub lhs: Box<Il>,
-    pub rhs: Box<Il>,
+    pub lhs: std::boxed::Box<Il>,
+    pub rhs: std::boxed::Box<Il>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Car {
     pub source: Ast,
-    pub body: Box<Il>,
+    pub body: std::boxed::Box<Il>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Cdr {
     pub source: Ast,
-    pub body: Box<Il>,
+    pub body: std::boxed::Box<Il>,
 }
 
 #[derive(Clone, Debug)]
@@ -187,8 +190,8 @@ pub enum ArithmeticOperator {
 pub struct ArithmeticOperation {
     pub source: Ast,
     pub operator: ArithmeticOperator,
-    pub lhs: Box<Il>,
-    pub rhs: Box<Il>,
+    pub lhs: std::boxed::Box<Il>,
+    pub rhs: std::boxed::Box<Il>,
 }
 
 #[derive(Clone, Debug)]
@@ -202,22 +205,41 @@ pub enum ComparisonOperator {
 pub struct ComparisonOperation {
     pub source: Ast,
     pub operator: ComparisonOperator,
-    pub lhs: Box<Il>,
-    pub rhs: Box<Il>,
+    pub lhs: std::boxed::Box<Il>,
+    pub rhs: std::boxed::Box<Il>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Def {
     pub source: Ast,
     pub parameter: Parameter,
-    pub body: Box<Il>,
+    pub body: std::boxed::Box<Il>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Set {
     pub source: Ast,
     pub target: VarRef,
-    pub body: Box<Il>,
+    pub body: std::boxed::Box<Il>,
+}
+
+#[derive(Clone, Debug)]
+pub struct SetBox {
+    pub source: Ast,
+    pub target: std::boxed::Box<Il>,
+    pub body: std::boxed::Box<Il>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Box {
+    pub source: Ast,
+    pub body: std::boxed::Box<Il>,
+}
+
+#[derive(Clone, Debug)]
+pub struct UnBox {
+    pub source: Ast,
+    pub body: std::boxed::Box<Il>,
 }
 
 #[derive(Clone, Debug)]
@@ -228,22 +250,22 @@ pub struct MapCreate {
 #[derive(Clone, Debug)]
 pub struct MapInsert {
     pub source: Ast,
-    pub map: Box<Il>,
-    pub key: Box<Il>,
-    pub value: Box<Il>,
+    pub map: std::boxed::Box<Il>,
+    pub key: std::boxed::Box<Il>,
+    pub value: std::boxed::Box<Il>,
 }
 
 #[derive(Clone, Debug)]
 pub struct MapRetrieve {
     pub source: Ast,
-    pub map: Box<Il>,
-    pub key: Box<Il>,
+    pub map: std::boxed::Box<Il>,
+    pub key: std::boxed::Box<Il>,
 }
 
 #[derive(Clone, Debug)]
 pub struct MapItems {
     pub source: Ast,
-    pub map: Box<Il>,
+    pub map: std::boxed::Box<Il>,
 }
 
 #[derive(Clone, Debug)]
@@ -262,13 +284,13 @@ pub enum IsTypeParameter {
 pub struct IsType {
     pub source: Ast,
     pub r#type: IsTypeParameter,
-    pub body: Box<Il>,
+    pub body: std::boxed::Box<Il>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Assert {
     pub source: Ast,
-    pub body: Box<Il>,
+    pub body: std::boxed::Box<Il>,
 }
 
 pub struct Compiler {
@@ -317,6 +339,9 @@ impl Il {
             | Self::ComparisonOperation(ComparisonOperation { source, .. })
             | Self::Def(Def { source, .. })
             | Self::Set(Set { source, .. })
+            | Self::SetBox(SetBox { source, .. })
+            | Self::Box(Box { source, .. })
+            | Self::UnBox(UnBox { source, .. })
             | Self::If(If { source, .. })
             | Self::FnCall(FnCall { source, .. })
             | Self::Apply(Apply { source, .. })
@@ -389,7 +414,10 @@ impl Compiler {
         ast: &Ast,
         vm: &mut Vm<&'static Sexpr<'static>>,
         ast_compiler: &mut ast::Compiler,
-        find_module: &dyn Fn(&Path) -> Option<Result<PathBuf, Box<dyn std::error::Error>>>,
+        find_module: &dyn Fn(
+            &Path,
+        )
+            -> Option<Result<PathBuf, std::boxed::Box<dyn std::error::Error>>>,
     ) -> Result<Il, Error> {
         match ast {
             Ast::Require(require) => {
@@ -405,6 +433,9 @@ impl Compiler {
             Ast::Def(def) => self.compile_def(ast, def, vm, ast_compiler, find_module),
             Ast::Decl(decl) => self.compile_decl(ast, decl),
             Ast::Set(set) => self.compile_set(ast, set, vm, ast_compiler, find_module),
+            Ast::SetBox(setbox) => self.compile_set_box(ast, setbox, vm, ast_compiler, find_module),
+            Ast::Box(r#box) => self.compile_box(ast, r#box, vm, ast_compiler, find_module),
+            Ast::UnBox(unbox) => self.compile_unbox(ast, unbox, vm, ast_compiler, find_module),
             Ast::If(r#if) => self.compile_if(ast, r#if, vm, ast_compiler, find_module),
             Ast::MacroCall(macro_call) => {
                 self.eval_macro(ast, macro_call, vm, ast_compiler, find_module)
@@ -447,7 +478,10 @@ impl Compiler {
         require: &ast::Require,
         vm: &mut Vm<&'static Sexpr<'static>>,
         ast_compiler: &mut ast::Compiler,
-        find_module: &dyn Fn(&Path) -> Option<Result<PathBuf, Box<dyn std::error::Error>>>,
+        find_module: &dyn Fn(
+            &Path,
+        )
+            -> Option<Result<PathBuf, std::boxed::Box<dyn std::error::Error>>>,
     ) -> Result<Il, Error> {
         let module = PathBuf::from(require.module.as_str());
 
@@ -473,17 +507,16 @@ impl Compiler {
 
         file.read_to_string(&mut buff)?;
 
-        let context: &'static _ = Box::leak(Box::new(reader::Context::new(
-            buff.as_str(),
-            path.to_str().unwrap(),
-        )));
+        let context: &'static _ = std::boxed::Box::leak(std::boxed::Box::new(
+            reader::Context::new(buff.as_str(), path.to_str().unwrap()),
+        ));
 
         let reader = Reader::new(context);
 
         let mut opcode_table = OpCodeTable::new();
 
         for expr in reader {
-            let sexpr = Box::leak(Box::new(expr?));
+            let sexpr = std::boxed::Box::leak(std::boxed::Box::new(expr?));
             let ast = ast_compiler.compile(sexpr)?;
             let il = self.compile(&ast, vm, ast_compiler, find_module)?;
             bytecode::compile(&il, &mut opcode_table)?;
@@ -503,12 +536,15 @@ impl Compiler {
         eval_when_compile: &ast::EvalWhenCompile,
         vm: &mut Vm<&'static Sexpr<'static>>,
         ast_compiler: &mut ast::Compiler,
-        find_module: &dyn Fn(&Path) -> Option<Result<PathBuf, Box<dyn std::error::Error>>>,
+        find_module: &dyn Fn(
+            &Path,
+        )
+            -> Option<Result<PathBuf, std::boxed::Box<dyn std::error::Error>>>,
     ) -> Result<Il, Error> {
         let mut opcode_table = OpCodeTable::new();
 
         for expr in &eval_when_compile.exprs {
-            let il = Box::leak(Box::new(self.compile(
+            let il = std::boxed::Box::leak(std::boxed::Box::new(self.compile(
                 expr,
                 vm,
                 ast_compiler,
@@ -585,7 +621,10 @@ impl Compiler {
         defmacro: &ast::DefMacro,
         vm: &mut Vm<&'static Sexpr<'static>>,
         ast_compiler: &mut ast::Compiler,
-        find_module: &dyn Fn(&Path) -> Option<Result<PathBuf, Box<dyn std::error::Error>>>,
+        find_module: &dyn Fn(
+            &Path,
+        )
+            -> Option<Result<PathBuf, std::boxed::Box<dyn std::error::Error>>>,
     ) -> Result<Il, Error> {
         let arity = match &defmacro.parameters {
             ast::Parameters::Normal(_) if defmacro.parameters.len() == 0 => Arity::Nullary,
@@ -608,7 +647,7 @@ impl Compiler {
             .map(|ast| self.compile(ast, vm, ast_compiler, find_module))
             .collect::<Result<Vec<Il>, Error>>()?;
 
-        let lambda = Box::leak(Box::new(Il::Lambda(il::Lambda {
+        let lambda = std::boxed::Box::leak(std::boxed::Box::new(Il::Lambda(il::Lambda {
             source: source.clone(),
             parameters,
             r#type: None,
@@ -637,13 +676,20 @@ impl Compiler {
         macro_call: &ast::MacroCall,
         vm: &mut Vm<&'static Sexpr<'static>>,
         ast_compiler: &mut ast::Compiler,
-        find_module: &dyn Fn(&Path) -> Option<Result<PathBuf, Box<dyn std::error::Error>>>,
+        find_module: &dyn Fn(
+            &Path,
+        )
+            -> Option<Result<PathBuf, std::boxed::Box<dyn std::error::Error>>>,
     ) -> Result<Il, Error> {
         let mut opcode_table = OpCodeTable::new();
 
         for arg in &macro_call.args {
-            let il = Box::leak(Box::new(self.compile_quoted(source, arg)?));
-            bytecode::compile(Box::leak(Box::new(il)), &mut opcode_table).unwrap();
+            let il = std::boxed::Box::leak(std::boxed::Box::new(self.compile_quoted(source, arg)?));
+            bytecode::compile(
+                std::boxed::Box::leak(std::boxed::Box::new(il)),
+                &mut opcode_table,
+            )
+            .unwrap();
         }
 
         vm.get_global(macro_call.r#macro.as_str())?;
@@ -669,12 +715,12 @@ impl Compiler {
             message: "failed to print macro result".to_string(),
         })?;
 
-        let context: &'static _ = Box::leak(Box::new(reader::Context::new(
-            buff.as_str(),
-            "macro-expansion",
-        )));
+        let context: &'static _ = std::boxed::Box::leak(std::boxed::Box::new(
+            reader::Context::new(buff.as_str(), "macro-expansion"),
+        ));
         let mut reader = Reader::new(context);
-        let sexpr: &'static _ = Box::leak(Box::new(reader.next().unwrap()?));
+        let sexpr: &'static _ =
+            std::boxed::Box::leak(std::boxed::Box::new(reader.next().unwrap()?));
         let ast = ast_compiler.compile(sexpr)?;
 
         self.compile(&ast, vm, ast_compiler, find_module)
@@ -686,7 +732,10 @@ impl Compiler {
         lambda: &ast::Lambda,
         vm: &mut Vm<&'static Sexpr<'static>>,
         ast_compiler: &mut ast::Compiler,
-        find_module: &dyn Fn(&Path) -> Option<Result<PathBuf, Box<dyn std::error::Error>>>,
+        find_module: &dyn Fn(
+            &Path,
+        )
+            -> Option<Result<PathBuf, std::boxed::Box<dyn std::error::Error>>>,
     ) -> Result<Il, Error> {
         let arity = match &lambda.parameters {
             ast::Parameters::Normal(_) if lambda.parameters.len() == 0 => Arity::Nullary,
@@ -734,13 +783,26 @@ impl Compiler {
         r#if: &ast::If,
         vm: &mut Vm<&'static Sexpr<'static>>,
         ast_compiler: &mut ast::Compiler,
-        find_module: &dyn Fn(&Path) -> Option<Result<PathBuf, Box<dyn std::error::Error>>>,
+        find_module: &dyn Fn(
+            &Path,
+        )
+            -> Option<Result<PathBuf, std::boxed::Box<dyn std::error::Error>>>,
     ) -> Result<Il, Error> {
         Ok(Il::If(If {
             source: source.clone(),
-            predicate: Box::new(self.compile(&r#if.predicate, vm, ast_compiler, find_module)?),
-            then: Box::new(self.compile(&r#if.then, vm, ast_compiler, find_module)?),
-            r#else: Box::new(self.compile(&r#if.r#else, vm, ast_compiler, find_module)?),
+            predicate: std::boxed::Box::new(self.compile(
+                &r#if.predicate,
+                vm,
+                ast_compiler,
+                find_module,
+            )?),
+            then: std::boxed::Box::new(self.compile(&r#if.then, vm, ast_compiler, find_module)?),
+            r#else: std::boxed::Box::new(self.compile(
+                &r#if.r#else,
+                vm,
+                ast_compiler,
+                find_module,
+            )?),
         }))
     }
 
@@ -750,7 +812,10 @@ impl Compiler {
         def: &ast::Def,
         vm: &mut Vm<&'static Sexpr<'static>>,
         ast_compiler: &mut ast::Compiler,
-        find_module: &dyn Fn(&Path) -> Option<Result<PathBuf, Box<dyn std::error::Error>>>,
+        find_module: &dyn Fn(
+            &Path,
+        )
+            -> Option<Result<PathBuf, std::boxed::Box<dyn std::error::Error>>>,
     ) -> Result<Il, Error> {
         self.environment.insert_global(def.parameter.name.as_str());
 
@@ -762,7 +827,7 @@ impl Compiler {
         Ok(Il::Def(Def {
             source: source.clone(),
             parameter,
-            body: Box::new(self.compile(&def.body, vm, ast_compiler, find_module)?),
+            body: std::boxed::Box::new(self.compile(&def.body, vm, ast_compiler, find_module)?),
         }))
     }
 
@@ -780,7 +845,10 @@ impl Compiler {
         set: &ast::Set,
         vm: &mut Vm<&'static Sexpr<'static>>,
         ast_compiler: &mut ast::Compiler,
-        find_module: &dyn Fn(&Path) -> Option<Result<PathBuf, Box<dyn std::error::Error>>>,
+        find_module: &dyn Fn(
+            &Path,
+        )
+            -> Option<Result<PathBuf, std::boxed::Box<dyn std::error::Error>>>,
     ) -> Result<Il, Error> {
         Ok(Il::Set(Set {
             source: source.clone(),
@@ -807,7 +875,69 @@ impl Compiler {
                 }
             },
 
-            body: Box::new(self.compile(&set.body, vm, ast_compiler, find_module)?),
+            body: std::boxed::Box::new(self.compile(&set.body, vm, ast_compiler, find_module)?),
+        }))
+    }
+
+    fn compile_set_box(
+        &mut self,
+        source: &Ast,
+        setbox: &ast::SetBox,
+        vm: &mut Vm<&'static Sexpr<'static>>,
+        ast_compiler: &mut ast::Compiler,
+        find_module: &dyn Fn(
+            &Path,
+        )
+            -> Option<Result<PathBuf, std::boxed::Box<dyn std::error::Error>>>,
+    ) -> Result<Il, Error> {
+        Ok(Il::SetBox(SetBox {
+            source: source.clone(),
+            target: std::boxed::Box::new(self.compile(
+                &setbox.target,
+                vm,
+                ast_compiler,
+                find_module,
+            )?),
+            body: std::boxed::Box::new(self.compile(
+                &setbox.body,
+                vm,
+                ast_compiler,
+                find_module,
+            )?),
+        }))
+    }
+
+    fn compile_box(
+        &mut self,
+        source: &Ast,
+        r#box: &ast::Box,
+        vm: &mut Vm<&'static Sexpr<'static>>,
+        ast_compiler: &mut ast::Compiler,
+        find_module: &dyn Fn(
+            &Path,
+        )
+            -> Option<Result<PathBuf, std::boxed::Box<dyn std::error::Error>>>,
+    ) -> Result<Il, Error> {
+        Ok(Il::Box(Box {
+            source: source.clone(),
+            body: std::boxed::Box::new(self.compile(&r#box.body, vm, ast_compiler, find_module)?),
+        }))
+    }
+
+    fn compile_unbox(
+        &mut self,
+        source: &Ast,
+        unbox: &ast::UnBox,
+        vm: &mut Vm<&'static Sexpr<'static>>,
+        ast_compiler: &mut ast::Compiler,
+        find_module: &dyn Fn(
+            &Path,
+        )
+            -> Option<Result<PathBuf, std::boxed::Box<dyn std::error::Error>>>,
+    ) -> Result<Il, Error> {
+        Ok(Il::UnBox(UnBox {
+            source: source.clone(),
+            body: std::boxed::Box::new(self.compile(&unbox.body, vm, ast_compiler, find_module)?),
         }))
     }
 
@@ -886,11 +1016,19 @@ impl Compiler {
         fncall: &ast::FnCall,
         vm: &mut Vm<&'static Sexpr<'static>>,
         ast_compiler: &mut ast::Compiler,
-        find_module: &dyn Fn(&Path) -> Option<Result<PathBuf, Box<dyn std::error::Error>>>,
+        find_module: &dyn Fn(
+            &Path,
+        )
+            -> Option<Result<PathBuf, std::boxed::Box<dyn std::error::Error>>>,
     ) -> Result<Il, Error> {
         Ok(Il::FnCall(FnCall {
             source: source.clone(),
-            function: Box::new(self.compile(&fncall.function, vm, ast_compiler, find_module)?),
+            function: std::boxed::Box::new(self.compile(
+                &fncall.function,
+                vm,
+                ast_compiler,
+                find_module,
+            )?),
             args: fncall
                 .exprs
                 .iter()
@@ -905,12 +1043,20 @@ impl Compiler {
         apply: &ast::Apply,
         vm: &mut Vm<&'static Sexpr<'static>>,
         ast_compiler: &mut ast::Compiler,
-        find_module: &dyn Fn(&Path) -> Option<Result<PathBuf, Box<dyn std::error::Error>>>,
+        find_module: &dyn Fn(
+            &Path,
+        )
+            -> Option<Result<PathBuf, std::boxed::Box<dyn std::error::Error>>>,
     ) -> Result<Il, Error> {
         Ok(Il::Apply(Apply {
             source: source.clone(),
-            function: Box::new(self.compile(&apply.function, vm, ast_compiler, find_module)?),
-            list: Box::new(self.compile(&apply.list, vm, ast_compiler, find_module)?),
+            function: std::boxed::Box::new(self.compile(
+                &apply.function,
+                vm,
+                ast_compiler,
+                find_module,
+            )?),
+            list: std::boxed::Box::new(self.compile(&apply.list, vm, ast_compiler, find_module)?),
         }))
     }
 
@@ -920,7 +1066,10 @@ impl Compiler {
         op: &ast::BinaryArithmeticOperation,
         vm: &mut Vm<&'static Sexpr<'static>>,
         ast_compiler: &mut ast::Compiler,
-        find_module: &dyn Fn(&Path) -> Option<Result<PathBuf, Box<dyn std::error::Error>>>,
+        find_module: &dyn Fn(
+            &Path,
+        )
+            -> Option<Result<PathBuf, std::boxed::Box<dyn std::error::Error>>>,
     ) -> Result<Il, Error> {
         Ok(Il::ArithmeticOperation(ArithmeticOperation {
             source: source.clone(),
@@ -930,8 +1079,8 @@ impl Compiler {
                 ast::BinaryArithmeticOperator::Mul => ArithmeticOperator::Mul,
                 ast::BinaryArithmeticOperator::Div => ArithmeticOperator::Div,
             },
-            lhs: Box::new(self.compile(&op.lhs, vm, ast_compiler, find_module)?),
-            rhs: Box::new(self.compile(&op.rhs, vm, ast_compiler, find_module)?),
+            lhs: std::boxed::Box::new(self.compile(&op.lhs, vm, ast_compiler, find_module)?),
+            rhs: std::boxed::Box::new(self.compile(&op.rhs, vm, ast_compiler, find_module)?),
         }))
     }
 
@@ -941,7 +1090,10 @@ impl Compiler {
         op: &ast::ComparisonOperation,
         vm: &mut Vm<&'static Sexpr<'static>>,
         ast_compiler: &mut ast::Compiler,
-        find_module: &dyn Fn(&Path) -> Option<Result<PathBuf, Box<dyn std::error::Error>>>,
+        find_module: &dyn Fn(
+            &Path,
+        )
+            -> Option<Result<PathBuf, std::boxed::Box<dyn std::error::Error>>>,
     ) -> Result<Il, Error> {
         Ok(Il::ComparisonOperation(ComparisonOperation {
             source: source.clone(),
@@ -950,8 +1102,8 @@ impl Compiler {
                 ast::ComparisonOperator::Lt => ComparisonOperator::Lt,
                 ast::ComparisonOperator::Gt => ComparisonOperator::Gt,
             },
-            lhs: Box::new(self.compile(&op.lhs, vm, ast_compiler, find_module)?),
-            rhs: Box::new(self.compile(&op.rhs, vm, ast_compiler, find_module)?),
+            lhs: std::boxed::Box::new(self.compile(&op.lhs, vm, ast_compiler, find_module)?),
+            rhs: std::boxed::Box::new(self.compile(&op.rhs, vm, ast_compiler, find_module)?),
         }))
     }
 
@@ -961,7 +1113,10 @@ impl Compiler {
         list: &ast::List,
         vm: &mut Vm<&'static Sexpr<'static>>,
         ast_compiler: &mut ast::Compiler,
-        find_module: &dyn Fn(&Path) -> Option<Result<PathBuf, Box<dyn std::error::Error>>>,
+        find_module: &dyn Fn(
+            &Path,
+        )
+            -> Option<Result<PathBuf, std::boxed::Box<dyn std::error::Error>>>,
     ) -> Result<Il, Error> {
         Ok(Il::List(List {
             source: source.clone(),
@@ -979,12 +1134,15 @@ impl Compiler {
         cons: &ast::Cons,
         vm: &mut Vm<&'static Sexpr<'static>>,
         ast_compiler: &mut ast::Compiler,
-        find_module: &dyn Fn(&Path) -> Option<Result<PathBuf, Box<dyn std::error::Error>>>,
+        find_module: &dyn Fn(
+            &Path,
+        )
+            -> Option<Result<PathBuf, std::boxed::Box<dyn std::error::Error>>>,
     ) -> Result<Il, Error> {
         Ok(Il::Cons(Cons {
             source: source.clone(),
-            lhs: Box::new(self.compile(&cons.lhs, vm, ast_compiler, find_module)?),
-            rhs: Box::new(self.compile(&cons.rhs, vm, ast_compiler, find_module)?),
+            lhs: std::boxed::Box::new(self.compile(&cons.lhs, vm, ast_compiler, find_module)?),
+            rhs: std::boxed::Box::new(self.compile(&cons.rhs, vm, ast_compiler, find_module)?),
         }))
     }
 
@@ -994,11 +1152,14 @@ impl Compiler {
         car: &ast::Car,
         vm: &mut Vm<&'static Sexpr<'static>>,
         ast_compiler: &mut ast::Compiler,
-        find_module: &dyn Fn(&Path) -> Option<Result<PathBuf, Box<dyn std::error::Error>>>,
+        find_module: &dyn Fn(
+            &Path,
+        )
+            -> Option<Result<PathBuf, std::boxed::Box<dyn std::error::Error>>>,
     ) -> Result<Il, Error> {
         Ok(Il::Car(Car {
             source: source.clone(),
-            body: Box::new(self.compile(&car.body, vm, ast_compiler, find_module)?),
+            body: std::boxed::Box::new(self.compile(&car.body, vm, ast_compiler, find_module)?),
         }))
     }
 
@@ -1008,11 +1169,14 @@ impl Compiler {
         cdr: &ast::Cdr,
         vm: &mut Vm<&'static Sexpr<'static>>,
         ast_compiler: &mut ast::Compiler,
-        find_module: &dyn Fn(&Path) -> Option<Result<PathBuf, Box<dyn std::error::Error>>>,
+        find_module: &dyn Fn(
+            &Path,
+        )
+            -> Option<Result<PathBuf, std::boxed::Box<dyn std::error::Error>>>,
     ) -> Result<Il, Error> {
         Ok(Il::Cdr(Cdr {
             source: source.clone(),
-            body: Box::new(self.compile(&cdr.body, vm, ast_compiler, find_module)?),
+            body: std::boxed::Box::new(self.compile(&cdr.body, vm, ast_compiler, find_module)?),
         }))
     }
 
@@ -1022,7 +1186,10 @@ impl Compiler {
         is_type: &ast::IsType,
         vm: &mut Vm<&'static Sexpr<'static>>,
         ast_compiler: &mut ast::Compiler,
-        find_module: &dyn Fn(&Path) -> Option<Result<PathBuf, Box<dyn std::error::Error>>>,
+        find_module: &dyn Fn(
+            &Path,
+        )
+            -> Option<Result<PathBuf, std::boxed::Box<dyn std::error::Error>>>,
     ) -> Result<Il, Error> {
         Ok(Il::IsType(IsType {
             source: source.clone(),
@@ -1036,7 +1203,12 @@ impl Compiler {
                 ast::IsTypeParameter::Bool => IsTypeParameter::Bool,
                 ast::IsTypeParameter::Nil => IsTypeParameter::Nil,
             },
-            body: Box::new(self.compile(&is_type.body, vm, ast_compiler, find_module)?),
+            body: std::boxed::Box::new(self.compile(
+                &is_type.body,
+                vm,
+                ast_compiler,
+                find_module,
+            )?),
         }))
     }
 
@@ -1046,11 +1218,19 @@ impl Compiler {
         assert: &ast::Assert,
         vm: &mut Vm<&'static Sexpr<'static>>,
         ast_compiler: &mut ast::Compiler,
-        find_module: &dyn Fn(&Path) -> Option<Result<PathBuf, Box<dyn std::error::Error>>>,
+        find_module: &dyn Fn(
+            &Path,
+        )
+            -> Option<Result<PathBuf, std::boxed::Box<dyn std::error::Error>>>,
     ) -> Result<Il, Error> {
         Ok(Il::Assert(Assert {
             source: source.clone(),
-            body: Box::new(self.compile(&assert.body, vm, ast_compiler, find_module)?),
+            body: std::boxed::Box::new(self.compile(
+                &assert.body,
+                vm,
+                ast_compiler,
+                find_module,
+            )?),
         }))
     }
 
@@ -1066,13 +1246,31 @@ impl Compiler {
         map_insert: &ast::MapInsert,
         vm: &mut Vm<&'static Sexpr<'static>>,
         ast_compiler: &mut ast::Compiler,
-        find_module: &dyn Fn(&Path) -> Option<Result<PathBuf, Box<dyn std::error::Error>>>,
+        find_module: &dyn Fn(
+            &Path,
+        )
+            -> Option<Result<PathBuf, std::boxed::Box<dyn std::error::Error>>>,
     ) -> Result<Il, Error> {
         Ok(Il::MapInsert(MapInsert {
             source: source.clone(),
-            map: Box::new(self.compile(&map_insert.map, vm, ast_compiler, find_module)?),
-            key: Box::new(self.compile(&map_insert.key, vm, ast_compiler, find_module)?),
-            value: Box::new(self.compile(&map_insert.value, vm, ast_compiler, find_module)?),
+            map: std::boxed::Box::new(self.compile(
+                &map_insert.map,
+                vm,
+                ast_compiler,
+                find_module,
+            )?),
+            key: std::boxed::Box::new(self.compile(
+                &map_insert.key,
+                vm,
+                ast_compiler,
+                find_module,
+            )?),
+            value: std::boxed::Box::new(self.compile(
+                &map_insert.value,
+                vm,
+                ast_compiler,
+                find_module,
+            )?),
         }))
     }
 
@@ -1082,12 +1280,25 @@ impl Compiler {
         map_retrieve: &ast::MapRetrieve,
         vm: &mut Vm<&'static Sexpr<'static>>,
         ast_compiler: &mut ast::Compiler,
-        find_module: &dyn Fn(&Path) -> Option<Result<PathBuf, Box<dyn std::error::Error>>>,
+        find_module: &dyn Fn(
+            &Path,
+        )
+            -> Option<Result<PathBuf, std::boxed::Box<dyn std::error::Error>>>,
     ) -> Result<Il, Error> {
         Ok(Il::MapRetrieve(MapRetrieve {
             source: source.clone(),
-            map: Box::new(self.compile(&map_retrieve.map, vm, ast_compiler, find_module)?),
-            key: Box::new(self.compile(&map_retrieve.key, vm, ast_compiler, find_module)?),
+            map: std::boxed::Box::new(self.compile(
+                &map_retrieve.map,
+                vm,
+                ast_compiler,
+                find_module,
+            )?),
+            key: std::boxed::Box::new(self.compile(
+                &map_retrieve.key,
+                vm,
+                ast_compiler,
+                find_module,
+            )?),
         }))
     }
 
@@ -1097,11 +1308,19 @@ impl Compiler {
         map_items: &ast::MapItems,
         vm: &mut Vm<&'static Sexpr<'static>>,
         ast_compiler: &mut ast::Compiler,
-        find_module: &dyn Fn(&Path) -> Option<Result<PathBuf, Box<dyn std::error::Error>>>,
+        find_module: &dyn Fn(
+            &Path,
+        )
+            -> Option<Result<PathBuf, std::boxed::Box<dyn std::error::Error>>>,
     ) -> Result<Il, Error> {
         Ok(Il::MapItems(MapItems {
             source: source.clone(),
-            map: Box::new(self.compile(&map_items.map, vm, ast_compiler, find_module)?),
+            map: std::boxed::Box::new(self.compile(
+                &map_items.map,
+                vm,
+                ast_compiler,
+                find_module,
+            )?),
         }))
     }
 }

@@ -34,6 +34,7 @@ pub enum HashMapKey {
 
 #[derive(Clone, Debug, EnumAs, EnumIs)]
 pub enum Object<D: 'static> {
+    Box(Gc<GcCell<Object<D>>>),
     NativeFunction(NativeFunction<D>),
     Function(Gc<GcCell<Lambda<D>>>),
     Cons(Gc<GcCell<Cons<D>>>),
@@ -136,6 +137,7 @@ impl<D> Debug for NativeFunction<D> {
 impl<D> From<&Object<D>> for Type {
     fn from(value: &Object<D>) -> Self {
         match value {
+            Object::Box(object) => Type::from(&*object.borrow()),
             Object::Function(_) | Object::NativeFunction(_) => Type::Function,
             Object::Cons(_) => Type::Cons,
             Object::HashMap(_) => Type::Map,
@@ -218,6 +220,7 @@ impl<D: Clone> Display for Cons<D> {
 impl<D: Clone> Display for Object<D> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Box(object) => write!(f, "box({object})"),
             Self::NativeFunction(native_function) => write!(f, "{native_function}",),
             Self::Function(function) => write!(f, "{}", *function.deref().borrow()),
             Self::Cons(cons) => write!(f, "{}", cons.borrow().deref()),
@@ -399,6 +402,7 @@ unsafe impl<D> Trace for Cons<D> {
 impl<D: Clone> Object<D> {
     pub fn print(&self, buffer: &mut String) -> Result<(), ()> {
         match self {
+            Self::Box(object) => object.borrow().print(buffer)?,
             Self::Cons(cons) => cons.borrow().print(buffer)?,
             Self::Symbol(symbol) => write!(buffer, "{symbol}").map_err(|_| ())?,
             Self::String(string) => write!(buffer, r#""{string}""#).map_err(|_| ())?,

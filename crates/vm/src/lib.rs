@@ -39,6 +39,8 @@ pub enum Error {
     HashKey(Type),
     #[error("expected a list for apply")]
     Apply,
+    #[error("expected box")]
+    Box,
     #[error("other error: {0}")]
     Other(#[from] Box<dyn std::error::Error>),
 }
@@ -52,6 +54,9 @@ pub enum OpCode<D> {
     GetLocal(usize),
     SetUpValue(usize),
     GetUpValue(usize),
+    SetBox,
+    Box,
+    UnBox,
     Call(usize),
     Tail(usize),
     Apply,
@@ -183,6 +188,9 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
             OpCode::GetLocal(local) => self.get_local(local)?,
             OpCode::SetUpValue(upvalue) => self.set_upvalue(upvalue)?,
             OpCode::GetUpValue(upvalue) => self.get_upvalue(upvalue)?,
+            OpCode::Box => self.r#box()?,
+            OpCode::UnBox => self.unbox()?,
+            OpCode::SetBox => self.set_box()?,
             OpCode::Call(args) => self.call(args)?,
             OpCode::Tail(args) => self.tail(args)?,
             OpCode::Return => self.ret()?,
@@ -276,6 +284,7 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
         let val = self.stack.pop().unwrap();
         let i = self.bp + local;
         match &mut self.stack[i] {
+            Local::Value(Object::Box(object)) => *object.borrow_mut() = val.clone().into_object(),
             Local::Value(_) => self.stack[i] = val.clone(),
             Local::UpValue(inner) => {
                 *inner.borrow_mut() = val.clone().into_object();
@@ -295,13 +304,16 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
     pub fn set_upvalue(&mut self, upvalue: usize) -> Result<(), Error> {
         let val = self.stack.pop().unwrap();
 
-        *self
+        match &mut *self
             .current_function
             .as_mut()
             .unwrap()
             .borrow_mut()
             .upvalues[upvalue]
-            .borrow_mut() = val.into_object();
+            .borrow_mut()
+        {
+            object => *object = val.into_object(),
+        }
 
         Ok(())
     }
@@ -347,6 +359,39 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
                 }),
             })?;
 
+        Ok(())
+    }
+
+    pub fn unbox(&mut self) -> Result<(), Error> {
+        let r#box = self.stack.pop().unwrap().into_object();
+        let val = match r#box {
+            Object::Box(inner) => inner.borrow().clone(),
+            _ => return Err(Error::Box),
+        };
+
+        self.stack.push(Local::Value(val));
+
+        Ok(())
+    }
+
+    pub fn set_box(&mut self) -> Result<(), Error> {
+        let val = self.stack.pop().unwrap();
+        let r#box = self.stack.pop().unwrap().into_object();
+
+        match r#box {
+            Object::Box(inner) => *inner.borrow_mut() = val.clone().into_object(),
+            _ => return Err(Error::Box),
+        };
+
+        self.stack.push(val);
+
+        Ok(())
+    }
+
+    pub fn r#box(&mut self) -> Result<(), Error> {
+        let val = self.stack.pop().unwrap().into_object();
+        self.stack
+            .push(Local::Value(Object::Box(Gc::new(GcCell::new(val)))));
         Ok(())
     }
 

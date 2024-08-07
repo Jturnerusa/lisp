@@ -39,6 +39,9 @@ static BUILT_INS: &[&str] = &[
     "map-retrieve",
     "map-items",
     "require",
+    "box",
+    "set-box!",
+    "unbox",
 ];
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -61,6 +64,9 @@ pub enum Ast {
     Def(Def),
     Decl(Decl),
     Set(Set),
+    SetBox(SetBox),
+    UnBox(UnBox),
+    Box(Box),
     If(If),
     Apply(Apply),
     BinaryArithemticOperation(BinaryArithmeticOperation),
@@ -161,36 +167,55 @@ pub struct Lambda {
 pub struct Def {
     pub source: &'static Sexpr<'static>,
     pub parameter: Parameter,
-    pub body: Box<Ast>,
+    pub body: std::boxed::Box<Ast>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Decl {
     pub source: &'static Sexpr<'static>,
     pub parameter: Parameter,
-    pub body: Box<Ast>,
+    pub body: std::boxed::Box<Ast>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Set {
     pub source: &'static Sexpr<'static>,
     pub target: String,
-    pub body: Box<Ast>,
+    pub body: std::boxed::Box<Ast>,
+}
+
+#[derive(Clone, Debug)]
+pub struct SetBox {
+    pub source: &'static Sexpr<'static>,
+    pub target: std::boxed::Box<Ast>,
+    pub body: std::boxed::Box<Ast>,
+}
+
+#[derive(Clone, Debug)]
+pub struct UnBox {
+    pub source: &'static Sexpr<'static>,
+    pub body: std::boxed::Box<Ast>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Box {
+    pub source: &'static Sexpr<'static>,
+    pub body: std::boxed::Box<Ast>,
 }
 
 #[derive(Clone, Debug)]
 pub struct If {
     pub source: &'static Sexpr<'static>,
-    pub predicate: Box<Ast>,
-    pub then: Box<Ast>,
-    pub r#else: Box<Ast>,
+    pub predicate: std::boxed::Box<Ast>,
+    pub then: std::boxed::Box<Ast>,
+    pub r#else: std::boxed::Box<Ast>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Apply {
     pub source: &'static Sexpr<'static>,
-    pub function: Box<Ast>,
-    pub list: Box<Ast>,
+    pub function: std::boxed::Box<Ast>,
+    pub list: std::boxed::Box<Ast>,
 }
 
 #[derive(Clone, Debug)]
@@ -205,8 +230,8 @@ pub enum BinaryArithmeticOperator {
 pub struct BinaryArithmeticOperation {
     pub source: &'static Sexpr<'static>,
     pub operator: BinaryArithmeticOperator,
-    pub lhs: Box<Ast>,
-    pub rhs: Box<Ast>,
+    pub lhs: std::boxed::Box<Ast>,
+    pub rhs: std::boxed::Box<Ast>,
 }
 
 #[derive(Clone, Debug, EnumAs, EnumIs)]
@@ -220,8 +245,8 @@ pub enum ComparisonOperator {
 pub struct ComparisonOperation {
     pub source: &'static Sexpr<'static>,
     pub operator: ComparisonOperator,
-    pub lhs: Box<Ast>,
-    pub rhs: Box<Ast>,
+    pub lhs: std::boxed::Box<Ast>,
+    pub rhs: std::boxed::Box<Ast>,
 }
 
 #[derive(Clone, Debug)]
@@ -233,26 +258,26 @@ pub struct List {
 #[derive(Clone, Debug)]
 pub struct Cons {
     pub source: &'static Sexpr<'static>,
-    pub lhs: Box<Ast>,
-    pub rhs: Box<Ast>,
+    pub lhs: std::boxed::Box<Ast>,
+    pub rhs: std::boxed::Box<Ast>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Car {
     pub source: &'static Sexpr<'static>,
-    pub body: Box<Ast>,
+    pub body: std::boxed::Box<Ast>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Cdr {
     pub source: &'static Sexpr<'static>,
-    pub body: Box<Ast>,
+    pub body: std::boxed::Box<Ast>,
 }
 
 #[derive(Clone, Debug)]
 pub struct FnCall {
     pub source: &'static Sexpr<'static>,
-    pub function: Box<Ast>,
+    pub function: std::boxed::Box<Ast>,
     pub exprs: Vec<Ast>,
 }
 
@@ -285,13 +310,13 @@ pub enum IsTypeParameter {
 pub struct IsType {
     pub source: &'static Sexpr<'static>,
     pub parameter: IsTypeParameter,
-    pub body: Box<Ast>,
+    pub body: std::boxed::Box<Ast>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Assert {
     pub source: &'static Sexpr<'static>,
-    pub body: Box<Ast>,
+    pub body: std::boxed::Box<Ast>,
 }
 
 #[derive(Clone, Debug)]
@@ -302,22 +327,22 @@ pub struct MapCreate {
 #[derive(Clone, Debug)]
 pub struct MapInsert {
     pub source: &'static Sexpr<'static>,
-    pub map: Box<Ast>,
-    pub key: Box<Ast>,
-    pub value: Box<Ast>,
+    pub map: std::boxed::Box<Ast>,
+    pub key: std::boxed::Box<Ast>,
+    pub value: std::boxed::Box<Ast>,
 }
 
 #[derive(Clone, Debug)]
 pub struct MapRetrieve {
     pub source: &'static Sexpr<'static>,
-    pub map: Box<Ast>,
-    pub key: Box<Ast>,
+    pub map: std::boxed::Box<Ast>,
+    pub key: std::boxed::Box<Ast>,
 }
 
 #[derive(Clone, Debug)]
 pub struct MapItems {
     pub source: &'static Sexpr<'static>,
-    pub map: Box<Ast>,
+    pub map: std::boxed::Box<Ast>,
 }
 
 #[derive(Clone, Debug)]
@@ -399,6 +424,15 @@ impl Compiler {
                         if symbol == "set!" =>
                     {
                         self.compile_set(sexpr, target, body)?
+                    }
+                    [Symbol { symbol, .. }, target, body] if symbol == "set-box!" => {
+                        self.compile_set_box(sexpr, target, body)?
+                    }
+                    [Symbol { symbol, .. }, body] if symbol == "unbox" => {
+                        self.compile_unbox(sexpr, body)?
+                    }
+                    [Symbol { symbol, .. }, body] if symbol == "box" => {
+                        self.compile_box(sexpr, body)?
                     }
                     [Symbol { symbol, .. }, predicate, then, r#else] if symbol == "if" => {
                         self.compile_if(sexpr, predicate, then, r#else)?
@@ -621,7 +655,7 @@ impl Compiler {
                 sexpr: source,
                 message: "failed to parse parameter".to_string(),
             })?,
-            body: Box::new(self.compile(body)?),
+            body: std::boxed::Box::new(self.compile(body)?),
         }))
     }
 
@@ -637,7 +671,7 @@ impl Compiler {
                 sexpr: source,
                 message: "failed to parse parameter".to_string(),
             })?,
-            body: Box::new(self.compile(body)?),
+            body: std::boxed::Box::new(self.compile(body)?),
         }))
     }
 
@@ -650,7 +684,42 @@ impl Compiler {
         Ok(Ast::Set(Set {
             source,
             target: target.to_string(),
-            body: Box::new(self.compile(body)?),
+            body: std::boxed::Box::new(self.compile(body)?),
+        }))
+    }
+
+    fn compile_set_box(
+        &mut self,
+        source: &'static Sexpr<'static>,
+        target: &'static Sexpr<'static>,
+        body: &'static Sexpr<'static>,
+    ) -> Result<Ast, Error> {
+        Ok(Ast::SetBox(SetBox {
+            source,
+            target: std::boxed::Box::new(self.compile(target)?),
+            body: std::boxed::Box::new(self.compile(body)?),
+        }))
+    }
+
+    fn compile_box(
+        &mut self,
+        source: &'static Sexpr<'static>,
+        body: &'static Sexpr<'static>,
+    ) -> Result<Ast, Error> {
+        Ok(Ast::Box(Box {
+            source,
+            body: std::boxed::Box::new(self.compile(body)?),
+        }))
+    }
+
+    fn compile_unbox(
+        &mut self,
+        source: &'static Sexpr<'static>,
+        body: &'static Sexpr<'static>,
+    ) -> Result<Ast, Error> {
+        Ok(Ast::UnBox(UnBox {
+            source,
+            body: std::boxed::Box::new(self.compile(body)?),
         }))
     }
 
@@ -663,9 +732,9 @@ impl Compiler {
     ) -> Result<Ast, Error> {
         Ok(Ast::If(If {
             source,
-            predicate: Box::new(self.compile(predicate)?),
-            then: Box::new(self.compile(then)?),
-            r#else: Box::new(self.compile(r#else)?),
+            predicate: std::boxed::Box::new(self.compile(predicate)?),
+            then: std::boxed::Box::new(self.compile(then)?),
+            r#else: std::boxed::Box::new(self.compile(r#else)?),
         }))
     }
 
@@ -677,8 +746,8 @@ impl Compiler {
     ) -> Result<Ast, Error> {
         Ok(Ast::Apply(Apply {
             source,
-            function: Box::new(self.compile(function)?),
-            list: Box::new(self.compile(list)?),
+            function: std::boxed::Box::new(self.compile(function)?),
+            list: std::boxed::Box::new(self.compile(list)?),
         }))
     }
 
@@ -698,8 +767,8 @@ impl Compiler {
                 "/" => BinaryArithmeticOperator::Div,
                 _ => unreachable!(),
             },
-            lhs: Box::new(self.compile(lhs)?),
-            rhs: Box::new(self.compile(rhs)?),
+            lhs: std::boxed::Box::new(self.compile(lhs)?),
+            rhs: std::boxed::Box::new(self.compile(rhs)?),
         }))
     }
 
@@ -718,8 +787,8 @@ impl Compiler {
                 ">" => ComparisonOperator::Gt,
                 _ => unreachable!(),
             },
-            lhs: Box::new(self.compile(lhs)?),
-            rhs: Box::new(self.compile(rhs)?),
+            lhs: std::boxed::Box::new(self.compile(lhs)?),
+            rhs: std::boxed::Box::new(self.compile(rhs)?),
         }))
     }
 
@@ -745,8 +814,8 @@ impl Compiler {
     ) -> Result<Ast, Error> {
         Ok(Ast::Cons(Cons {
             source,
-            lhs: Box::new(self.compile(lhs)?),
-            rhs: Box::new(self.compile(rhs)?),
+            lhs: std::boxed::Box::new(self.compile(lhs)?),
+            rhs: std::boxed::Box::new(self.compile(rhs)?),
         }))
     }
 
@@ -757,7 +826,7 @@ impl Compiler {
     ) -> Result<Ast, Error> {
         Ok(Ast::Car(Car {
             source,
-            body: Box::new(self.compile(body)?),
+            body: std::boxed::Box::new(self.compile(body)?),
         }))
     }
 
@@ -768,7 +837,7 @@ impl Compiler {
     ) -> Result<Ast, Error> {
         Ok(Ast::Cdr(Cdr {
             source,
-            body: Box::new(self.compile(body)?),
+            body: std::boxed::Box::new(self.compile(body)?),
         }))
     }
 
@@ -780,7 +849,7 @@ impl Compiler {
     ) -> Result<Ast, Error> {
         Ok(Ast::FnCall(FnCall {
             source,
-            function: Box::new(self.compile(function)?),
+            function: std::boxed::Box::new(self.compile(function)?),
             exprs: args
                 .iter()
                 .map(|arg| self.compile(arg))
@@ -831,7 +900,7 @@ impl Compiler {
                 "nil?" => IsTypeParameter::Nil,
                 _ => unreachable!(),
             },
-            body: Box::new(self.compile(body)?),
+            body: std::boxed::Box::new(self.compile(body)?),
         }))
     }
 
@@ -842,7 +911,7 @@ impl Compiler {
     ) -> Result<Ast, Error> {
         Ok(Ast::Assert(Assert {
             source,
-            body: Box::new(self.compile(body)?),
+            body: std::boxed::Box::new(self.compile(body)?),
         }))
     }
 
@@ -855,9 +924,9 @@ impl Compiler {
     ) -> Result<Ast, Error> {
         Ok(Ast::MapInsert(MapInsert {
             source,
-            map: Box::new(self.compile(map)?),
-            key: Box::new(self.compile(key)?),
-            value: Box::new(self.compile(value)?),
+            map: std::boxed::Box::new(self.compile(map)?),
+            key: std::boxed::Box::new(self.compile(key)?),
+            value: std::boxed::Box::new(self.compile(value)?),
         }))
     }
 
@@ -869,8 +938,8 @@ impl Compiler {
     ) -> Result<Ast, Error> {
         Ok(Ast::MapRetrieve(MapRetrieve {
             source,
-            map: Box::new(self.compile(map)?),
-            key: Box::new(self.compile(key)?),
+            map: std::boxed::Box::new(self.compile(map)?),
+            key: std::boxed::Box::new(self.compile(key)?),
         }))
     }
 
@@ -881,7 +950,7 @@ impl Compiler {
     ) -> Result<Ast, Error> {
         Ok(Ast::MapItems(MapItems {
             source,
-            map: Box::new(self.compile(map)?),
+            map: std::boxed::Box::new(self.compile(map)?),
         }))
     }
 }
@@ -902,6 +971,9 @@ impl Ast {
             | Self::Def(Def { source, .. })
             | Self::Decl(Decl { source, .. })
             | Self::Set(Set { source, .. })
+            | Self::SetBox(SetBox { source, .. })
+            | Self::Box(Box { source, .. })
+            | Self::UnBox(UnBox { source, .. })
             | Self::If(If { source, .. })
             | Self::Apply(Apply { source, .. })
             | Self::BinaryArithemticOperation(BinaryArithmeticOperation { source, .. })
@@ -1084,12 +1156,12 @@ mod tests {
     #[test]
     fn test_parse_parameters() {
         let input = "(a b &rest c)";
-        let context = Box::leak(Box::new(reader::Context::new(
+        let context = std::boxed::Box::leak(std::boxed::Box::new(reader::Context::new(
             input,
             "test_parse_parameters",
         )));
         let mut reader = Reader::new(context);
-        let sexpr = Box::leak(Box::new(reader.next().unwrap().unwrap()));
+        let sexpr = std::boxed::Box::leak(std::boxed::Box::new(reader.next().unwrap().unwrap()));
         let list = sexpr.as_list().unwrap();
         let parameters = parse_parameters(sexpr, list).unwrap();
 
@@ -1102,12 +1174,12 @@ mod tests {
     #[test]
     fn test_parse_only_rest_parameters() {
         let input = "(&rest c)";
-        let context = Box::leak(Box::new(reader::Context::new(
+        let context = std::boxed::Box::leak(std::boxed::Box::new(reader::Context::new(
             input,
             "test_parse_parameters",
         )));
         let mut reader = Reader::new(context);
-        let sexpr = Box::leak(Box::new(reader.next().unwrap().unwrap()));
+        let sexpr = std::boxed::Box::leak(std::boxed::Box::new(reader.next().unwrap().unwrap()));
         let list = sexpr.as_list().unwrap();
         let parameters = parse_parameters(sexpr, list).unwrap();
 

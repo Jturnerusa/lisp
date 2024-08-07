@@ -25,6 +25,9 @@ pub fn compile(il: &Il, opcodes: &mut OpCodeTable<&'static Sexpr<'static>>) -> R
         Il::Lambda(lambda) => compile_lambda(lambda, opcodes),
         Il::Def(def) => compile_def(def, opcodes),
         Il::Set(set) => compile_set(set, opcodes),
+        Il::SetBox(setbox) => compile_setbox(setbox, opcodes),
+        Il::Box(r#box) => compile_box(r#box, opcodes),
+        Il::UnBox(unbox) => compile_unbox(unbox, opcodes),
         Il::If(r#if) => compile_if(r#if, opcodes),
         Il::Cons(cons) => compile_cons(cons, opcodes),
         Il::Car(car) => compile_car(car, opcodes),
@@ -176,6 +179,40 @@ fn compile_set(
             );
         }
     };
+
+    Ok(())
+}
+
+fn compile_setbox(
+    setbox: &il::SetBox,
+    opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
+) -> Result<(), Error> {
+    compile(&setbox.target, opcodes)?;
+    compile(&setbox.body, opcodes)?;
+
+    opcodes.push(OpCode::SetBox, setbox.source.source_sexpr());
+
+    Ok(())
+}
+
+fn compile_box(
+    r#box: &il::Box,
+    opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
+) -> Result<(), Error> {
+    compile(&r#box.body, opcodes)?;
+
+    opcodes.push(OpCode::Box, r#box.source.source_sexpr());
+
+    Ok(())
+}
+
+fn compile_unbox(
+    unbox: &il::UnBox,
+    opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
+) -> Result<(), Error> {
+    compile(&unbox.body, opcodes)?;
+
+    opcodes.push(OpCode::UnBox, unbox.source.source_sexpr());
 
     Ok(())
 }
