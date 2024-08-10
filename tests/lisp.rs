@@ -1,4 +1,4 @@
-use compiler::{ast, bytecode, il};
+use compiler::{ast, bytecode, tree};
 use core::fmt;
 use reader::{Reader, Sexpr};
 use vm::{OpCode, OpCodeTable, Vm};
@@ -36,7 +36,7 @@ fn disasm<D: fmt::Debug>(opcode_table: &OpCodeTable<D>, depth: usize) {
 fn compile(
     input: &str,
     context: &str,
-    il_compiler: &mut il::Compiler,
+    tree_compiler: &mut tree::Compiler,
     ast_compiler: &mut ast::Compiler,
     opcode_table: &mut OpCodeTable<&'static Sexpr>,
     vm: &mut Vm<&Sexpr>,
@@ -49,7 +49,7 @@ fn compile(
 
         let ast: &'static _ = Box::leak(Box::new(ast_compiler.compile(sexpr)?));
 
-        let il: &'static _ = Box::leak(Box::new(il_compiler.compile(
+        let il: &'static _ = Box::leak(Box::new(tree_compiler.compile(
             ast,
             vm,
             ast_compiler,
@@ -65,7 +65,7 @@ fn compile(
 fn eval_with_bootstrap(
     input: &str,
 ) -> Result<Option<vm::Object<&'static Sexpr>>, Box<dyn std::error::Error>> {
-    let mut il_compiler = il::Compiler::new();
+    let mut tree_compiler = tree::Compiler::new();
     let mut ast_compiler = ast::Compiler::new();
     let mut opcode_table = OpCodeTable::new();
     let mut vm = Vm::new();
@@ -73,7 +73,7 @@ fn eval_with_bootstrap(
     compile(
         BOOTSTRAP_SOURCE,
         "bootstrap.lisp",
-        &mut il_compiler,
+        &mut tree_compiler,
         &mut ast_compiler,
         &mut opcode_table,
         &mut vm,
@@ -82,7 +82,7 @@ fn eval_with_bootstrap(
     compile(
         LIST_UTILS_SOURCE,
         "list.lisp",
-        &mut il_compiler,
+        &mut tree_compiler,
         &mut ast_compiler,
         &mut opcode_table,
         &mut vm,
@@ -91,7 +91,7 @@ fn eval_with_bootstrap(
     compile(
         input,
         "test input",
-        &mut il_compiler,
+        &mut tree_compiler,
         &mut ast_compiler,
         &mut opcode_table,
         &mut vm,
@@ -107,7 +107,7 @@ fn eval_with_bootstrap(
 }
 
 fn eval(input: &'static str) -> Result<Option<vm::Object<&Sexpr>>, Box<dyn std::error::Error>> {
-    let mut il_compiler = il::Compiler::new();
+    let mut tree_compiler = tree::Compiler::new();
     let mut ast_compiler = ast::Compiler::new();
     let mut opcode_table = OpCodeTable::new();
     let mut vm = Vm::new();
@@ -115,7 +115,7 @@ fn eval(input: &'static str) -> Result<Option<vm::Object<&Sexpr>>, Box<dyn std::
     compile(
         input,
         "test input",
-        &mut il_compiler,
+        &mut tree_compiler,
         &mut ast_compiler,
         &mut opcode_table,
         &mut vm,

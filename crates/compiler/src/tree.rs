@@ -8,7 +8,6 @@ use crate::{
     ast::{self, Ast, Quoted},
     bytecode,
     environment::{self, Environment, Variable},
-    il,
 };
 use reader::{Reader, Sexpr};
 use unwrap_enum::{EnumAs, EnumIs};
@@ -648,7 +647,7 @@ impl Compiler {
             .map(|ast| self.compile(ast, vm, ast_compiler, find_module))
             .collect::<Result<Vec<Il>, Error>>()?;
 
-        let lambda = std::boxed::Box::leak(std::boxed::Box::new(Il::Lambda(il::Lambda {
+        let lambda = std::boxed::Box::leak(std::boxed::Box::new(Il::Lambda(self::Lambda {
             source: source.clone(),
             parameters,
             r#type: None,

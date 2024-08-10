@@ -1,6 +1,6 @@
 mod optimizer;
 
-use crate::il::{self, Il};
+use crate::tree::{self, Il};
 use core::fmt;
 use gc::Gc;
 use reader::Sexpr;
@@ -49,17 +49,17 @@ pub fn compile(il: &Il, opcodes: &mut OpCodeTable<&'static Sexpr<'static>>) -> R
 }
 
 fn compile_varref(
-    varref: &il::VarRef,
+    varref: &tree::VarRef,
     opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
 ) -> Result<(), Error> {
     match varref {
-        il::VarRef::Local { index, .. } => {
+        tree::VarRef::Local { index, .. } => {
             opcodes.push(OpCode::GetLocal(*index), varref.source().source_sexpr());
         }
-        il::VarRef::UpValue { index, .. } => {
+        tree::VarRef::UpValue { index, .. } => {
             opcodes.push(OpCode::GetUpValue(*index), varref.source().source_sexpr());
         }
-        il::VarRef::Global { name, .. } => opcodes.push(
+        tree::VarRef::Global { name, .. } => opcodes.push(
             OpCode::GetGlobal(Gc::new(name.clone())),
             varref.source().source_sexpr(),
         ),
@@ -69,16 +69,16 @@ fn compile_varref(
 }
 
 fn compile_constant(
-    constant: &il::Constant,
+    constant: &tree::Constant,
     opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
 ) -> Result<(), Error> {
     let op = match constant {
-        il::Constant::Symbol { symbol, .. } => OpCode::PushSymbol(Gc::new(symbol.clone())),
-        il::Constant::String { string, .. } => OpCode::PushString(Gc::new(string.clone())),
-        il::Constant::Char { char, .. } => OpCode::PushChar(*char),
-        il::Constant::Int { int, .. } => OpCode::PushInt(*int),
-        il::Constant::Bool { bool, .. } => OpCode::PushBool(*bool),
-        il::Constant::Nil { .. } => OpCode::PushNil,
+        tree::Constant::Symbol { symbol, .. } => OpCode::PushSymbol(Gc::new(symbol.clone())),
+        tree::Constant::String { string, .. } => OpCode::PushString(Gc::new(string.clone())),
+        tree::Constant::Char { char, .. } => OpCode::PushChar(*char),
+        tree::Constant::Int { int, .. } => OpCode::PushInt(*int),
+        tree::Constant::Bool { bool, .. } => OpCode::PushBool(*bool),
+        tree::Constant::Nil { .. } => OpCode::PushNil,
     };
 
     opcodes.push(op, constant.source().source_sexpr());
@@ -87,7 +87,7 @@ fn compile_constant(
 }
 
 fn compile_lambda(
-    lambda: &il::Lambda,
+    lambda: &tree::Lambda,
     opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
 ) -> Result<(), Error> {
     let mut lambda_opcode_table = OpCodeTable::new();
@@ -119,7 +119,7 @@ fn compile_lambda(
 }
 
 fn compile_if(
-    r#if: &il::If,
+    r#if: &tree::If,
     opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
 ) -> Result<(), Error> {
     let mut then_opcodes = OpCodeTable::new();
@@ -146,7 +146,7 @@ fn compile_if(
 }
 
 fn compile_def(
-    def: &il::Def,
+    def: &tree::Def,
     opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
 ) -> Result<(), Error> {
     compile(&def.body, opcodes)?;
@@ -160,19 +160,19 @@ fn compile_def(
 }
 
 fn compile_set(
-    set: &il::Set,
+    set: &tree::Set,
     opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
 ) -> Result<(), Error> {
     compile(&set.body, opcodes)?;
 
     match &set.target {
-        il::VarRef::Local { index, .. } => {
+        tree::VarRef::Local { index, .. } => {
             opcodes.push(OpCode::SetLocal(*index), set.source.source_sexpr());
         }
-        il::VarRef::UpValue { index, .. } => {
+        tree::VarRef::UpValue { index, .. } => {
             opcodes.push(OpCode::SetUpValue(*index), set.source.source_sexpr());
         }
-        il::VarRef::Global { name, .. } => {
+        tree::VarRef::Global { name, .. } => {
             opcodes.push(
                 OpCode::SetGlobal(Gc::new(name.clone())),
                 set.source.source_sexpr(),
@@ -184,7 +184,7 @@ fn compile_set(
 }
 
 fn compile_setbox(
-    setbox: &il::SetBox,
+    setbox: &tree::SetBox,
     opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
 ) -> Result<(), Error> {
     compile(&setbox.target, opcodes)?;
@@ -196,7 +196,7 @@ fn compile_setbox(
 }
 
 fn compile_box(
-    r#box: &il::Box,
+    r#box: &tree::Box,
     opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
 ) -> Result<(), Error> {
     compile(&r#box.body, opcodes)?;
@@ -207,7 +207,7 @@ fn compile_box(
 }
 
 fn compile_unbox(
-    unbox: &il::UnBox,
+    unbox: &tree::UnBox,
     opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
 ) -> Result<(), Error> {
     compile(&unbox.body, opcodes)?;
@@ -218,7 +218,7 @@ fn compile_unbox(
 }
 
 fn compile_arithmetic_operation(
-    arithmetic_op: &il::ArithmeticOperation,
+    arithmetic_op: &tree::ArithmeticOperation,
     opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
 ) -> Result<(), Error> {
     compile(&arithmetic_op.lhs, opcodes)?;
@@ -226,10 +226,10 @@ fn compile_arithmetic_operation(
 
     opcodes.push(
         match arithmetic_op.operator {
-            il::ArithmeticOperator::Add => OpCode::Add,
-            il::ArithmeticOperator::Sub => OpCode::Sub,
-            il::ArithmeticOperator::Mul => OpCode::Mul,
-            il::ArithmeticOperator::Div => OpCode::Div,
+            tree::ArithmeticOperator::Add => OpCode::Add,
+            tree::ArithmeticOperator::Sub => OpCode::Sub,
+            tree::ArithmeticOperator::Mul => OpCode::Mul,
+            tree::ArithmeticOperator::Div => OpCode::Div,
         },
         arithmetic_op.source.source_sexpr(),
     );
@@ -238,7 +238,7 @@ fn compile_arithmetic_operation(
 }
 
 fn compile_comparison_operation(
-    comparison_op: &il::ComparisonOperation,
+    comparison_op: &tree::ComparisonOperation,
     opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
 ) -> Result<(), Error> {
     compile(&comparison_op.lhs, opcodes)?;
@@ -246,9 +246,9 @@ fn compile_comparison_operation(
 
     opcodes.push(
         match comparison_op.operator {
-            il::ComparisonOperator::Eq => OpCode::Eq,
-            il::ComparisonOperator::Lt => OpCode::Lt,
-            il::ComparisonOperator::Gt => OpCode::Gt,
+            tree::ComparisonOperator::Eq => OpCode::Eq,
+            tree::ComparisonOperator::Lt => OpCode::Lt,
+            tree::ComparisonOperator::Gt => OpCode::Gt,
         },
         comparison_op.source.source_sexpr(),
     );
@@ -257,7 +257,7 @@ fn compile_comparison_operation(
 }
 
 fn compile_list(
-    list: &il::List,
+    list: &tree::List,
     opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
 ) -> Result<(), Error> {
     for expr in &list.exprs {
@@ -270,7 +270,7 @@ fn compile_list(
 }
 
 fn compile_fncall(
-    fncall: &il::FnCall,
+    fncall: &tree::FnCall,
     opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
 ) -> Result<(), Error> {
     compile(&fncall.function, opcodes)?;
@@ -288,7 +288,7 @@ fn compile_fncall(
 }
 
 fn compile_cons(
-    cons: &il::Cons,
+    cons: &tree::Cons,
     opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
 ) -> Result<(), Error> {
     compile(&cons.lhs, opcodes)?;
@@ -300,7 +300,7 @@ fn compile_cons(
 }
 
 fn compile_car(
-    car: &il::Car,
+    car: &tree::Car,
     opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
 ) -> Result<(), Error> {
     compile(&car.body, opcodes)?;
@@ -311,7 +311,7 @@ fn compile_car(
 }
 
 fn compile_cdr(
-    cdr: &il::Cdr,
+    cdr: &tree::Cdr,
     opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
 ) -> Result<(), Error> {
     compile(&cdr.body, opcodes)?;
@@ -322,20 +322,20 @@ fn compile_cdr(
 }
 
 fn compile_is_type(
-    is_type: &il::IsType,
+    is_type: &tree::IsType,
     opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
 ) -> Result<(), Error> {
     compile(&is_type.body, opcodes)?;
 
     let vm_type = match is_type.r#type {
-        il::IsTypeParameter::Function => vm::object::Type::Function,
-        il::IsTypeParameter::Cons => vm::object::Type::Cons,
-        il::IsTypeParameter::Symbol => vm::object::Type::Symbol,
-        il::IsTypeParameter::String => vm::object::Type::String,
-        il::IsTypeParameter::Char => vm::object::Type::Char,
-        il::IsTypeParameter::Int => vm::object::Type::Int,
-        il::IsTypeParameter::Bool => vm::object::Type::Bool,
-        il::IsTypeParameter::Nil => vm::object::Type::Nil,
+        tree::IsTypeParameter::Function => vm::object::Type::Function,
+        tree::IsTypeParameter::Cons => vm::object::Type::Cons,
+        tree::IsTypeParameter::Symbol => vm::object::Type::Symbol,
+        tree::IsTypeParameter::String => vm::object::Type::String,
+        tree::IsTypeParameter::Char => vm::object::Type::Char,
+        tree::IsTypeParameter::Int => vm::object::Type::Int,
+        tree::IsTypeParameter::Bool => vm::object::Type::Bool,
+        tree::IsTypeParameter::Nil => vm::object::Type::Nil,
     };
 
     opcodes.push(OpCode::IsType(vm_type), is_type.source.source_sexpr());
@@ -344,7 +344,7 @@ fn compile_is_type(
 }
 
 fn compile_apply(
-    apply: &il::Apply,
+    apply: &tree::Apply,
     opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
 ) -> Result<(), Error> {
     compile(&apply.function, opcodes)?;
@@ -356,7 +356,7 @@ fn compile_apply(
 }
 
 fn compile_assert(
-    assert: &il::Assert,
+    assert: &tree::Assert,
     opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
 ) -> Result<(), Error> {
     compile(&assert.body, opcodes)?;
@@ -367,7 +367,7 @@ fn compile_assert(
 }
 
 fn compile_map_create(
-    map_create: &il::MapCreate,
+    map_create: &tree::MapCreate,
     opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
 ) -> Result<(), Error> {
     opcodes.push(OpCode::MapCreate, map_create.source.source_sexpr());
@@ -376,7 +376,7 @@ fn compile_map_create(
 }
 
 fn compile_map_insert(
-    map_insert: &il::MapInsert,
+    map_insert: &tree::MapInsert,
     opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
 ) -> Result<(), Error> {
     compile(&map_insert.map, opcodes)?;
@@ -389,7 +389,7 @@ fn compile_map_insert(
 }
 
 fn compile_map_retrieve(
-    map_retrieve: &il::MapRetrieve,
+    map_retrieve: &tree::MapRetrieve,
     opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
 ) -> Result<(), Error> {
     compile(&map_retrieve.map, opcodes)?;
@@ -401,7 +401,7 @@ fn compile_map_retrieve(
 }
 
 fn compile_map_items(
-    map_items: &il::MapItems,
+    map_items: &tree::MapItems,
     opcodes: &mut OpCodeTable<&'static Sexpr<'static>>,
 ) -> Result<(), Error> {
     compile(&map_items.map, opcodes)?;

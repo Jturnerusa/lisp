@@ -1,6 +1,6 @@
 use compiler::{
     ast::{self},
-    bytecode, il,
+    bytecode, tree,
 };
 use reader::{Reader, Sexpr};
 use std::fs::{self, File};
@@ -11,7 +11,7 @@ use vm::{OpCodeTable, Vm};
 
 pub fn compile_file(
     path: &Path,
-    il_compiler: &mut il::Compiler,
+    tree_compiler: &mut tree::Compiler,
     ast_compiler: &mut ast::Compiler,
     vm: &mut Vm<&'static Sexpr<'static>>,
     opcode_table: &mut OpCodeTable<&'static Sexpr<'static>>,
@@ -27,7 +27,7 @@ pub fn compile_file(
     compile_source(
         source.as_str(),
         path.to_str().unwrap(),
-        il_compiler,
+        tree_compiler,
         ast_compiler,
         vm,
         opcode_table,
@@ -37,7 +37,7 @@ pub fn compile_file(
 pub fn compile_source(
     source: &str,
     context: &str,
-    il_compiler: &mut il::Compiler,
+    tree_compiler: &mut tree::Compiler,
     ast_compiler: &mut ast::Compiler,
     vm: &mut Vm<&'static Sexpr<'static>>,
     opcode_table: &mut OpCodeTable<&'static Sexpr<'static>>,
@@ -49,7 +49,7 @@ pub fn compile_source(
     for expr in reader {
         let sexpr: &'static _ = Box::leak(Box::new(expr?));
         let ast = ast_compiler.compile(sexpr)?;
-        let il = il_compiler.compile(&ast, vm, ast_compiler, &find_module as _)?;
+        let il = tree_compiler.compile(&ast, vm, ast_compiler, &find_module as _)?;
         bytecode::compile(&il, opcode_table)?;
     }
 

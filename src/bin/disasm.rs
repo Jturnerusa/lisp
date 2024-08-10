@@ -1,10 +1,7 @@
-use std::{
-    env,
-    path::{PathBuf},
-};
+use std::{env, path::PathBuf};
 
-use compiler::{ast, il};
-use reader::{Sexpr};
+use compiler::{ast, tree};
+use reader::Sexpr;
 use vm::{OpCode, OpCodeTable, Vm};
 
 static BOOTSTRAP_SOURCE: &str = include_str!(concat!(
@@ -18,7 +15,7 @@ static NATIVE_DECL_SOURCE: &str = include_str!(concat!(
 ));
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let mut il_compiler = il::Compiler::new();
+    let mut tree_compiler = tree::Compiler::new();
     let mut ast_compiler = ast::Compiler::new();
     let mut vm: Vm<&Sexpr<'_>> = Vm::new();
     let mut opcode_table = OpCodeTable::new();
@@ -26,7 +23,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     lisp::compile_source(
         BOOTSTRAP_SOURCE,
         "bootstrap.lisp",
-        &mut il_compiler,
+        &mut tree_compiler,
         &mut ast_compiler,
         &mut vm,
         &mut opcode_table,
@@ -35,7 +32,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     lisp::compile_source(
         NATIVE_DECL_SOURCE,
         "native.lisp",
-        &mut il_compiler,
+        &mut tree_compiler,
         &mut ast_compiler,
         &mut vm,
         &mut opcode_table,
@@ -48,7 +45,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         lisp::compile_file(
             path.as_path(),
-            &mut il_compiler,
+            &mut tree_compiler,
             &mut ast_compiler,
             &mut vm,
             &mut opcode_table,
