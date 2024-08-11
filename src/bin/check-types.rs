@@ -29,7 +29,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         &mut tree_compiler,
         &mut ast_compiler,
         &mut type_checker,
-        false,
+        true,
         &mut vm,
         &mut opcode_table,
     )?;
@@ -53,42 +53,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             &mut tree_compiler,
             &mut ast_compiler,
             &mut type_checker,
-            false,
+            true,
             &mut vm,
             &mut opcode_table,
         )?;
     }
 
-    match vm.eval(&opcode_table) {
-        Ok(_) => Ok(()),
-        Err((error, sexpr)) => {
-            let span = get_span(sexpr);
-            let line = get_line_number(sexpr);
-            let source = get_source(sexpr, span);
-            let display = sexpr.context().display();
-            eprintln!("{display}:{line}: {error}\n{source}");
-            Err(Box::new(error))
-        }
-    }
-}
-
-fn get_span(sexpr: &Sexpr) -> Range<usize> {
-    match sexpr {
-        Sexpr::List { list, .. } => list.first().unwrap().span().start - 1..sexpr.span().end,
-        _ => sexpr.span(),
-    }
-}
-
-fn get_line_number(sexpr: &Sexpr) -> usize {
-    sexpr
-        .context()
-        .source()
-        .bytes()
-        .take(sexpr.span().start)
-        .filter(|b| *b == b'\n')
-        .count()
-}
-
-fn get_source<'sexpr>(sexpr: &'sexpr Sexpr, span: Range<usize>) -> &'sexpr str {
-    &sexpr.context().source()[span]
+    Ok(())
 }

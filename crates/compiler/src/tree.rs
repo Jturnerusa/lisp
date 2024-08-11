@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    ast::{self, Ast, Quoted},
+    ast::{self, Ast, Quoted, Type},
     bytecode,
     environment::{self, Environment, Variable},
 };
@@ -65,12 +65,6 @@ pub enum Il {
     Assert(Assert),
     VarRef(VarRef),
     Constant(Constant),
-}
-
-#[derive(Clone, Debug)]
-pub enum Type {
-    Scalar(String),
-    Composite(Vec<Type>),
 }
 
 #[derive(Clone, Debug)]

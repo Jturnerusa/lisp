@@ -1,5 +1,5 @@
 use compiler::{
-    ast::{self},
+    ast::{self, Ast},
     bytecode, tree,
 };
 use reader::{Reader, Sexpr};
@@ -13,6 +13,8 @@ pub fn compile_file(
     path: &Path,
     tree_compiler: &mut tree::Compiler,
     ast_compiler: &mut ast::Compiler,
+    type_checker: &mut compiler::types::Checker,
+    check_types: bool,
     vm: &mut Vm<&'static Sexpr<'static>>,
     opcode_table: &mut OpCodeTable<&'static Sexpr<'static>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -29,6 +31,8 @@ pub fn compile_file(
         path.to_str().unwrap(),
         tree_compiler,
         ast_compiler,
+        type_checker,
+        check_types,
         vm,
         opcode_table,
     )
@@ -39,6 +43,8 @@ pub fn compile_source(
     context: &str,
     tree_compiler: &mut tree::Compiler,
     ast_compiler: &mut ast::Compiler,
+    type_checker: &mut compiler::types::Checker,
+    check_types: bool,
     vm: &mut Vm<&'static Sexpr<'static>>,
     opcode_table: &mut OpCodeTable<&'static Sexpr<'static>>,
 ) -> Result<(), Box<dyn Error>> {
@@ -49,7 +55,25 @@ pub fn compile_source(
     for expr in reader {
         let sexpr: &'static _ = Box::leak(Box::new(expr?));
         let ast = ast_compiler.compile(sexpr)?;
+
         let il = tree_compiler.compile(&ast, vm, ast_compiler, &find_module as _)?;
+
+        if let Ast::Decl(decl) = &ast {
+            type_checker.decl(decl)?
+        }
+
+        match &il {
+            tree::Il::Lambda(lambda) => match type_checker.check_lambda(lambda) {
+                Err(e) if check_types => return Err(Box::new(e)),
+                _ => (),
+            },
+            tree::Il::Def(def) => match type_checker.check_def(def) {
+                Err(e) if check_types => return Err(Box::new(e)),
+                _ => (),
+            },
+            _ => (),
+        }
+
         bytecode::compile(&il, opcode_table)?;
     }
 

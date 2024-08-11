@@ -176,7 +176,6 @@ pub struct Def {
 pub struct Decl {
     pub source: &'static Sexpr<'static>,
     pub parameter: Parameter,
-    pub body: std::boxed::Box<Ast>,
 }
 
 #[derive(Clone, Debug)]
@@ -424,8 +423,8 @@ impl Compiler {
                     [Symbol { symbol, .. }, parameter, body] if symbol == "def" => {
                         self.compile_def(sexpr, parameter, body)?
                     }
-                    [Symbol { symbol, .. }, parameter, body] if symbol == "decl" => {
-                        self.compile_decl(sexpr, parameter, body)?
+                    [Symbol { symbol, .. }, parameter] if symbol == "decl" => {
+                        self.compile_decl(sexpr, parameter)?
                     }
                     [Symbol { symbol, .. }, Symbol { symbol: target, .. }, body]
                         if symbol == "set!" =>
@@ -673,7 +672,6 @@ impl Compiler {
         &mut self,
         source: &'static Sexpr<'static>,
         parameter: &'static Sexpr<'static>,
-        body: &'static Sexpr<'static>,
     ) -> Result<Ast, Error> {
         Ok(Ast::Decl(Decl {
             source,
@@ -681,7 +679,6 @@ impl Compiler {
                 sexpr: source,
                 message: "failed to parse parameter".to_string(),
             })?,
-            body: std::boxed::Box::new(self.compile(body)?),
         }))
     }
 

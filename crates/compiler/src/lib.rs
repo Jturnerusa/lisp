@@ -5,4 +5,4 @@ pub mod ast;
 pub mod bytecode;
 mod environment;
 pub mod tree;
-mod types;
+pub mod types;
