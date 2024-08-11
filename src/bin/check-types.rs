@@ -1,7 +1,6 @@
 #![feature(let_chains)]
 
-use reader::Sexpr;
-use std::{env, ops::Range, path::PathBuf};
+use std::{env, path::PathBuf};
 use vm::{OpCodeTable, Vm};
 
 static BOOTSTRAP_SOURCE: &str = include_str!(concat!(
