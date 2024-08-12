@@ -376,6 +376,8 @@ impl Checker {
         self.environments
             .push(self.environments.last().cloned().unwrap());
 
+        let predicate = self.check(&r#if.predicate)?;
+
         if let tree::Il::IsType(is_type) = &*r#if.predicate
             && let tree::Il::VarRef(varref) = &*is_type.body
         {
@@ -398,7 +400,6 @@ impl Checker {
             }
         }
 
-        let predicate = self.check(&r#if.predicate)?;
         let then = self.check(&r#if.then)?;
 
         self.environments.pop().unwrap();
