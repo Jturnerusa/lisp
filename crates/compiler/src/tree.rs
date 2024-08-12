@@ -290,17 +290,6 @@ pub struct Compiler {
     environment: Environment,
 }
 
-impl Type {
-    fn from_ast(ast: &ast::Type) -> Self {
-        match ast {
-            ast::Type::Scalar(scalar) => Self::Scalar(scalar.clone()),
-            ast::Type::Composite(composite) => {
-                Self::Composite(composite.iter().map(Type::from_ast).collect())
-            }
-        }
-    }
-}
-
 impl VarRef {
     pub fn source(&self) -> &Ast {
         match self {
@@ -366,7 +355,7 @@ impl Parameter {
         Ok(Self {
             source: source.clone(),
             name: parameter.name.clone(),
-            r#type: parameter.r#type.as_ref().map(Type::from_ast),
+            r#type: parameter.r#type.clone(),
         })
     }
 }
@@ -754,7 +743,7 @@ impl Compiler {
 
         let upvalues = self.environment.upvalues().collect::<Vec<UpValue>>();
 
-        let r#type = match lambda.r#type.as_ref().map(Type::from_ast) {
+        let r#type = match lambda.r#type.clone() {
             Some(t) => Some(t),
             None => None,
         };
