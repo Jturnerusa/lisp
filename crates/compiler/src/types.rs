@@ -299,6 +299,47 @@ impl Checker {
         }
     }
 
+    fn infer_lambda(&self, lambda: &tree::Lambda) -> Result<Type, Error> {
+        let mut parameters = Vec::new();
+
+        for parameter in &lambda.parameters {
+            let t = match parameter.r#type.as_ref().map(Type::from_ast) {
+                Some(Ok(t)) => t,
+                Some(Err(())) => {
+                    return Err(Error::Invalid {
+                        sexpr: lambda.source.source_sexpr(),
+                    })
+                }
+                None => {
+                    return Err(Error::None {
+                        sexpr: lambda.source.source_sexpr(),
+                    })
+                }
+            };
+
+            parameters.push(t);
+        }
+
+        let r#return = match lambda.r#type.as_ref().map(Type::from_ast) {
+            Some(Ok(t)) => t,
+            Some(Err(())) => {
+                return Err(Error::Invalid {
+                    sexpr: lambda.source.source_sexpr(),
+                })
+            }
+            None => {
+                return Err(Error::None {
+                    sexpr: lambda.source.source_sexpr(),
+                })
+            }
+        };
+
+        Ok(Type::Function {
+            parameters,
+            r#return: Box::new(r#return),
+        })
+    }
+
     fn check_if(&mut self, r#if: &tree::If) -> Result<Type, Error> {
         let predicate = self.check(&r#if.predicate)?;
         let then = self.check(&r#if.then)?;
@@ -357,18 +398,23 @@ impl Checker {
     }
 
     pub fn check_def(&mut self, def: &tree::Def) -> Result<Type, Error> {
-        let parameter = match def.parameter.r#type.as_ref().map(Type::from_ast) {
-            Some(Ok(t)) => t,
-            Some(Err(())) => {
-                return Err(Error::Invalid {
-                    sexpr: def.source.source_sexpr(),
-                })
+        let parameter = match (def.parameter.r#type.as_ref(), &*def.body) {
+            (Some(ast::Type::Scalar(t)), tree::Il::Lambda(lambda)) if t == "function" => {
+                self.infer_lambda(lambda)?
             }
-            None => {
-                return Err(Error::None {
-                    sexpr: def.source.source_sexpr(),
-                })
-            }
+            _ => match def.parameter.r#type.as_ref().map(Type::from_ast) {
+                Some(Ok(t)) => t,
+                Some(Err(())) => {
+                    return Err(Error::Invalid {
+                        sexpr: def.source.source_sexpr(),
+                    })
+                }
+                None => {
+                    return Err(Error::None {
+                        sexpr: def.source.source_sexpr(),
+                    })
+                }
+            },
         };
 
         self.environments
