@@ -7,21 +7,21 @@ use crate::{ast, tree};
 
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum Error {
-    #[error("expected: {expected}, received: {received}\n{sexpr}")]
+    #[error("type error: expected: {expected}, received: {received}\n{sexpr:?}")]
     Expected {
         expected: Type,
         received: Type,
         sexpr: &'static Sexpr<'static>,
     },
-    #[error("unexpected\n{sexpr}")]
+    #[error("type error: unexpected type for context\n{sexpr:?}")]
     Unexpected { sexpr: &'static Sexpr<'static> },
-    #[error("wrong number of arguments\n{sexpr}")]
+    #[error("type error: wrong number of arguments\n{sexpr:?}")]
     Arity { sexpr: &'static Sexpr<'static> },
-    #[error("no type found\n{sexpr}")]
+    #[error("type error: no type found for expression\n{sexpr:?}")]
     None { sexpr: &'static Sexpr<'static> },
-    #[error("invalid type\n{sexpr}")]
+    #[error("type error: invalid type annotation\n{sexpr:?}")]
     Invalid { sexpr: &'static Sexpr<'static> },
-    #[error("cant narrow non-union types\n{sexpr:?}")]
+    #[error("type error: cant narrow non-union types\n{sexpr:?}")]
     Narrow { sexpr: &'static Sexpr<'static> },
 }
 
