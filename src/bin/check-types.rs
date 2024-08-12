@@ -13,7 +13,7 @@ static NATIVE_DECL_SOURCE: &str = include_str!(concat!(
     "/lib/native/decl/native.lisp"
 ));
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
     let mut tree_compiler = compiler::tree::Compiler::new();
     let mut ast_compiler = compiler::ast::Compiler::new();
     let mut type_checker = compiler::types::Checker::new();
@@ -31,7 +31,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         true,
         &mut vm,
         &mut opcode_table,
-    )?;
+    )
+    .unwrap();
 
     lisp::compile_source(
         BOOTSTRAP_SOURCE,
@@ -42,12 +43,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         false,
         &mut vm,
         &mut opcode_table,
-    )?;
+    )
+    .unwrap();
 
     for arg in env::args().skip(1).take_while(|s| s != "--") {
         let path = PathBuf::from(arg);
 
-        lisp::compile_file(
+        match lisp::compile_file(
             path.as_path(),
             &mut tree_compiler,
             &mut ast_compiler,
@@ -55,8 +57,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             true,
             &mut vm,
             &mut opcode_table,
-        )?;
+        ) {
+            Ok(()) => continue,
+            Err(e) => {
+                eprintln!("{e}");
+                return;
+            }
+        }
     }
-
-    Ok(())
 }
