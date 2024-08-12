@@ -195,6 +195,7 @@ impl fmt::Display for Type {
                 write!(f, ")")?;
                 Ok(())
             }
+            Self::Generic { name } => write!(f, "generic({name})"),
             _ => todo!(),
         }
     }
