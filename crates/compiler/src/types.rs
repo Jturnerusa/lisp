@@ -632,11 +632,23 @@ impl Checker {
     }
 
     fn check_car(&mut self, car: &tree::Car) -> Result<Type, Error> {
-        self.check(&car.body)
+        match self.check(&car.body)? {
+            Type::List(inner) => Ok(*inner),
+            _ => Err(Error::Unexpected {
+                sexpr: car.source.source_sexpr(),
+            }),
+        }
     }
 
     fn check_cdr(&mut self, cdr: &tree::Cdr) -> Result<Type, Error> {
-        self.check(&cdr.body)
+        let t = self.check(&cdr.body)?;
+
+        match t {
+            Type::List(_) => Ok(t),
+            _ => Err(Error::Unexpected {
+                sexpr: cdr.source.source_sexpr(),
+            }),
+        }
     }
 
     fn check_varref(&self, varref: &tree::VarRef) -> Result<Type, Error> {
