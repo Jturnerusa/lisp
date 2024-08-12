@@ -39,6 +39,9 @@ pub enum Type {
     Nil,
     Union(BTreeSet<Type>),
     Box(std::boxed::Box<Type>),
+    Generic {
+        name: String,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -87,6 +90,7 @@ impl Type {
             (Type::Bool, Type::Bool) => true,
             (Type::Nil, Type::Nil) => true,
             (Type::Union(a), Type::Union(b)) if a == b => true,
+            (Type::Generic { name: a }, Type::Generic { name: b }) if a == b => true,
             _ => false,
         }
     }
@@ -113,6 +117,9 @@ impl Type {
                         .map(Type::from_ast)
                         .collect::<Result<BTreeSet<_>, _>>()?,
                 ),
+                [ast::Type::Scalar(t), ast::Type::Scalar(name)] if t == "generic" => {
+                    Type::Generic { name: name.clone() }
+                }
                 _ => return Err(()),
             },
             ast::Type::Scalar(t) if t == "symbol" => Type::Symbol,
@@ -400,6 +407,8 @@ impl Checker {
     }
 
     fn check_fncall(&mut self, fncall: &tree::FnCall) -> Result<Type, Error> {
+        let mut generics: HashMap<String, Type> = HashMap::new();
+
         let function = self.check(&fncall.function)?;
 
         let Type::Function {
@@ -425,16 +434,38 @@ impl Checker {
         }
 
         for (a, b) in parameters.iter().zip(args.iter()) {
-            if !a.check(b) {
-                return Err(Error::Expected {
-                    sexpr: fncall.source.source_sexpr(),
-                    expected: a.clone(),
-                    received: b.clone(),
-                });
+            match a {
+                Type::Generic { name } => match generics.get(name.as_str()) {
+                    Some(t) => {
+                        if !t.check(b) {
+                            return Err(Error::Expected {
+                                sexpr: fncall.source.source_sexpr(),
+                                expected: t.clone(),
+                                received: b.clone(),
+                            });
+                        }
+                    }
+                    None => {
+                        generics.insert(name.clone(), b.clone());
+                    }
+                },
+                t => {
+                    if !t.check(b) {
+                        return Err(Error::Expected {
+                            sexpr: fncall.source.source_sexpr(),
+                            expected: a.clone(),
+                            received: b.clone(),
+                        });
+                    }
+                }
             }
         }
 
-        Ok(*r#return)
+        if let Type::Generic { name } = *r#return {
+            Ok(generics.get(name.as_str()).cloned().unwrap())
+        } else {
+            Ok(*r#return)
+        }
     }
 
     fn check_arithmetic_op(&mut self, op: &tree::ArithmeticOperation) -> Result<Type, Error> {
