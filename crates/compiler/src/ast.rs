@@ -129,6 +129,7 @@ pub enum Constant {
 pub enum Type {
     Scalar(String),
     Composite(Vec<Type>),
+    Inferred,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1017,6 +1018,7 @@ impl Type {
                     .map(Type::from_sexpr)
                     .collect::<Result<Vec<_>, _>>()?,
             ),
+            Sexpr::Symbol { symbol, .. } if symbol == "_" => Type::Inferred,
             Sexpr::Symbol { symbol, .. } => Type::Scalar(symbol.clone()),
             Sexpr::Nil { .. } => Type::Scalar("nil".to_string()),
             _ => return Err(()),
