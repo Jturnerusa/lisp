@@ -458,7 +458,19 @@ impl<'context> fmt::Debug for Error<'context> {
 impl<'context> fmt::Debug for Sexpr<'context> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let source = get_source(self, self.span());
-        write!(f, "{source}")
+        let line_number = self
+            .context()
+            .source()
+            .bytes()
+            .take(self.span().start)
+            .filter(|b| *b == b'\n')
+            .count();
+
+        write!(
+            f,
+            "{}:{line_number}:\n{source}",
+            self.context().display.as_str()
+        )
     }
 }
 
