@@ -21,6 +21,8 @@ pub enum Error {
     None { sexpr: &'static Sexpr<'static> },
     #[error("invalid type\n{sexpr}")]
     Invalid { sexpr: &'static Sexpr<'static> },
+    #[error("cant narrow non-union types\n{sexpr:?}")]
+    Narrow { sexpr: &'static Sexpr<'static> },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -131,6 +133,30 @@ impl Type {
             _ => return Err(()),
         })
     }
+
+    fn narrow(&self, parameter: &tree::IsTypeParameter) -> Result<Type, ()> {
+        let Type::Union(types) = self else {
+            return Err(());
+        };
+
+        for t in types.iter() {
+            match (t, parameter) {
+                (Type::List(_) | Type::Cons(_, _), tree::IsTypeParameter::Cons) => {
+                    return Ok(t.clone())
+                }
+                (Type::Function { .. }, tree::IsTypeParameter::Function) => return Ok(t.clone()),
+                (Type::Symbol, tree::IsTypeParameter::Symbol) => return Ok(t.clone()),
+                (Type::String, tree::IsTypeParameter::String) => return Ok(t.clone()),
+                (Type::Char, tree::IsTypeParameter::Char) => return Ok(t.clone()),
+                (Type::Int, tree::IsTypeParameter::Int) => return Ok(t.clone()),
+                (Type::Bool, tree::IsTypeParameter::Bool) => return Ok(t.clone()),
+                (Type::Nil, tree::IsTypeParameter::Nil) => return Ok(t.clone()),
+                _ => continue,
+            }
+        }
+
+        Err(())
+    }
 }
 
 impl fmt::Display for Type {
@@ -231,6 +257,7 @@ impl Checker {
             tree::Il::Cdr(cdr) => self.check_cdr(cdr),
             tree::Il::VarRef(varref) => self.check_varref(varref),
             tree::Il::Constant(constant) => self.check_constant(constant),
+            tree::Il::IsType(_) => Ok(Type::Bool),
             _ => todo!("{tree:?}"),
         }
     }
@@ -341,8 +368,36 @@ impl Checker {
     }
 
     fn check_if(&mut self, r#if: &tree::If) -> Result<Type, Error> {
+        self.environments
+            .push(self.environments.last().cloned().unwrap());
+
+        if let tree::Il::IsType(is_type) = &*r#if.predicate
+            && let tree::Il::VarRef(varref) = &*is_type.body
+        {
+            let t = self.check_varref(varref)?;
+            let narrowed = t.narrow(&is_type.r#type).map_err(|_| Error::Narrow {
+                sexpr: r#if.source.source_sexpr(),
+            })?;
+
+            match varref {
+                tree::VarRef::Local { index, .. } => {
+                    self.environments
+                        .last_mut()
+                        .unwrap()
+                        .scopes
+                        .last_mut()
+                        .unwrap()
+                        .locals[*index] = Some(narrowed)
+                }
+                _ => todo!(),
+            }
+        }
+
         let predicate = self.check(&r#if.predicate)?;
         let then = self.check(&r#if.then)?;
+
+        self.environments.pop().unwrap();
+
         let r#else = self.check(&r#if.r#else)?;
 
         let Type::Bool = &predicate else {
