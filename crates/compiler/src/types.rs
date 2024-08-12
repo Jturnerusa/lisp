@@ -91,7 +91,11 @@ impl Type {
             (Type::Int, Type::Int) => true,
             (Type::Bool, Type::Bool) => true,
             (Type::Nil, Type::Nil) => true,
-            (Type::Union(a), Type::Union(b)) if a == b => true,
+            (Type::Union(a), Type::Union(b)) if a.iter().all(|x| b.iter().any(|y| x.check(y))) => {
+                true
+            }
+            (Type::Union(a), b) if a.iter().any(|x| x.check(b)) => true,
+            (a, Type::Union(b)) if b.iter().any(|x| x.check(a)) => true,
             (Type::Generic { name: a }, Type::Generic { name: b }) if a == b => true,
             _ => false,
         }
