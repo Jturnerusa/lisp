@@ -425,15 +425,11 @@ impl Checker {
             });
         };
 
-        if then.check(&r#else) {
-            Ok(then)
+        Ok(if then.check(&r#else) {
+            then
         } else {
-            Err(Error::Expected {
-                sexpr: r#if.source.source_sexpr(),
-                expected: then,
-                received: r#else,
-            })
-        }
+            Type::Union(BTreeSet::from([then, r#else]))
+        })
     }
 
     fn check_apply(&mut self, apply: &tree::Apply) -> Result<Type, Error> {
