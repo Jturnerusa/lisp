@@ -1,6 +1,6 @@
 use std::{env, path::PathBuf};
 
-use compiler::{ast, tree};
+use compiler::{ast, tree, types};
 use reader::Sexpr;
 use vm::{OpCode, OpCodeTable, Vm};
 
@@ -17,6 +17,7 @@ static NATIVE_DECL_SOURCE: &str = include_str!(concat!(
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut tree_compiler = tree::Compiler::new();
     let mut ast_compiler = ast::Compiler::new();
+    let mut type_checker = types::Checker::new();
     let mut vm: Vm<&Sexpr<'_>> = Vm::new();
     let mut opcode_table = OpCodeTable::new();
 
@@ -25,6 +26,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "bootstrap.lisp",
         &mut tree_compiler,
         &mut ast_compiler,
+        &mut type_checker,
+        false,
         &mut vm,
         &mut opcode_table,
     )?;
@@ -34,6 +37,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "native.lisp",
         &mut tree_compiler,
         &mut ast_compiler,
+        &mut type_checker,
+        false,
         &mut vm,
         &mut opcode_table,
     )?;
@@ -47,6 +52,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             path.as_path(),
             &mut tree_compiler,
             &mut ast_compiler,
+            &mut type_checker,
+            false,
             &mut vm,
             &mut opcode_table,
         )?;
