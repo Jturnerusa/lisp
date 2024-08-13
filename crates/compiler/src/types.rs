@@ -427,7 +427,9 @@ impl Checker {
 
         if r#if.predicate.is_istype() {
             self.narrow(r#if)?;
-        } else if let tree::Il::If(inner_if) = &*r#if.predicate {
+        } else if let tree::Il::If(inner_if) = &*r#if.predicate
+            && is_and(inner_if)
+        {
             self.narrow_nested_ifs(inner_if)?;
         }
 
@@ -765,5 +767,18 @@ fn get_upvalue_type<'scope>(
             let next_upvalue = scope.upvalues[i];
             get_upvalue_type(next_upvalue, scopes)
         }
+    }
+}
+
+fn is_and(r#if: &tree::If) -> bool {
+    match (&*r#if.then, &*r#if.r#else) {
+        (tree::Il::If(inner), tree::Il::Constant(tree::Constant::Bool { bool, .. })) if !*bool => {
+            is_and(inner)
+        }
+        (
+            tree::Il::Constant(tree::Constant::Bool { bool: then, .. }),
+            tree::Il::Constant(tree::Constant::Bool { bool: r#else, .. }),
+        ) if *then && !r#else => true,
+        _ => false,
     }
 }
