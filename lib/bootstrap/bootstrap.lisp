@@ -113,8 +113,11 @@
 (defmacro cond (&rest clauses)
   (if (nil? clauses)
       nil
-      (list 'if (caar clauses) (cadar clauses)
-            (cons 'cond (cdr clauses)))))
+      (if (= (caar clauses) 'true)
+          (cadar clauses)
+          (list 'if (caar clauses)
+                (cadar clauses)
+                (cons 'cond (cdr clauses))))))
 
 (defmacro and (&rest exprs)
   (cond ((nil? exprs) false)
