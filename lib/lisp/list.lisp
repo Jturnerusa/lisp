@@ -1,7 +1,7 @@
 (def (take function)
      (lambda ((list (union (list (generic t)) nil))
               (n int)) -> (union (list (generic t)) nil)
-            (cond ((= n 1)
+            (cond ((= n 0)
                    nil)
                   ((cons? list)
                    (cons (car list) (take (cdr list) (- n 1)))))))
