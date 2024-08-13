@@ -1,10 +1,8 @@
 (def (take function)
      (lambda ((list (union (list (generic t)) nil))
               (n int)) -> (union (list (generic t)) nil)
-            (cond ((nil? list)
-                   nil)
-                  ((= n 0)
-                   nil)
+            (cond ((= n 0)
+                   list)
                   ((cons? list)
                    (cons (car list) (take (cdr list) (- n 1)))))))
 
