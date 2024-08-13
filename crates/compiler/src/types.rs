@@ -645,7 +645,7 @@ impl Checker {
         let t = self.check(&cdr.body)?;
 
         match t {
-            Type::List(_) => Ok(t),
+            Type::List(_) => Ok(Type::Union(BTreeSet::from([Type::Nil, t]))),
             _ => Err(Error::Unexpected {
                 sexpr: cdr.source.source_sexpr(),
             }),
