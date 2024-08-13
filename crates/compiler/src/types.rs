@@ -1,6 +1,7 @@
 use core::fmt;
 use reader::Sexpr;
 use std::collections::{BTreeSet, HashMap};
+use unwrap_enum::{EnumAs, EnumIs};
 use vm::UpValue;
 
 use crate::{ast, tree};
@@ -25,7 +26,7 @@ pub enum Error {
     Narrow { sexpr: &'static Sexpr<'static> },
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, EnumAs, EnumIs)]
 pub enum Type {
     List(std::boxed::Box<Type>),
     Cons(std::boxed::Box<Type>, std::boxed::Box<Type>),
@@ -160,6 +161,16 @@ impl Type {
         }
 
         Err(())
+    }
+
+    fn is_list_or_nil(&self) -> bool {
+        let Type::Union(types) = self else {
+            return false;
+        };
+
+        types.len() == 2
+            && types.iter().filter(|t| t.is_list()).count() == 1
+            && types.iter().filter(|t| t.is_nil()).count() == 1
     }
 }
 
@@ -628,6 +639,24 @@ impl Checker {
 
         Ok(match (lhs, rhs) {
             (a, Type::List(inner)) if inner.check(&a) => Type::List(inner.clone()),
+            (a, b)
+                if b.is_list_or_nil()
+                    && b.as_union()
+                        .unwrap()
+                        .iter()
+                        .any(|x| x.check(&Type::List(Box::new(a.clone())))) =>
+            {
+                Type::List(Box::new(
+                    b.as_union()
+                        .unwrap()
+                        .iter()
+                        .find_map(|t| match t {
+                            Type::List(inner) => Some(*inner.clone()),
+                            _ => None,
+                        })
+                        .unwrap(),
+                ))
+            }
             (a, b) => Type::Cons(std::boxed::Box::new(a), std::boxed::Box::new(b)),
         })
     }
