@@ -383,12 +383,7 @@ impl Checker {
         })
     }
 
-    fn check_if(&mut self, r#if: &tree::If) -> Result<Type, Error> {
-        self.environments
-            .push(self.environments.last().cloned().unwrap());
-
-        let predicate = self.check(&r#if.predicate)?;
-
+    fn narrow(&mut self, r#if: &tree::If) -> Result<(), Error> {
         if let tree::Il::IsType(is_type) = &*r#if.predicate
             && let tree::Il::VarRef(varref) = &*is_type.body
         {
@@ -409,6 +404,31 @@ impl Checker {
                 }
                 _ => todo!(),
             }
+        }
+
+        Ok(())
+    }
+
+    fn narrow_nested_ifs(&mut self, r#if: &tree::If) -> Result<(), Error> {
+        self.narrow(r#if)?;
+
+        if let tree::Il::If(then) = &*r#if.then {
+            self.narrow(then)?;
+        }
+
+        Ok(())
+    }
+
+    fn check_if(&mut self, r#if: &tree::If) -> Result<Type, Error> {
+        self.environments
+            .push(self.environments.last().cloned().unwrap());
+
+        let predicate = self.check(&r#if.predicate)?;
+
+        if r#if.predicate.is_istype() {
+            self.narrow(r#if)?;
+        } else if let tree::Il::If(inner_if) = &*r#if.predicate {
+            self.narrow_nested_ifs(inner_if)?;
         }
 
         let then = self.check(&r#if.then)?;
