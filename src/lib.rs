@@ -61,7 +61,7 @@ pub fn compile_source(
             let mut opcode_table = OpCodeTable::new();
 
             for expr in &eval_when_compile.exprs {
-                let tree = tree_compiler.compile(expr, vm, ast_compiler, &find_module as _)?;
+                let tree = tree_compiler.compile(expr, vm, ast_compiler)?;
 
                 type_check(type_checker, check_types, &tree)?;
 
@@ -98,7 +98,7 @@ pub fn compile_source(
             continue;
         }
 
-        let tree = tree_compiler.compile(&ast, vm, ast_compiler, &find_module as _)?;
+        let tree = tree_compiler.compile(&ast, vm, ast_compiler)?;
 
         type_check(type_checker, check_types, &tree)?;
 
