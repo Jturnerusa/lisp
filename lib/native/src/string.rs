@@ -1,10 +1,6 @@
-
 use crate::{check_arity, check_type};
 use gc::Gc;
-use vm::{
-    object::{Type},
-    Error, Local, Object,
-};
+use vm::{object::Type, Error, Local, Object};
 
 pub fn split<D: Clone>(objects: &mut [Local<D>]) -> Result<Object<D>, Error> {
     check_arity!("string-split", 2, objects);

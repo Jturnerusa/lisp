@@ -92,7 +92,7 @@ mod tests {
         let optimized = tco(&opcode_table);
 
         assert!(matches!(
-            dbg!(optimized.opcodes()),
+            optimized.opcodes(),
             [
                 OpCode::PushInt(1),
                 OpCode::PushInt(1),

@@ -1,8 +1,7 @@
 use compiler::{ast, tree, types};
-use core::fmt;
 use lisp::compile_source;
 use reader::Sexpr;
-use vm::{OpCode, OpCodeTable, Vm};
+use vm::{OpCodeTable, Vm};
 
 macro_rules! deftest {
     ($name:tt, $input:literal) => {
@@ -15,24 +14,8 @@ macro_rules! deftest {
     };
 }
 
-macro_rules! leak {
-    ($e:expr) => {
-        Box::leak(Box::new($e))
-    };
-}
-
 static BOOTSTRAP_SOURCE: &str = include_str!("../lib/bootstrap/bootstrap.lisp");
 static LIST_UTILS_SOURCE: &str = include_str!("../lib/lisp/list.lisp");
-
-fn disasm<D: fmt::Debug>(opcode_table: &OpCodeTable<D>, depth: usize) {
-    let indent = "  ".repeat(depth);
-    for opcode in opcode_table.opcodes() {
-        println!("{indent}{opcode:?}");
-        if let OpCode::Lambda { body, .. } = opcode {
-            disasm(body, depth + 1);
-        }
-    }
-}
 
 fn eval_with_bootstrap(
     input: &str,

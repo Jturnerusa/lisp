@@ -102,6 +102,7 @@ impl Type {
         }
     }
 
+    #[allow(clippy::result_unit_err)]
     pub fn from_ast(tree: &ast::Type) -> Result<Self, ()> {
         Ok(match tree {
             ast::Type::Composite(types) => match types.as_slice() {
@@ -234,6 +235,7 @@ impl Environment {
     }
 }
 
+#[allow(clippy::new_without_default)]
 impl Checker {
     pub fn new() -> Self {
         Self {
@@ -700,7 +702,7 @@ impl Checker {
     }
 
     fn check_varref(&self, varref: &tree::VarRef) -> Result<Type, Error> {
-        Ok(match varref {
+        match varref {
             tree::VarRef::Local { index, .. } => self
                 .environments
                 .last()
@@ -741,7 +743,7 @@ impl Checker {
         }
         .ok_or(Error::None {
             sexpr: varref.source().source_sexpr(),
-        })?)
+        })
     }
 
     fn check_constant(&mut self, constant: &tree::Constant) -> Result<Type, Error> {

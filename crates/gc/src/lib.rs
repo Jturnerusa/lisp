@@ -17,6 +17,7 @@ thread_local! {
     pub static HEAD: Cell<Option<NonNull<Inner<dyn Trace>>>> = Cell::new(None);
 }
 
+#[allow(clippy::missing_safety_doc)]
 pub unsafe trait Trace {
     unsafe fn root(&self);
     unsafe fn unroot(&self);

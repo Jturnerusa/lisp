@@ -383,6 +383,7 @@ pub struct GenSym {
     pub source: &'static Sexpr<'static>,
 }
 
+#[allow(clippy::new_without_default)]
 impl Compiler {
     pub fn new() -> Self {
         Self {
@@ -1011,6 +1012,7 @@ impl Ast {
 }
 
 impl Type {
+    #[allow(clippy::result_unit_err)]
     pub fn from_sexpr(sexpr: &Sexpr) -> Result<Self, ()> {
         Ok(match sexpr {
             Sexpr::List { list, .. } => Type::Composite(
@@ -1027,6 +1029,7 @@ impl Type {
 }
 
 impl Parameter {
+    #[allow(clippy::result_unit_err)]
     pub fn from_sexpr(sexpr: &Sexpr) -> Result<Self, ()> {
         Ok(match sexpr {
             Sexpr::List { list, .. } => {
@@ -1055,6 +1058,10 @@ impl Parameters {
             Parameters::Normal(params) => params.len(),
             Parameters::Rest(params, _) => params.len() + 1,
         }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 }
 

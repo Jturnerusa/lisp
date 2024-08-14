@@ -39,6 +39,7 @@ pub fn compile_file(
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn compile_source(
     source: &str,
     context: &str,
@@ -142,8 +143,6 @@ pub fn find_module(name: &Path) -> Option<Result<PathBuf, Box<dyn std::error::Er
                             return Some(Err(format!("failed to read dir entry: {e}").into()))
                         }
                     };
-
-                    dbg!(&entry.file_name());
 
                     if entry.path().as_path().file_stem()? == name {
                         return Some(Ok(entry.path()));

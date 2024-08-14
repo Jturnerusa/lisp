@@ -304,16 +304,13 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
     pub fn set_upvalue(&mut self, upvalue: usize) -> Result<(), Error> {
         let val = self.stack.pop().unwrap();
 
-        match &mut *self
+        *self
             .current_function
             .as_mut()
             .unwrap()
             .borrow_mut()
             .upvalues[upvalue]
-            .borrow_mut()
-        {
-            object => *object = val.into_object(),
-        }
+            .borrow_mut() = val.into_object();
 
         Ok(())
     }
@@ -889,6 +886,7 @@ impl<D: Clone> Local<D> {
     }
 }
 
+#[allow(clippy::new_without_default)]
 impl<T> OpCodeTable<T> {
     pub fn new() -> Self {
         Self {

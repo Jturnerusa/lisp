@@ -342,6 +342,7 @@ impl Il {
 }
 
 impl Parameter {
+    #[allow(clippy::result_unit_err)]
     pub fn from_ast(source: &Ast, parameter: &ast::Parameter) -> Result<Self, ()> {
         Ok(Self {
             source: source.clone(),
@@ -352,6 +353,7 @@ impl Parameter {
 }
 
 impl Parameters {
+    #[allow(clippy::result_unit_err)]
     pub fn from_ast(source: &Ast, parameters: &ast::Parameters) -> Result<Self, ()> {
         Ok(match parameters {
             ast::Parameters::Normal(params) => Parameters::Nary(
@@ -375,6 +377,7 @@ impl Parameters {
     }
 }
 
+#[allow(clippy::new_without_default)]
 impl Compiler {
     pub fn new() -> Self {
         Self {
@@ -490,7 +493,7 @@ impl Compiler {
         ast_compiler: &mut ast::Compiler,
     ) -> Result<Il, Error> {
         let arity = match &defmacro.parameters {
-            ast::Parameters::Normal(_) if defmacro.parameters.len() == 0 => Arity::Nullary,
+            ast::Parameters::Normal(_) if defmacro.parameters.is_empty() => Arity::Nullary,
             ast::Parameters::Normal(_) => Arity::Nary(defmacro.parameters.len()),
             ast::Parameters::Rest(..) => Arity::Variadic(defmacro.parameters.len() - 1),
         };
@@ -593,7 +596,7 @@ impl Compiler {
         ast_compiler: &mut ast::Compiler,
     ) -> Result<Il, Error> {
         let arity = match &lambda.parameters {
-            ast::Parameters::Normal(_) if lambda.parameters.len() == 0 => Arity::Nullary,
+            ast::Parameters::Normal(_) if lambda.parameters.is_empty() => Arity::Nullary,
             ast::Parameters::Normal(_) => Arity::Nary(lambda.parameters.len()),
             ast::Parameters::Rest(..) => Arity::Variadic(lambda.parameters.len() - 1),
         };
@@ -615,10 +618,7 @@ impl Compiler {
 
         let upvalues = self.environment.upvalues().collect::<Vec<UpValue>>();
 
-        let r#type = match lambda.r#type.clone() {
-            Some(t) => Some(t),
-            None => None,
-        };
+        let r#type = lambda.r#type.clone();
 
         self.environment.pop_scope();
 
@@ -685,7 +685,7 @@ impl Compiler {
     ) -> Result<Il, Error> {
         Ok(Il::Set(Set {
             source: source.clone(),
-            target: match self.environment.resolve(&set.target.as_str()) {
+            target: match self.environment.resolve(set.target.as_str()) {
                 Some(Variable::Local(index)) => VarRef::Local {
                     source: source.clone(),
                     name: set.target.clone(),

@@ -1,10 +1,7 @@
 use crate::{check_arity, check_type};
 use gc::Gc;
 use std::{fs::File, io::Read};
-use vm::{
-    object::{Type},
-    Error, Local, Object,
-};
+use vm::{object::Type, Error, Local, Object};
 
 pub fn print<D: Clone>(objects: &mut [Local<D>]) -> Result<Object<D>, Error> {
     check_arity!("print", 1, objects);

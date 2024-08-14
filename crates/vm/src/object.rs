@@ -400,6 +400,7 @@ unsafe impl<D> Trace for Cons<D> {
 }
 
 impl<D: Clone> Object<D> {
+    #[allow(clippy::result_unit_err)]
     pub fn print(&self, buffer: &mut String) -> Result<(), ()> {
         match self {
             Self::Box(object) => object.borrow().print(buffer)?,
@@ -419,6 +420,7 @@ impl<D: Clone> Object<D> {
 }
 
 impl<D: Clone> Cons<D> {
+    #[allow(clippy::result_unit_err)]
     pub fn print(&self, buffer: &mut String) -> Result<(), ()> {
         write!(buffer, "(").map_err(|_| ())?;
 

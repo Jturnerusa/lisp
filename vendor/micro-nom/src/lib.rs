@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+#![allow(dead_code, clippy::result_unit_err)]
 #![feature(impl_trait_in_assoc_type)]
 
 use std::ops::Range;
