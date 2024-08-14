@@ -578,7 +578,7 @@ impl Compiler {
         })?;
 
         let context: &'static _ = std::boxed::Box::leak(std::boxed::Box::new(
-            reader::Context::new(buff.as_str(), "macro-expansion"),
+            reader::Context::new(buff.as_str(), source.source_sexpr().context().display()),
         ));
         let mut reader = Reader::new(context);
         let sexpr: &'static _ =
