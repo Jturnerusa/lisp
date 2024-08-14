@@ -45,6 +45,7 @@ pub enum Type {
     Generic {
         name: String,
     },
+    TypeVar(usize),
 }
 
 #[derive(Clone, Debug)]
@@ -62,13 +63,14 @@ struct Environment {
 #[derive(Clone, Debug)]
 pub struct Checker {
     environments: Vec<Environment>,
+    vars: Vec<HashMap<usize, Type>>,
 }
 
 impl Type {
-    pub fn check(&self, other: &Self) -> bool {
+    pub fn check(&self, other: &Self, vars: &mut HashMap<usize, Type>) -> bool {
         match (self, other) {
-            (Type::List(a), Type::List(b)) if a.check(b) => true,
-            (Type::Cons(a, b), Type::Cons(c, d)) if a.check(c) && b.check(d) => true,
+            (Type::List(a), Type::List(b)) if a.check(b, vars) => true,
+            (Type::Cons(a, b), Type::Cons(c, d)) if a.check(c, vars) && b.check(d, vars) => true,
             (
                 Type::Function {
                     parameters: parameters_a,
@@ -81,8 +83,8 @@ impl Type {
             ) if parameters_a
                 .iter()
                 .zip(parameters_b.iter())
-                .all(|(a, b)| a.check(b))
-                && return_a.check(return_b) =>
+                .all(|(a, b)| a.check(b, vars))
+                && return_a.check(return_b, vars) =>
             {
                 true
             }
@@ -92,12 +94,28 @@ impl Type {
             (Type::Int, Type::Int) => true,
             (Type::Bool, Type::Bool) => true,
             (Type::Nil, Type::Nil) => true,
-            (Type::Union(a), Type::Union(b)) if a.iter().all(|x| b.iter().any(|y| x.check(y))) => {
+            (Type::Union(a), Type::Union(b))
+                if a.iter().all(|x| b.iter().any(|y| x.check(y, vars))) =>
+            {
                 true
             }
-            (Type::Union(a), b) if a.iter().any(|x| x.check(b)) => true,
-            (a, Type::Union(b)) if b.iter().any(|x| x.check(a)) => true,
+            (Type::Union(a), b) if a.iter().any(|x| x.check(b, vars)) => true,
+            (a, Type::Union(b)) if b.iter().any(|x| x.check(a, vars)) => true,
             (Type::Generic { name: a }, Type::Generic { name: b }) if a == b => true,
+            (Type::TypeVar(t), rhs) => match vars.get(t) {
+                Some(t) => t == rhs,
+                None => {
+                    vars.insert(*t, rhs.clone());
+                    true
+                }
+            },
+            (lhs, Type::TypeVar(t)) => match vars.get(t) {
+                Some(t) => t == lhs,
+                None => {
+                    vars.insert(*t, lhs.clone());
+                    true
+                }
+            },
             _ => false,
         }
     }
@@ -173,6 +191,34 @@ impl Type {
             && types.iter().filter(|t| t.is_list()).count() == 1
             && types.iter().filter(|t| t.is_nil()).count() == 1
     }
+
+    fn unify(&self, mapping: &mut HashMap<String, usize>) -> Type {
+        debug_assert!(!self.is_typevar());
+
+        match self {
+            Type::Generic { name } => match mapping.get(name) {
+                Some(t) => Type::TypeVar(*t),
+                None => {
+                    let t = rand::random::<usize>();
+                    mapping.insert(name.clone(), t);
+                    Type::TypeVar(t)
+                }
+            },
+            Type::List(inner) => Type::List(Box::new(inner.unify(mapping))),
+            Type::Cons(lhs, rhs) => {
+                Type::Cons(Box::new(lhs.unify(mapping)), Box::new(rhs.unify(mapping)))
+            }
+            Type::Function {
+                parameters,
+                r#return,
+            } => Type::Function {
+                parameters: parameters.iter().map(|p| p.unify(mapping)).collect(),
+                r#return: Box::new(r#return.unify(mapping)),
+            },
+            Type::Union(types) => Type::Union(types.iter().map(|t| t.unify(mapping)).collect()),
+            t => t.clone(),
+        }
+    }
 }
 
 impl fmt::Display for Type {
@@ -240,6 +286,7 @@ impl Checker {
     pub fn new() -> Self {
         Self {
             environments: vec![Environment::new()],
+            vars: vec![HashMap::new()],
         }
     }
 
@@ -281,6 +328,8 @@ impl Checker {
     }
 
     pub fn check_lambda(&mut self, lambda: &tree::Lambda) -> Result<Type, Error> {
+        self.vars.push(HashMap::new());
+
         let mut scope = Scope::new();
 
         let mut parameters = Vec::new();
@@ -330,7 +379,11 @@ impl Checker {
 
         self.environments.last_mut().unwrap().scopes.pop();
 
-        if r#return.check(&last_expr) {
+        let ret = r#return.check(&last_expr, self.vars.last_mut().unwrap());
+
+        self.vars.pop().unwrap();
+
+        if ret {
             Ok(Type::Function {
                 parameters,
                 r#return: Box::new(r#return),
@@ -447,7 +500,7 @@ impl Checker {
             });
         };
 
-        Ok(if then.check(&r#else) {
+        Ok(if then.check(&r#else, self.vars.last_mut().unwrap()) {
             then
         } else {
             Type::Union(BTreeSet::from([then, r#else]))
@@ -475,7 +528,7 @@ impl Checker {
         };
 
         for parameter in &parameters {
-            if !inner.check(parameter) {
+            if !inner.check(parameter, self.vars.last_mut().unwrap()) {
                 return Err(Error::Expected {
                     sexpr: apply.source.source_sexpr(),
                     expected: parameter.clone(),
@@ -515,7 +568,7 @@ impl Checker {
 
         let body = self.check(&def.body)?;
 
-        if parameter.check(&body) {
+        if parameter.check(&body, self.vars.last_mut().unwrap()) {
             Ok(parameter)
         } else {
             Err(Error::Expected {
@@ -531,7 +584,7 @@ impl Checker {
 
         let body = self.check(&set.body)?;
 
-        if parameter.check(&body) {
+        if parameter.check(&body, self.vars.last_mut().unwrap()) {
             Ok(parameter)
         } else {
             Err(Error::Expected {
@@ -543,18 +596,14 @@ impl Checker {
     }
 
     fn check_fncall(&mut self, fncall: &tree::FnCall) -> Result<Type, Error> {
-        let mut generics: HashMap<String, Type> = HashMap::new();
-
-        let function = self.check(&fncall.function)?;
+        let mut mapping = HashMap::new();
 
         let Type::Function {
             parameters,
             r#return,
-        } = function
+        } = self.check(&fncall.function)?.unify(&mut mapping)
         else {
-            return Err(Error::Unexpected {
-                sexpr: fncall.source.source_sexpr(),
-            });
+            todo!()
         };
 
         let args = fncall
@@ -563,45 +612,19 @@ impl Checker {
             .map(|arg| self.check(arg))
             .collect::<Result<Vec<_>, _>>()?;
 
-        if parameters.len() != args.len() {
-            return Err(Error::Arity {
-                sexpr: fncall.source.source_sexpr(),
-            });
-        }
-
-        for (a, b) in parameters.iter().zip(args.iter()) {
-            match a {
-                Type::Generic { name } => match generics.get(name.as_str()) {
-                    Some(t) => {
-                        if !t.check(b) {
-                            return Err(Error::Expected {
-                                sexpr: fncall.source.source_sexpr(),
-                                expected: t.clone(),
-                                received: b.clone(),
-                            });
-                        }
-                    }
-                    None => {
-                        generics.insert(name.clone(), b.clone());
-                    }
-                },
-                t => {
-                    if !t.check(b) {
-                        return Err(Error::Expected {
-                            sexpr: fncall.source.source_sexpr(),
-                            expected: a.clone(),
-                            received: b.clone(),
-                        });
-                    }
-                }
+        for (expected, received) in parameters.iter().zip(args.iter()) {
+            if expected.check(received, self.vars.last_mut().unwrap()) {
+                continue;
+            } else {
+                return Err(Error::Expected {
+                    sexpr: fncall.source.source_sexpr(),
+                    expected: expected.clone(),
+                    received: received.clone(),
+                });
             }
         }
 
-        if let Type::Generic { name } = *r#return {
-            Ok(generics.get(name.as_str()).cloned().unwrap())
-        } else {
-            Ok(*r#return)
-        }
+        Ok(*r#return)
     }
 
     fn check_arithmetic_op(&mut self, op: &tree::ArithmeticOperation) -> Result<Type, Error> {
@@ -622,7 +645,7 @@ impl Checker {
         let lhs = self.check(&op.lhs)?;
         let rhs = self.check(&op.rhs)?;
 
-        if lhs.check(&rhs) {
+        if lhs.check(&rhs, self.vars.last_mut().unwrap()) {
             Ok(Type::Bool)
         } else {
             Err(Error::Expected {
@@ -656,13 +679,17 @@ impl Checker {
         let rhs = self.check(&cons.rhs)?;
 
         Ok(match (lhs, rhs) {
-            (a, Type::List(inner)) if inner.check(&a) => Type::List(inner.clone()),
+            (a, Type::List(inner)) if inner.check(&a, self.vars.last_mut().unwrap()) => {
+                Type::List(inner.clone())
+            }
             (a, b)
                 if b.is_list_or_nil()
-                    && b.as_union()
-                        .unwrap()
-                        .iter()
-                        .any(|x| x.check(&Type::List(Box::new(a.clone())))) =>
+                    && b.as_union().unwrap().iter().any(|x| {
+                        x.check(
+                            &Type::List(Box::new(a.clone())),
+                            self.vars.last_mut().unwrap(),
+                        )
+                    }) =>
             {
                 Type::List(Box::new(
                     b.as_union()
