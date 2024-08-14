@@ -310,25 +310,23 @@ impl Checker {
 
         self.environments.last_mut().unwrap().scopes.push(scope);
 
-        let r#return = match lambda.r#type.as_ref().map(Type::from_ast) {
-            Some(Ok(t)) => t,
-            Some(Err(())) => {
-                return Err(Error::Invalid {
-                    sexpr: lambda.source.source_sexpr(),
-                })
-            }
+        for expr in lambda.body.iter().take(lambda.body.len() - 1) {
+            self.check(expr)?;
+        }
+
+        let last_expr = self.check(lambda.body.last().unwrap())?;
+
+        let r#return = match &lambda.r#type {
+            Some(ast::Type::Inferred) => last_expr.clone(),
+            Some(r#type) => Type::from_ast(r#type).map_err(|_| Error::Invalid {
+                sexpr: lambda.source.source_sexpr(),
+            })?,
             None => {
                 return Err(Error::None {
                     sexpr: lambda.source.source_sexpr(),
                 })
             }
         };
-
-        for expr in lambda.body.iter().take(lambda.body.len() - 1) {
-            self.check(expr)?;
-        }
-
-        let last_expr = self.check(lambda.body.last().unwrap())?;
 
         self.environments.last_mut().unwrap().scopes.pop();
 
