@@ -1,6 +1,7 @@
-use compiler::{ast, bytecode, tree};
+use compiler::{ast, tree, types};
 use core::fmt;
-use reader::{Reader, Sexpr};
+use lisp::compile_source;
+use reader::Sexpr;
 use vm::{OpCode, OpCodeTable, Vm};
 
 macro_rules! deftest {
@@ -33,68 +34,46 @@ fn disasm<D: fmt::Debug>(opcode_table: &OpCodeTable<D>, depth: usize) {
     }
 }
 
-fn compile(
-    input: &str,
-    context: &str,
-    tree_compiler: &mut tree::Compiler,
-    ast_compiler: &mut ast::Compiler,
-    opcode_table: &mut OpCodeTable<&'static Sexpr>,
-    vm: &mut Vm<&Sexpr>,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let context: &'static reader::Context = leak!(reader::Context::new(input, context));
-    let reader = Reader::new(context);
-
-    for sexpr in reader {
-        let sexpr: &'static _ = Box::leak(Box::new(sexpr?));
-
-        let ast: &'static _ = Box::leak(Box::new(ast_compiler.compile(sexpr)?));
-
-        let il: &'static _ = Box::leak(Box::new(tree_compiler.compile(
-            ast,
-            vm,
-            ast_compiler,
-            &|_| None,
-        )?));
-
-        bytecode::compile(il, opcode_table)?;
-    }
-
-    Ok(())
-}
-
 fn eval_with_bootstrap(
     input: &str,
 ) -> Result<Option<vm::Object<&'static Sexpr>>, Box<dyn std::error::Error>> {
     let mut tree_compiler = tree::Compiler::new();
     let mut ast_compiler = ast::Compiler::new();
+    let mut type_checker = types::Checker::new();
     let mut opcode_table = OpCodeTable::new();
     let mut vm = Vm::new();
 
-    compile(
+    compile_source(
         BOOTSTRAP_SOURCE,
         "bootstrap.lisp",
         &mut tree_compiler,
         &mut ast_compiler,
-        &mut opcode_table,
+        &mut type_checker,
+        false,
         &mut vm,
+        &mut opcode_table,
     )?;
 
-    compile(
+    compile_source(
         LIST_UTILS_SOURCE,
         "list.lisp",
         &mut tree_compiler,
         &mut ast_compiler,
-        &mut opcode_table,
+        &mut type_checker,
+        false,
         &mut vm,
+        &mut opcode_table,
     )?;
 
-    compile(
+    compile_source(
         input,
         "test input",
         &mut tree_compiler,
         &mut ast_compiler,
-        &mut opcode_table,
+        &mut type_checker,
+        false,
         &mut vm,
+        &mut opcode_table,
     )?;
 
     match vm.eval(&opcode_table) {
@@ -109,16 +88,19 @@ fn eval_with_bootstrap(
 fn eval(input: &'static str) -> Result<Option<vm::Object<&Sexpr>>, Box<dyn std::error::Error>> {
     let mut tree_compiler = tree::Compiler::new();
     let mut ast_compiler = ast::Compiler::new();
+    let mut type_checker = types::Checker::new();
     let mut opcode_table = OpCodeTable::new();
     let mut vm = Vm::new();
 
-    compile(
+    compile_source(
         input,
         "test input",
         &mut tree_compiler,
         &mut ast_compiler,
-        &mut opcode_table,
+        &mut type_checker,
+        false,
         &mut vm,
+        &mut opcode_table,
     )?;
 
     match vm.eval(&opcode_table) {
