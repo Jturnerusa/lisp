@@ -21,13 +21,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut vm: Vm<&Sexpr<'_>> = Vm::new();
     let mut opcode_table = OpCodeTable::new();
 
+    let ignore_types = &mut |_: &_, _: &mut _| Ok(());
+
     lisp::compile_source(
         BOOTSTRAP_SOURCE,
         "bootstrap.lisp",
         &mut tree_compiler,
         &mut ast_compiler,
         &mut type_checker,
-        false,
+        ignore_types,
         &mut vm,
         &mut opcode_table,
     )?;
@@ -38,7 +40,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         &mut tree_compiler,
         &mut ast_compiler,
         &mut type_checker,
-        false,
+        ignore_types,
         &mut vm,
         &mut opcode_table,
     )?;
@@ -53,7 +55,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             &mut tree_compiler,
             &mut ast_compiler,
             &mut type_checker,
-            false,
+            ignore_types,
             &mut vm,
             &mut opcode_table,
         )?;

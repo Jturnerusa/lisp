@@ -10,12 +10,14 @@ use std::path::{Path, PathBuf};
 use std::{env, error::Error};
 use vm::{OpCodeTable, Vm};
 
+type CheckTypes = dyn Fn(&Il, &mut compiler::types::Checker) -> Result<(), Box<dyn Error>>;
+
 pub fn compile_file(
     path: &Path,
     tree_compiler: &mut tree::Compiler,
     ast_compiler: &mut ast::Compiler,
     type_checker: &mut compiler::types::Checker,
-    check_types: bool,
+    check_types: &CheckTypes,
     vm: &mut Vm<&'static Sexpr<'static>>,
     opcode_table: &mut OpCodeTable<&'static Sexpr<'static>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -46,7 +48,7 @@ pub fn compile_source(
     tree_compiler: &mut tree::Compiler,
     ast_compiler: &mut ast::Compiler,
     type_checker: &mut compiler::types::Checker,
-    check_types: bool,
+    check_types: &CheckTypes,
     vm: &mut Vm<&'static Sexpr<'static>>,
     opcode_table: &mut OpCodeTable<&'static Sexpr<'static>>,
 ) -> Result<(), Box<dyn Error>> {
@@ -64,7 +66,7 @@ pub fn compile_source(
             for expr in &eval_when_compile.exprs {
                 let tree = tree_compiler.compile(expr, vm, ast_compiler)?;
 
-                type_check(type_checker, check_types, &tree)?;
+                check_types(&tree, type_checker)?;
 
                 bytecode::compile(&tree, &mut opcode_table)?;
             }
@@ -101,30 +103,12 @@ pub fn compile_source(
 
         let tree = tree_compiler.compile(&ast, vm, ast_compiler)?;
 
-        type_check(type_checker, check_types, &tree)?;
+        check_types(&tree, type_checker)?;
 
         bytecode::compile(&tree, opcode_table)?;
     }
 
     Ok(())
-}
-
-fn type_check(
-    type_checker: &mut compiler::types::Checker,
-    check_types: bool,
-    il: &Il,
-) -> Result<(), Box<dyn Error>> {
-    match &il {
-        tree::Il::Lambda(lambda) => match type_checker.check_lambda(lambda) {
-            Err(e) if check_types => Err(Box::new(e)),
-            _ => Ok(()),
-        },
-        tree::Il::Def(def) => match type_checker.check_def(def) {
-            Err(e) if check_types => Err(Box::new(e)),
-            _ => Ok(()),
-        },
-        _ => Ok(()),
-    }
 }
 
 pub fn find_module(name: &Path) -> Option<Result<PathBuf, Box<dyn std::error::Error>>> {

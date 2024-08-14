@@ -1,6 +1,7 @@
 #![feature(let_chains)]
 
-use std::{env, path::PathBuf};
+use compiler::tree::Il;
+use std::{env, error::Error, path::PathBuf};
 use vm::{OpCodeTable, Vm};
 
 static BOOTSTRAP_SOURCE: &str = include_str!(concat!(
@@ -28,7 +29,7 @@ fn main() {
         &mut tree_compiler,
         &mut ast_compiler,
         &mut type_checker,
-        true,
+        &mut check_defs as _,
         &mut vm,
         &mut opcode_table,
     )
@@ -40,13 +41,19 @@ fn main() {
         &mut tree_compiler,
         &mut ast_compiler,
         &mut type_checker,
-        false,
+        &mut check_defs as _,
         &mut vm,
         &mut opcode_table,
     )
     .unwrap();
 
-    for arg in env::args().skip(1).take_while(|s| s != "--") {
+    let check_type_function = if env::args().skip(1).any(|arg| arg == "--machine-readable") {
+        &report_errors as _
+    } else {
+        &die_on_error as _
+    };
+
+    for arg in env::args().skip(1).filter(|s| !s.starts_with("--")) {
         let path = PathBuf::from(arg);
 
         match lisp::compile_file(
@@ -54,7 +61,7 @@ fn main() {
             &mut tree_compiler,
             &mut ast_compiler,
             &mut type_checker,
-            true,
+            check_type_function,
             &mut vm,
             &mut opcode_table,
         ) {
@@ -63,6 +70,106 @@ fn main() {
                 eprintln!("{e}");
                 return;
             }
+        }
+    }
+}
+
+fn check_defs(il: &Il, type_checker: &mut compiler::types::Checker) -> Result<(), Box<dyn Error>> {
+    if let Il::Def(def) = il {
+        let _ = type_checker.check_def(def);
+    }
+    Ok(())
+}
+
+fn die_on_error(
+    il: &Il,
+    type_checker: &mut compiler::types::Checker,
+) -> Result<(), Box<dyn Error>> {
+    match il {
+        Il::Def(def) => match type_checker.check_def(def) {
+            Ok(_) => Ok(()),
+            Err(e) => Err(Box::new(e)),
+        },
+        Il::Lambda(lambda) => match type_checker.check_lambda(lambda) {
+            Ok(_) => Ok(()),
+            Err(e) => Err(Box::new(e)),
+        },
+        _ => Ok(()),
+    }
+}
+
+fn report_errors(
+    il: &Il,
+    type_checker: &mut compiler::types::Checker,
+) -> Result<(), Box<dyn Error>> {
+    match il {
+        Il::Def(def) => match type_checker.check_def(def) {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                report_error(&e);
+                Ok(())
+            }
+        },
+        Il::Lambda(lambda) => match type_checker.check_lambda(lambda) {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                report_error(&e);
+                Ok(())
+            }
+        },
+        _ => Ok(()),
+    }
+}
+
+fn report_error(error: &compiler::types::Error) {
+    match error {
+        compiler::types::Error::Expected {
+            expected,
+            received,
+            sexpr,
+        } => {
+            eprintln!(
+                "{}:{}:3 expected: {}, recieved: {}",
+                sexpr.context().display(),
+                sexpr.line_number(),
+                expected,
+                received
+            );
+        }
+        compiler::types::Error::Unexpected { sexpr } => {
+            eprintln!(
+                "{}:{}:3 unexpected type",
+                sexpr.context().display(),
+                sexpr.line_number(),
+            );
+        }
+        compiler::types::Error::Invalid { sexpr } => {
+            eprintln!(
+                "{}:{}:3 invalid type",
+                sexpr.context().display(),
+                sexpr.line_number(),
+            );
+        }
+        compiler::types::Error::Arity { sexpr } => {
+            eprintln!(
+                "{}:{}:3 incorrect arity",
+                sexpr.context().display(),
+                sexpr.line_number()
+            );
+        }
+        compiler::types::Error::Narrow { sexpr } => {
+            eprintln!(
+                "{}:{}:3 can't narrow non-union types",
+                sexpr.context().display(),
+                sexpr.line_number()
+            )
+        }
+        compiler::types::Error::None { sexpr } => {
+            eprintln!(
+                "{}:{}:0 unable to resolve type",
+                sexpr.context().display(),
+                sexpr.line_number()
+            )
         }
     }
 }

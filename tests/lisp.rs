@@ -25,6 +25,7 @@ fn eval_with_bootstrap(
     let mut type_checker = types::Checker::new();
     let mut opcode_table = OpCodeTable::new();
     let mut vm = Vm::new();
+    let ignore_types = &mut |_: &_, _: &mut _| Ok(());
 
     compile_source(
         BOOTSTRAP_SOURCE,
@@ -32,7 +33,7 @@ fn eval_with_bootstrap(
         &mut tree_compiler,
         &mut ast_compiler,
         &mut type_checker,
-        false,
+        ignore_types,
         &mut vm,
         &mut opcode_table,
     )?;
@@ -43,7 +44,7 @@ fn eval_with_bootstrap(
         &mut tree_compiler,
         &mut ast_compiler,
         &mut type_checker,
-        false,
+        ignore_types,
         &mut vm,
         &mut opcode_table,
     )?;
@@ -54,7 +55,7 @@ fn eval_with_bootstrap(
         &mut tree_compiler,
         &mut ast_compiler,
         &mut type_checker,
-        false,
+        ignore_types,
         &mut vm,
         &mut opcode_table,
     )?;
@@ -74,6 +75,7 @@ fn eval(input: &'static str) -> Result<Option<vm::Object<&Sexpr>>, Box<dyn std::
     let mut type_checker = types::Checker::new();
     let mut opcode_table = OpCodeTable::new();
     let mut vm = Vm::new();
+    let ignore_types = &mut |_: &_, _: &mut _| Ok(());
 
     compile_source(
         input,
@@ -81,7 +83,7 @@ fn eval(input: &'static str) -> Result<Option<vm::Object<&Sexpr>>, Box<dyn std::
         &mut tree_compiler,
         &mut ast_compiler,
         &mut type_checker,
-        false,
+        ignore_types,
         &mut vm,
         &mut opcode_table,
     )?;

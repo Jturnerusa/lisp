@@ -1,5 +1,6 @@
 #![feature(let_chains)]
 
+use compiler::tree::Il;
 use reader::Sexpr;
 use std::{env, ops::Range, path::PathBuf};
 use vm::{OpCodeTable, Vm};
@@ -23,13 +24,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     native_functions::load_module(&mut vm);
 
+    let ignore_types = &mut |_: &_, _: &mut _| Ok(());
+
     lisp::compile_source(
         NATIVE_DECL_SOURCE,
         "native.lisp",
         &mut tree_compiler,
         &mut ast_compiler,
         &mut type_checker,
-        false,
+        ignore_types,
         &mut vm,
         &mut opcode_table,
     )?;
@@ -40,7 +43,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         &mut tree_compiler,
         &mut ast_compiler,
         &mut type_checker,
-        false,
+        ignore_types,
         &mut vm,
         &mut opcode_table,
     )?;
@@ -53,7 +56,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             &mut tree_compiler,
             &mut ast_compiler,
             &mut type_checker,
-            false,
+            ignore_types,
             &mut vm,
             &mut opcode_table,
         )?;
