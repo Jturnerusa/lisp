@@ -213,6 +213,15 @@ impl<'context> Sexpr<'context> {
             | Self::Nil { span, .. } => span.clone(),
         }
     }
+
+    pub fn line_number(&self) -> usize {
+        self.context()
+            .source()
+            .bytes()
+            .take(self.span().start)
+            .filter(|b| *b == b'\n')
+            .count()
+    }
 }
 
 impl<'context> Sexpr<'context> {
