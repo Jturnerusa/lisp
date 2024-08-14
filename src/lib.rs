@@ -1,6 +1,7 @@
 use compiler::{
     ast::{self, Ast},
-    bytecode, tree,
+    bytecode,
+    tree::{self, Il},
 };
 use reader::{Reader, Sexpr};
 use std::fs::{self, File};
@@ -56,28 +57,51 @@ pub fn compile_source(
         let sexpr: &'static _ = Box::leak(Box::new(expr?));
         let ast = ast_compiler.compile(sexpr)?;
 
-        let il = tree_compiler.compile(&ast, vm, ast_compiler, &find_module as _)?;
+        if let Ast::EvalWhenCompile(eval_when_compile) = &ast {
+            let mut opcode_table = OpCodeTable::new();
 
-        if let Ast::Decl(decl) = &ast {
-            type_checker.decl(decl)?
+            for expr in &eval_when_compile.exprs {
+                let tree = tree_compiler.compile(expr, vm, ast_compiler, &find_module as _)?;
+
+                type_check(type_checker, check_types, &tree)?;
+
+                bytecode::compile(&tree, &mut opcode_table)?;
+            }
+
+            match vm.eval(&opcode_table) {
+                Ok(()) => (),
+                Err((error, sexpr)) => return Err(format!("{error}\n{sexpr}").into()),
+            }
+
+            continue;
         }
 
-        match &il {
-            tree::Il::Lambda(lambda) => match type_checker.check_lambda(lambda) {
-                Err(e) if check_types => return Err(Box::new(e)),
-                _ => (),
-            },
-            tree::Il::Def(def) => match type_checker.check_def(def) {
-                Err(e) if check_types => return Err(Box::new(e)),
-                _ => (),
-            },
-            _ => (),
-        }
+        let tree = tree_compiler.compile(&ast, vm, ast_compiler, &find_module as _)?;
 
-        bytecode::compile(&il, opcode_table)?;
+        type_check(type_checker, check_types, &tree)?;
+
+        bytecode::compile(&tree, opcode_table)?;
     }
 
     Ok(())
+}
+
+fn type_check(
+    type_checker: &mut compiler::types::Checker,
+    check_types: bool,
+    il: &Il,
+) -> Result<(), Box<dyn Error>> {
+    match &il {
+        tree::Il::Lambda(lambda) => match type_checker.check_lambda(lambda) {
+            Err(e) if check_types => Err(Box::new(e)),
+            _ => Ok(()),
+        },
+        tree::Il::Def(def) => match type_checker.check_def(def) {
+            Err(e) if check_types => Err(Box::new(e)),
+            _ => Ok(()),
+        },
+        _ => Ok(()),
+    }
 }
 
 pub fn find_module(name: &Path) -> Option<Result<PathBuf, Box<dyn std::error::Error>>> {

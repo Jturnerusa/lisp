@@ -405,9 +405,6 @@ impl Compiler {
             Ast::Require(require) => {
                 self.compile_require(ast, require, vm, ast_compiler, find_module)
             }
-            Ast::EvalWhenCompile(eval_when_compile) => {
-                self.eval_when_compile(ast, eval_when_compile, vm, ast_compiler, find_module)
-            }
             Ast::DefMacro(defmacro) => {
                 self.compile_defmacro(ast, defmacro, vm, ast_compiler, find_module)
             }
@@ -452,6 +449,7 @@ impl Compiler {
             Ast::GenSym(_) => self.compile_gensym(ast),
             Ast::Constant(constant) => self.compile_constant(ast, constant),
             Ast::Variable(variable) => self.compile_variable_reference(ast, variable),
+            _ => unreachable!(),
         }
     }
 
@@ -503,38 +501,6 @@ impl Compiler {
             let ast = ast_compiler.compile(sexpr)?;
             let il = self.compile(&ast, vm, ast_compiler, find_module)?;
             bytecode::compile(&il, &mut opcode_table)?;
-        }
-
-        vm.eval(&opcode_table)
-            .map_err(|(error, sexpr)| Error::VmWithDebug { error, sexpr })?;
-
-        Ok(Il::Constant(Constant::Nil {
-            source: source.clone(),
-        }))
-    }
-
-    fn eval_when_compile(
-        &mut self,
-        source: &Ast,
-        eval_when_compile: &ast::EvalWhenCompile,
-        vm: &mut Vm<&'static Sexpr<'static>>,
-        ast_compiler: &mut ast::Compiler,
-        find_module: &dyn Fn(
-            &Path,
-        )
-            -> Option<Result<PathBuf, std::boxed::Box<dyn std::error::Error>>>,
-    ) -> Result<Il, Error> {
-        let mut opcode_table = OpCodeTable::new();
-
-        for expr in &eval_when_compile.exprs {
-            let il = std::boxed::Box::leak(std::boxed::Box::new(self.compile(
-                expr,
-                vm,
-                ast_compiler,
-                find_module,
-            )?));
-
-            bytecode::compile(il, &mut opcode_table)?;
         }
 
         vm.eval(&opcode_table)
