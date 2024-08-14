@@ -74,6 +74,28 @@ pub fn compile_source(
             }
 
             continue;
+        } else if let Ast::Require(require) = &ast {
+            let path = PathBuf::from(require.module.as_str());
+
+            let module = match find_module(path.as_path()) {
+                Some(Ok(m)) => m,
+                Some(Err(e)) => return Err(e),
+                None => {
+                    return Err(format!("failed to find module {}", require.module.as_str()).into())
+                }
+            };
+
+            compile_file(
+                module.as_path(),
+                tree_compiler,
+                ast_compiler,
+                type_checker,
+                check_types,
+                vm,
+                opcode_table,
+            )?;
+
+            continue;
         }
 
         let tree = tree_compiler.compile(&ast, vm, ast_compiler, &find_module as _)?;

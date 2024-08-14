@@ -402,9 +402,6 @@ impl Compiler {
             -> Option<Result<PathBuf, std::boxed::Box<dyn std::error::Error>>>,
     ) -> Result<Il, Error> {
         match ast {
-            Ast::Require(require) => {
-                self.compile_require(ast, require, vm, ast_compiler, find_module)
-            }
             Ast::DefMacro(defmacro) => {
                 self.compile_defmacro(ast, defmacro, vm, ast_compiler, find_module)
             }
@@ -451,64 +448,6 @@ impl Compiler {
             Ast::Variable(variable) => self.compile_variable_reference(ast, variable),
             _ => unreachable!(),
         }
-    }
-
-    fn compile_require(
-        &mut self,
-        source: &Ast,
-        require: &ast::Require,
-        vm: &mut Vm<&'static Sexpr<'static>>,
-        ast_compiler: &mut ast::Compiler,
-        find_module: &dyn Fn(
-            &Path,
-        )
-            -> Option<Result<PathBuf, std::boxed::Box<dyn std::error::Error>>>,
-    ) -> Result<Il, Error> {
-        let module = PathBuf::from(require.module.as_str());
-
-        let path = match find_module(module.as_path()) {
-            Some(Ok(p)) => p,
-            Some(Err(e)) => {
-                return Err(Error::Il {
-                    ast: source.clone(),
-                    message: format!("{e}"),
-                })
-            }
-            None => {
-                return Err(Error::Il {
-                    ast: source.clone(),
-                    message: "failed to find module".to_string(),
-                })
-            }
-        };
-
-        let mut file = File::open(path.as_path())?;
-
-        let mut buff = String::new();
-
-        file.read_to_string(&mut buff)?;
-
-        let context: &'static _ = std::boxed::Box::leak(std::boxed::Box::new(
-            reader::Context::new(buff.as_str(), path.to_str().unwrap()),
-        ));
-
-        let reader = Reader::new(context);
-
-        let mut opcode_table = OpCodeTable::new();
-
-        for expr in reader {
-            let sexpr = std::boxed::Box::leak(std::boxed::Box::new(expr?));
-            let ast = ast_compiler.compile(sexpr)?;
-            let il = self.compile(&ast, vm, ast_compiler, find_module)?;
-            bytecode::compile(&il, &mut opcode_table)?;
-        }
-
-        vm.eval(&opcode_table)
-            .map_err(|(error, sexpr)| Error::VmWithDebug { error, sexpr })?;
-
-        Ok(Il::Constant(Constant::Nil {
-            source: source.clone(),
-        }))
     }
 
     fn compile_constant(&mut self, source: &Ast, constant: &ast::Constant) -> Result<Il, Error> {
