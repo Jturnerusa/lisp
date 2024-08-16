@@ -125,7 +125,7 @@ impl Type {
         Ok(match tree {
             ast::Type::Composite(types) => match types.as_slice() {
                 [ast::Type::Scalar(t), parameters @ .., ast::Type::Scalar(arrow), r#return]
-                    if t == "function" && arrow == "->" =>
+                    if t == "fn" && arrow == "->" =>
                 {
                     Type::Function {
                         parameters: parameters
