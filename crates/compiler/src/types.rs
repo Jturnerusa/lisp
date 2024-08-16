@@ -143,10 +143,10 @@ impl Type {
                         .map(Type::from_ast)
                         .collect::<Result<BTreeSet<_>, _>>()?,
                 ),
+                [ast::Type::Scalar(t), ast::Type::Scalar(name)] if t == "quote" => {
+                    Type::Generic { name: name.clone() }
+                }
                 _ => return Err(()),
-            },
-            ast::Type::Scalar(t) if t.starts_with('\'') => Type::Generic {
-                name: t[1..].to_string(),
             },
             ast::Type::Scalar(t) if t == "symbol" => Type::Symbol,
             ast::Type::Scalar(t) if t == "string" => Type::String,
