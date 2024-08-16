@@ -99,6 +99,8 @@ pub fn compile_source(
             )?;
 
             continue;
+        } else if let Ast::Decl(decl) = &ast {
+            type_checker.decl(decl).unwrap()
         }
 
         let tree = tree_compiler.compile(&ast, vm, ast_compiler)?;
