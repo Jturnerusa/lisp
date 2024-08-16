@@ -26,6 +26,8 @@ pub enum Error {
     Narrow { sexpr: &'static Sexpr<'static> },
     #[error("type error: unknown type alias: {sexpr:?}")]
     Alias { sexpr: &'static Sexpr<'static> },
+    #[error("type error: unknown global variable\n{sexpr:?}")]
+    Global { sexpr: &'static Sexpr<'static> },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, EnumAs, EnumIs)]
@@ -844,7 +846,9 @@ impl Checker {
                 .globals
                 .get(name)
                 .cloned()
-                .unwrap(),
+                .ok_or(Error::Global {
+                    sexpr: varref.source().source_sexpr(),
+                })?,
         }
         .ok_or(Error::None {
             sexpr: varref.source().source_sexpr(),

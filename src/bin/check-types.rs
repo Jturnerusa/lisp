@@ -178,5 +178,12 @@ fn report_error(error: &compiler::types::Error) {
                 sexpr.line_number()
             )
         }
+        compiler::types::Error::Global { sexpr } => {
+            eprintln!(
+                "{}:{}:3 unknown global variable",
+                sexpr.context().display(),
+                sexpr.line_number()
+            )
+        }
     }
 }
