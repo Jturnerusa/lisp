@@ -1,7 +1,7 @@
-(decl (print (function string -> nil)))
+(decl (print (fn string -> nil)))
 
-(decl (argv (function -> nil)))
+(decl (argv (fn -> nil)))
 
-(decl (read-file (function string -> nil)))
+(decl (read-file (fn string -> nil)))
 
-(decl (is-digit? (function string -> bool)))
+(decl (is-digit? (fn string -> bool)))
