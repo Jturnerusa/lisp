@@ -43,6 +43,7 @@ static BUILT_INS: &[&str] = &[
     "set-box!",
     "unbox",
     "gensym",
+    "let-type",
 ];
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -88,6 +89,7 @@ pub enum Ast {
     Constant(Constant),
     Assert(Assert),
     GenSym(GenSym),
+    LetType(LetType),
 }
 
 #[derive(Clone, Debug)]
@@ -383,6 +385,13 @@ pub struct GenSym {
     pub source: &'static Sexpr<'static>,
 }
 
+#[derive(Clone, Debug)]
+pub struct LetType {
+    pub source: &'static Sexpr<'static>,
+    pub name: String,
+    pub r#type: Type,
+}
+
 #[allow(clippy::new_without_default)]
 impl Compiler {
     pub fn new() -> Self {
@@ -505,6 +514,11 @@ impl Compiler {
                     }
                     [Symbol { symbol, .. }] if symbol == "gensym" => {
                         Ast::GenSym(GenSym { source: sexpr })
+                    }
+                    [Symbol { symbol, .. }, Symbol { symbol: name, .. }, r#type]
+                        if symbol == "let-type" =>
+                    {
+                        self.compile_let_type(sexpr, name.as_str(), r#type)?
                     }
                     _ => {
                         return Err(Error {
@@ -962,6 +976,22 @@ impl Compiler {
             map: std::boxed::Box::new(self.compile(map)?),
         }))
     }
+
+    fn compile_let_type(
+        &mut self,
+        source: &'static Sexpr<'static>,
+        name: &str,
+        r#type: &'static Sexpr<'static>,
+    ) -> Result<Ast, Error> {
+        Ok(Ast::LetType(LetType {
+            source,
+            name: name.to_string(),
+            r#type: Type::from_sexpr(r#type).map_err(|_| Error {
+                sexpr: source,
+                message: "failed to parse type".to_string(),
+            })?,
+        }))
+    }
 }
 
 impl fmt::Display for Error {
@@ -1001,6 +1031,7 @@ impl Ast {
             | Self::MapRetrieve(MapRetrieve { source, .. })
             | Self::MapItems(MapItems { source, .. })
             | Self::GenSym(GenSym { source })
+            | Self::LetType(LetType { source, .. })
             | Self::Variable(Variable { source, .. })
             | Self::Constant(Constant::String { source, .. })
             | Self::Constant(Constant::Char { source, .. })

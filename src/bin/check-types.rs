@@ -171,5 +171,12 @@ fn report_error(error: &compiler::types::Error) {
                 sexpr.line_number()
             )
         }
+        compiler::types::Error::Alias { sexpr } => {
+            eprintln!(
+                "{}:{}:3 unknown type alias",
+                sexpr.context().display(),
+                sexpr.line_number()
+            )
+        }
     }
 }

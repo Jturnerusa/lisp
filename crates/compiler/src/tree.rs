@@ -428,7 +428,7 @@ impl Compiler {
             Ast::GenSym(_) => self.compile_gensym(ast),
             Ast::Constant(constant) => self.compile_constant(ast, constant),
             Ast::Variable(variable) => self.compile_variable_reference(ast, variable),
-            _ => unreachable!(),
+            _ => unreachable!("{ast:?}"),
         }
     }
 

@@ -1,6 +1,6 @@
 use core::fmt;
 use reader::Sexpr;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use unwrap_enum::{EnumAs, EnumIs};
 use vm::UpValue;
 
@@ -24,6 +24,8 @@ pub enum Error {
     Invalid { sexpr: &'static Sexpr<'static> },
     #[error("type error: cant narrow non-union types\n{sexpr:?}")]
     Narrow { sexpr: &'static Sexpr<'static> },
+    #[error("type error: unknown type alias: {sexpr:?}")]
+    Alias { sexpr: &'static Sexpr<'static> },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, EnumAs, EnumIs)]
@@ -46,6 +48,7 @@ pub enum Type {
         name: String,
     },
     TypeVar(usize),
+    Alias(String),
 }
 
 #[derive(Clone, Debug)]
@@ -64,6 +67,7 @@ struct Environment {
 pub struct Checker {
     environments: Vec<Environment>,
     vars: Vec<HashMap<usize, Type>>,
+    aliases: HashMap<String, Type>,
 }
 
 impl Type {
@@ -116,8 +120,42 @@ impl Type {
                     true
                 }
             },
+            (Type::Alias(a), Type::Alias(b)) if a == b => true,
             _ => false,
         }
+    }
+
+    pub fn expand(
+        &self,
+        aliases: &HashMap<String, Type>,
+        seen: &mut HashSet<String>,
+    ) -> Option<Type> {
+        Some(match self {
+            Self::List(a) => Type::List(Box::new(a.expand(aliases, seen)?)),
+            Self::Cons(lhs, rhs) => Type::Cons(
+                Box::new(lhs.expand(aliases, seen)?),
+                Box::new(rhs.expand(aliases, seen)?),
+            ),
+            Self::Function {
+                parameters,
+                r#return,
+            } => Type::Function {
+                parameters: parameters
+                    .iter()
+                    .map(|p| p.expand(aliases, seen))
+                    .collect::<Option<_>>()?,
+                r#return: Box::new(r#return.expand(aliases, seen)?),
+            },
+            Self::Union(types) => Type::Union(
+                types
+                    .iter()
+                    .map(|p| p.expand(aliases, seen))
+                    .collect::<Option<_>>()?,
+            ),
+            Self::Alias(a) if seen.contains(a) => aliases.get(a).cloned()?,
+            Self::Alias(a) => aliases.get(a.as_str()).cloned()?,
+            t => t.clone(),
+        })
     }
 
     #[allow(clippy::result_unit_err)]
@@ -154,6 +192,7 @@ impl Type {
             ast::Type::Scalar(t) if t == "char" => Type::Char,
             ast::Type::Scalar(t) if t == "bool" => Type::Bool,
             ast::Type::Scalar(t) if t == "nil" => Type::Nil,
+            ast::Type::Scalar(t) => Type::Alias(t.clone()),
             _ => return Err(()),
         })
     }
@@ -287,7 +326,25 @@ impl Checker {
         Self {
             environments: vec![Environment::new()],
             vars: vec![HashMap::new()],
+            aliases: HashMap::new(),
         }
+    }
+
+    pub fn compare_types(
+        &mut self,
+        a: &Type,
+        b: &Type,
+        sexpr: &'static Sexpr<'static>,
+    ) -> Result<bool, Error> {
+        let a_expanded = a
+            .expand(&self.aliases, &mut HashSet::new())
+            .ok_or(Error::Alias { sexpr })?;
+
+        let b_expanded = b
+            .expand(&self.aliases, &mut HashSet::new())
+            .ok_or(Error::Alias { sexpr })?;
+
+        Ok(a_expanded.check(&b_expanded, self.vars.last_mut().unwrap()))
     }
 
     pub fn decl(&mut self, decl: &ast::Decl) -> Result<(), Error> {
@@ -302,6 +359,17 @@ impl Checker {
             .unwrap()
             .globals
             .insert(decl.parameter.name.clone(), Some(t));
+
+        Ok(())
+    }
+
+    pub fn create_type_alias(&mut self, let_type: &ast::LetType) -> Result<(), Error> {
+        self.aliases.insert(
+            let_type.name.clone(),
+            Type::from_ast(&let_type.r#type).map_err(|_| Error::Invalid {
+                sexpr: let_type.source,
+            })?,
+        );
 
         Ok(())
     }
@@ -379,7 +447,7 @@ impl Checker {
 
         self.environments.last_mut().unwrap().scopes.pop();
 
-        let ret = r#return.check(&last_expr, self.vars.last_mut().unwrap());
+        let ret = self.compare_types(&r#return, &last_expr, lambda.source.source_sexpr())?;
 
         self.vars.pop().unwrap();
 
@@ -500,11 +568,13 @@ impl Checker {
             });
         };
 
-        Ok(if then.check(&r#else, self.vars.last_mut().unwrap()) {
-            then
-        } else {
-            Type::Union(BTreeSet::from([then, r#else]))
-        })
+        Ok(
+            if self.compare_types(&then, &r#else, r#if.source.source_sexpr())? {
+                then
+            } else {
+                Type::Union(BTreeSet::from([then, r#else]))
+            },
+        )
     }
 
     fn check_apply(&mut self, apply: &tree::Apply) -> Result<Type, Error> {
@@ -528,7 +598,7 @@ impl Checker {
         };
 
         for parameter in &parameters {
-            if !inner.check(parameter, self.vars.last_mut().unwrap()) {
+            if !self.compare_types(&inner, parameter, apply.source.source_sexpr())? {
                 return Err(Error::Expected {
                     sexpr: apply.source.source_sexpr(),
                     expected: parameter.clone(),
@@ -568,7 +638,7 @@ impl Checker {
 
         let body = self.check(&def.body)?;
 
-        if parameter.check(&body, self.vars.last_mut().unwrap()) {
+        if self.compare_types(&parameter, &body, def.source.source_sexpr())? {
             Ok(parameter)
         } else {
             Err(Error::Expected {
@@ -584,7 +654,7 @@ impl Checker {
 
         let body = self.check(&set.body)?;
 
-        if parameter.check(&body, self.vars.last_mut().unwrap()) {
+        if self.compare_types(&parameter, &body, set.source.source_sexpr())? {
             Ok(parameter)
         } else {
             Err(Error::Expected {
@@ -601,7 +671,13 @@ impl Checker {
         let Type::Function {
             parameters,
             r#return,
-        } = self.check(&fncall.function)?.unify(&mut mapping)
+        } = self
+            .check(&fncall.function)?
+            .unify(&mut mapping)
+            .expand(&self.aliases, &mut HashSet::new())
+            .ok_or(Error::Alias {
+                sexpr: fncall.source.source_sexpr(),
+            })?
         else {
             todo!()
         };
@@ -613,7 +689,7 @@ impl Checker {
             .collect::<Result<Vec<_>, _>>()?;
 
         for (expected, received) in parameters.iter().zip(args.iter()) {
-            if expected.check(received, self.vars.last_mut().unwrap()) {
+            if self.compare_types(expected, received, fncall.source.source_sexpr())? {
                 continue;
             } else {
                 return Err(Error::Expected {
@@ -645,7 +721,7 @@ impl Checker {
         let lhs = self.check(&op.lhs)?;
         let rhs = self.check(&op.rhs)?;
 
-        if lhs.check(&rhs, self.vars.last_mut().unwrap()) {
+        if self.compare_types(&lhs, &rhs, op.source.source_sexpr())? {
             Ok(Type::Bool)
         } else {
             Err(Error::Expected {
@@ -679,16 +755,20 @@ impl Checker {
         let rhs = self.check(&cons.rhs)?;
 
         Ok(match (lhs, rhs) {
-            (a, Type::List(inner)) if inner.check(&a, self.vars.last_mut().unwrap()) => {
+            (a, Type::List(inner))
+                if self.compare_types(&a, &inner, cons.source.source_sexpr())? =>
+            {
                 Type::List(inner.clone())
             }
             (a, b)
                 if b.is_list_or_nil()
                     && b.as_union().unwrap().iter().any(|x| {
-                        x.check(
+                        self.compare_types(
+                            x,
                             &Type::List(Box::new(a.clone())),
-                            self.vars.last_mut().unwrap(),
+                            cons.source.source_sexpr(),
                         )
+                        .is_ok_and(|b| b)
                     }) =>
             {
                 Type::List(Box::new(
