@@ -720,6 +720,10 @@ impl Checker {
             .map(|arg| self.check(arg))
             .collect::<Result<Vec<_>, _>>()?;
 
+        if args.len() != parameters.len() {
+            todo!("handle arity error")
+        }
+
         for (expected, received) in parameters.iter().zip(args.iter()) {
             if self.compare_types(expected, received, fncall.source.source_sexpr())? {
                 continue;
