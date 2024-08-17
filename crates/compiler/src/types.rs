@@ -696,12 +696,18 @@ impl Checker {
 
     fn check_fncall(&mut self, fncall: &tree::FnCall) -> Result<Type, Error> {
         let function = self.check(&fncall.function)?;
+
+        if function.is_typevar() {
+            return Ok(function);
+        }
+
         let expanded = function
             .expand(&self.aliases, &mut HashSet::new())
             .ok_or(Error::Alias {
                 sexpr: fncall.source.source_sexpr(),
                 t: function,
             })?;
+
         let unified = expanded.unify(&mut HashMap::new());
 
         let Type::Function {
