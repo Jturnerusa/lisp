@@ -246,8 +246,6 @@ impl Type {
     }
 
     fn unify(&self, mapping: &mut HashMap<String, usize>) -> Type {
-        debug_assert!(!self.is_typevar());
-
         match self {
             Type::Generic { name } => match mapping.get(name) {
                 Some(t) => Type::TypeVar(*t),
