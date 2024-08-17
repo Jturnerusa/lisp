@@ -136,9 +136,9 @@ fn report_error(error: &compiler::types::Error) {
                 received
             );
         }
-        compiler::types::Error::Unexpected { sexpr } => {
+        compiler::types::Error::Unexpected { sexpr, t } => {
             eprintln!(
-                "{}:{}:3 unexpected type",
+                "{}:{}:3 unexpected type {t}",
                 sexpr.context().display(),
                 sexpr.line_number(),
             );
@@ -157,9 +157,9 @@ fn report_error(error: &compiler::types::Error) {
                 sexpr.line_number()
             );
         }
-        compiler::types::Error::Narrow { sexpr } => {
+        compiler::types::Error::Narrow { sexpr, t } => {
             eprintln!(
-                "{}:{}:3 can't narrow non-union types",
+                "{}:{}:3 can't narrow non-union type {t}",
                 sexpr.context().display(),
                 sexpr.line_number()
             )
@@ -171,9 +171,9 @@ fn report_error(error: &compiler::types::Error) {
                 sexpr.line_number()
             )
         }
-        compiler::types::Error::Alias { sexpr } => {
+        compiler::types::Error::Alias { sexpr, t } => {
             eprintln!(
-                "{}:{}:3 unknown type alias",
+                "{}:{}:3 unknown type alias {t}",
                 sexpr.context().display(),
                 sexpr.line_number()
             )

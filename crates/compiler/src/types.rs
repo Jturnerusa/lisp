@@ -14,18 +14,27 @@ pub enum Error {
         received: Type,
         sexpr: &'static Sexpr<'static>,
     },
-    #[error("type error: unexpected type for context\n{sexpr:?}")]
-    Unexpected { sexpr: &'static Sexpr<'static> },
+    #[error("type error: unexpected type {t} for context\n{sexpr:?}")]
+    Unexpected {
+        sexpr: &'static Sexpr<'static>,
+        t: Type,
+    },
     #[error("type error: wrong number of arguments\n{sexpr:?}")]
     Arity { sexpr: &'static Sexpr<'static> },
     #[error("type error: no type found for expression\n{sexpr:?}")]
     None { sexpr: &'static Sexpr<'static> },
     #[error("type error: invalid type annotation\n{sexpr:?}")]
     Invalid { sexpr: &'static Sexpr<'static> },
-    #[error("type error: cant narrow non-union types\n{sexpr:?}")]
-    Narrow { sexpr: &'static Sexpr<'static> },
-    #[error("type error: unknown type alias: {sexpr:?}")]
-    Alias { sexpr: &'static Sexpr<'static> },
+    #[error("type error: cant narrow non-union type {t}\n{sexpr:?}")]
+    Narrow {
+        sexpr: &'static Sexpr<'static>,
+        t: Type,
+    },
+    #[error("type error: unknown type alias {t}: {sexpr:?}")]
+    Alias {
+        sexpr: &'static Sexpr<'static>,
+        t: Type,
+    },
     #[error("type error: unknown global variable\n{sexpr:?}")]
     Global { sexpr: &'static Sexpr<'static> },
 }
@@ -340,11 +349,17 @@ impl Checker {
     ) -> Result<bool, Error> {
         let a_expanded = a
             .expand(&self.aliases, &mut HashSet::new())
-            .ok_or(Error::Alias { sexpr })?;
+            .ok_or(Error::Alias {
+                sexpr,
+                t: a.clone(),
+            })?;
 
         let b_expanded = b
             .expand(&self.aliases, &mut HashSet::new())
-            .ok_or(Error::Alias { sexpr })?;
+            .ok_or(Error::Alias {
+                sexpr,
+                t: b.clone(),
+            })?;
 
         Ok(a_expanded.check(&b_expanded, self.vars.last_mut().unwrap()))
     }
@@ -461,6 +476,7 @@ impl Checker {
         } else {
             Err(Error::Unexpected {
                 sexpr: lambda.source.source_sexpr(),
+                t: last_expr.clone(),
             })
         }
     }
@@ -513,6 +529,7 @@ impl Checker {
             let t = self.check_varref(varref)?;
             let narrowed = t.narrow(&is_type.r#type).map_err(|_| Error::Narrow {
                 sexpr: r#if.source.source_sexpr(),
+                t,
             })?;
 
             match varref {
@@ -590,12 +607,14 @@ impl Checker {
         else {
             return Err(Error::Unexpected {
                 sexpr: apply.source.source_sexpr(),
+                t: function,
             });
         };
 
         let Type::List(inner) = list else {
             return Err(Error::Unexpected {
                 sexpr: apply.source.source_sexpr(),
+                t: list,
             });
         };
 
@@ -709,11 +728,12 @@ impl Checker {
         let lhs = self.check(&op.lhs)?;
         let rhs = self.check(&op.rhs)?;
 
-        Ok(match (lhs, rhs) {
+        Ok(match (&lhs, &rhs) {
             (Type::Int, Type::Int) => Type::Int,
             _ => {
                 return Err(Error::Unexpected {
                     sexpr: op.source.source_sexpr(),
+                    t: lhs,
                 })
             }
         })
@@ -791,8 +811,9 @@ impl Checker {
     fn check_car(&mut self, car: &tree::Car) -> Result<Type, Error> {
         match self.check(&car.body)? {
             Type::List(inner) => Ok(*inner),
-            _ => Err(Error::Unexpected {
+            t => Err(Error::Unexpected {
                 sexpr: car.source.source_sexpr(),
+                t,
             }),
         }
     }
@@ -802,8 +823,9 @@ impl Checker {
 
         match t {
             Type::List(_) => Ok(Type::Union(BTreeSet::from([Type::Nil, t]))),
-            _ => Err(Error::Unexpected {
+            t => Err(Error::Unexpected {
                 sexpr: cdr.source.source_sexpr(),
+                t,
             }),
         }
     }
