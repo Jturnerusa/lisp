@@ -311,6 +311,8 @@ impl fmt::Display for Type {
                 Ok(())
             }
             Self::Generic { name } => write!(f, "generic({name})"),
+            Self::TypeVar(id) => write!(f, "typevar({id})"),
+            Self::Alias(a) => write!(f, "alias({a})"),
             _ => todo!(),
         }
     }
