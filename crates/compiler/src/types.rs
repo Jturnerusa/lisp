@@ -687,18 +687,19 @@ impl Checker {
     }
 
     fn check_fncall(&mut self, fncall: &tree::FnCall) -> Result<Type, Error> {
-        let mut mapping = HashMap::new();
+        let function = self.check(&fncall.function)?;
+        let expanded = function
+            .expand(&self.aliases, &mut HashSet::new())
+            .ok_or(Error::Alias {
+                sexpr: fncall.source.source_sexpr(),
+                t: function,
+            })?;
+        let unified = expanded.unify(&mut HashMap::new());
 
         let Type::Function {
             parameters,
             r#return,
-        } = self
-            .check(&fncall.function)?
-            .unify(&mut mapping)
-            .expand(&self.aliases, &mut HashSet::new())
-            .ok_or(Error::Alias {
-                sexpr: fncall.source.source_sexpr(),
-            })?
+        } = unified
         else {
             todo!()
         };
