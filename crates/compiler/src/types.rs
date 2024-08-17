@@ -77,7 +77,7 @@ struct Environment {
 #[derive(Clone, Debug)]
 pub struct Checker {
     environments: Vec<Environment>,
-    vars: Vec<HashMap<usize, Type>>,
+    vars: Option<HashMap<usize, Type>>,
     aliases: HashMap<String, Type>,
 }
 
@@ -336,7 +336,7 @@ impl Checker {
     pub fn new() -> Self {
         Self {
             environments: vec![Environment::new()],
-            vars: vec![HashMap::new()],
+            vars: None,
             aliases: HashMap::new(),
         }
     }
@@ -361,7 +361,10 @@ impl Checker {
                 t: b.clone(),
             })?;
 
-        Ok(a_expanded.check(&b_expanded, self.vars.last_mut().unwrap()))
+        Ok(a_expanded.check(
+            &b_expanded,
+            self.vars.as_mut().unwrap_or(&mut HashMap::new()),
+        ))
     }
 
     pub fn decl(&mut self, decl: &ast::Decl) -> Result<(), Error> {
@@ -413,7 +416,9 @@ impl Checker {
     }
 
     pub fn check_lambda(&mut self, lambda: &tree::Lambda) -> Result<Type, Error> {
-        self.vars.push(HashMap::new());
+        if self.vars.is_none() {
+            self.vars = Some(HashMap::new());
+        }
 
         let mut scope = Scope::new();
 
@@ -466,7 +471,7 @@ impl Checker {
 
         let ret = self.compare_types(&r#return, &last_expr, lambda.source.source_sexpr())?;
 
-        self.vars.pop().unwrap();
+        let _ = self.vars.take();
 
         if ret {
             Ok(Type::Function {
