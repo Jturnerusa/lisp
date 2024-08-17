@@ -163,8 +163,11 @@ impl Type {
                     .map(|p| p.expand(aliases, seen))
                     .collect::<Option<_>>()?,
             ),
-            Self::Alias(a) if seen.contains(a) => aliases.get(a).cloned()?,
-            Self::Alias(a) => aliases.get(a.as_str()).cloned()?,
+            Self::Alias(a) if seen.contains(a) => Self::Alias(a.clone()),
+            Self::Alias(a) => {
+                seen.insert(a.clone());
+                aliases.get(a.as_str()).cloned()?
+            }
             t => t.clone(),
         })
     }
