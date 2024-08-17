@@ -117,15 +117,15 @@ impl Type {
             (Type::Union(a), b) if a.iter().any(|x| x.check(b, vars)) => true,
             (a, Type::Union(b)) if b.iter().any(|x| x.check(a, vars)) => true,
             (Type::Generic { name: a }, Type::Generic { name: b }) if a == b => true,
-            (Type::TypeVar(t), rhs) => match vars.get(t) {
-                Some(t) => t == rhs,
+            (Type::TypeVar(t), rhs) => match vars.get(t).cloned() {
+                Some(t) => t.check(rhs, vars),
                 None => {
                     vars.insert(*t, rhs.clone());
                     true
                 }
             },
-            (lhs, Type::TypeVar(t)) => match vars.get(t) {
-                Some(t) => t == lhs,
+            (lhs, Type::TypeVar(t)) => match vars.get(t).cloned() {
+                Some(t) => t.check(lhs, vars),
                 None => {
                     vars.insert(*t, lhs.clone());
                     true
