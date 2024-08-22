@@ -89,12 +89,7 @@
                             (cons (car (car lists))
                                   (apply append (cdr lists)))
                             (cons (car (car lists))
-                                  (apply append (cons (cdr (car lists)) (cdr lists)))))))))
-
-  (def Z (lambda (f)
-           ((lambda (g) (g g)) (lambda (g)
-                                 (f (lambda (&rest args)
-                                      (apply (g g) args))))))))
+                                  (apply append (cons (cdr (car lists)) (cdr lists))))))))))
 
 (defmacro progn (&rest body)
   (list (cons 'lambda (cons '() body))))
@@ -145,11 +140,17 @@
                               (list 'list (list 'quote expr)))))
                      exprs)))
 
+;; This impl is a temporary solution.
+;; This can be more cleanly implemented using the Z combinator, but
+;; this lisps type system is not yet capable of expressing Z.
 (defmacro named-let (name bindings &rest body)
-  `(let ((,name (Z (lambda (,name)
-                     (lambda ,(map car bindings)
-                       ,@body)))))
-     (,name ,@(map cadr bindings))))
+  (let ((tmp (gensym)))
+    `(let* ((,name nil)
+            (,tmp (lambda ,(map car bindings)
+                     ,@body)))
+       (set! ,name ,tmp)
+       (assert (function? ,name))
+       (,name ,@(map cadr bindings)))))
 
 (defmacro if-let* (bindings then else)
   `(let ((,(caar bindings) ,(car (cdr (car bindings)))))
