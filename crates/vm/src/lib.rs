@@ -332,8 +332,11 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
     pub fn create_upvalue(&mut self, upvalue: UpValue) -> Result<(), Error> {
         let val = match upvalue {
             UpValue::Local(i) => {
-                let val = self.stack[self.bp + i].clone().into_object();
-                let gc = Gc::new(GcCell::new(val));
+                let val = self.stack[self.bp + i].clone();
+                let gc = match val {
+                    Local::Value(inner) => Gc::new(GcCell::new(inner)),
+                    Local::UpValue(inner) => inner,
+                };
                 self.stack[self.bp + i] = Local::UpValue(gc.clone());
                 gc
             }
