@@ -102,6 +102,8 @@ pub fn compile_source(
         } else if let Ast::Decl(decl) = &ast {
             type_checker.decl(decl).unwrap();
 
+            let _ = tree_compiler.compile(&ast, vm, ast_compiler)?;
+
             continue;
         } else if let Ast::LetType(let_type) = &ast {
             type_checker.create_type_alias(let_type)?;
