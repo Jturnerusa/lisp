@@ -285,7 +285,9 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
         let i = self.bp + local;
         match &mut self.stack[i] {
             Local::Value(Object::Box(object)) => *object.borrow_mut() = val.clone().into_object(),
-            Local::Value(_) => self.stack[i] = val.clone(),
+            Local::Value(inner) => {
+                *inner = val.clone().into_object();
+            }
             Local::UpValue(inner) => {
                 *inner.borrow_mut() = val.clone().into_object();
             }
