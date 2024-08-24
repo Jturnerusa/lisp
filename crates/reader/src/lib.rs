@@ -1,13 +1,13 @@
 use core::fmt;
 use logos::{Lexer, Logos};
-use std::{cmp::Ordering, ops::Range};
+use std::cmp::Ordering;
 use thiserror::Error;
 use unwrap_enum::EnumIs;
 
 #[derive(Clone, Error)]
-pub enum Error<'a> {
+pub enum Error {
     #[error("lexer error: remaining input: {0}")]
-    Lexer(&'a str),
+    Lexer(String),
 
     #[error("unbalanced parens")]
     UnbalancedParens,
@@ -157,7 +157,7 @@ impl Sexpr {
 }
 
 impl<'src> Iterator for Reader<'src> {
-    type Item = Result<Sexpr, Error<'src>>;
+    type Item = Result<Sexpr, Error>;
     fn next(&mut self) -> Option<Self::Item> {
         read(&mut self.lexer, self.file_id)
     }
@@ -188,28 +188,28 @@ impl fmt::Display for Sexpr {
     }
 }
 
-fn read<'src>(lexer: &mut Lexer<'src, Token>, file_id: u64) -> Option<Result<Sexpr, Error<'src>>> {
+fn read<'src>(lexer: &mut Lexer<'src, Token>, file_id: u64) -> Option<Result<Sexpr, Error>> {
     Some(Ok(match lexer.next()? {
         Ok(Token::LeftParen) => match read_list(lexer, file_id) {
             Ok(sexpr) => sexpr,
-            Err(_) => return Some(Err(Error::Lexer(lexer.remainder()))),
+            Err(_) => return Some(Err(Error::Lexer(lexer.remainder().to_string()))),
         },
         Ok(Token::RightParen) => return Some(Err(Error::UnbalancedParens)),
         Ok(Token::Quote) => match expand_macro(lexer, file_id, Macro::Quote) {
             Ok(sexpr) => sexpr,
-            Err(_) => return Some(Err(Error::Lexer(lexer.remainder()))),
+            Err(_) => return Some(Err(Error::Lexer(lexer.remainder().to_string()))),
         },
         Ok(Token::QuasiQuote) => match expand_macro(lexer, file_id, Macro::QuasiQuote) {
             Ok(sexpr) => sexpr,
-            Err(_) => return Some(Err(Error::Lexer(lexer.remainder()))),
+            Err(_) => return Some(Err(Error::Lexer(lexer.remainder().to_string()))),
         },
         Ok(Token::UnQuote) => match expand_macro(lexer, file_id, Macro::UnQuote) {
             Ok(sexpr) => sexpr,
-            Err(_) => return Some(Err(Error::Lexer(lexer.remainder()))),
+            Err(_) => return Some(Err(Error::Lexer(lexer.remainder().to_string()))),
         },
         Ok(Token::Splice) => match expand_macro(lexer, file_id, Macro::Splice) {
             Ok(sexpr) => sexpr,
-            Err(_) => return Some(Err(Error::Lexer(lexer.remainder()))),
+            Err(_) => return Some(Err(Error::Lexer(lexer.remainder().to_string()))),
         },
         Ok(Token::Symbol) => Sexpr::Symbol {
             symbol: lexer.slice().to_string(),
@@ -266,11 +266,11 @@ fn read<'src>(lexer: &mut Lexer<'src, Token>, file_id: u64) -> Option<Result<Sex
                 stop: lexer.span().end,
             },
         },
-        Err(_) => return Some(Err(Error::Lexer(lexer.remainder()))),
+        Err(_) => return Some(Err(Error::Lexer(lexer.remainder().to_string()))),
     }))
 }
 
-fn read_list<'src>(lexer: &mut Lexer<'src, Token>, file_id: u64) -> Result<Sexpr, Error<'src>> {
+fn read_list<'src>(lexer: &mut Lexer<'src, Token>, file_id: u64) -> Result<Sexpr, Error> {
     let mut list = Vec::new();
 
     loop {
@@ -356,7 +356,7 @@ fn read_list<'src>(lexer: &mut Lexer<'src, Token>, file_id: u64) -> Result<Sexpr
                     stop: lexer.span().end,
                 },
             }),
-            Some(Err(_)) => return Err(Error::Lexer(lexer.remainder())),
+            Some(Err(_)) => return Err(Error::Lexer(lexer.remainder().to_string())),
             None => return Err(Error::UnExpectedEof),
         }
     }
@@ -366,7 +366,7 @@ fn expand_macro<'src>(
     lexer: &mut Lexer<'src, Token>,
     file_id: u64,
     r#macro: Macro,
-) -> Result<Sexpr, Error<'src>> {
+) -> Result<Sexpr, Error> {
     let span = FileSpan {
         id: file_id,
         start: lexer.span().start,
@@ -381,12 +381,12 @@ fn expand_macro<'src>(
             Macro::Splice => "unquote-splice",
         }
         .to_string(),
-        span: span.clone(),
+        span,
     };
 
     let body = match read(lexer, file_id) {
         Some(Ok(sexpr)) => sexpr,
-        Some(Err(_)) => return Err(Error::Lexer(lexer.remainder())),
+        Some(Err(_)) => return Err(Error::Lexer(lexer.remainder().to_string())),
         None => return Err(Error::UnExpectedEof),
     };
 
@@ -415,7 +415,7 @@ impl PartialOrd for Sexpr {
     }
 }
 
-impl<'src> fmt::Debug for Error<'src> {
+impl fmt::Debug for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Lexer(remainder) => {
