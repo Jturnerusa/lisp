@@ -1,7 +1,7 @@
 use core::fmt;
 use std::collections::HashSet;
 
-use reader::Sexpr;
+use reader::{FileSpan, Sexpr};
 use unwrap_enum::{EnumAs, EnumIs};
 
 static BUILT_INS: &[&str] = &[
@@ -48,7 +48,7 @@ static BUILT_INS: &[&str] = &[
 
 #[derive(Clone, Debug, thiserror::Error)]
 pub struct Error {
-    sexpr: &'static Sexpr<'static>,
+    span: FileSpan,
     message: String,
 }
 
@@ -94,37 +94,23 @@ pub enum Ast {
 
 #[derive(Clone, Debug)]
 pub struct EvalWhenCompile {
-    pub source: &'static Sexpr<'static>,
+    pub span: FileSpan,
     pub exprs: Vec<Ast>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Variable {
-    pub source: &'static Sexpr<'static>,
+    pub span: FileSpan,
     pub name: String,
 }
 
 #[derive(Clone, Debug)]
 pub enum Constant {
-    String {
-        source: &'static Sexpr<'static>,
-        string: String,
-    },
-    Char {
-        source: &'static Sexpr<'static>,
-        char: char,
-    },
-    Int {
-        source: &'static Sexpr<'static>,
-        int: i64,
-    },
-    Bool {
-        source: &'static Sexpr<'static>,
-        bool: bool,
-    },
-    Nil {
-        source: &'static Sexpr<'static>,
-    },
+    String { span: FileSpan, string: String },
+    Char { span: FileSpan, char: char },
+    Int { span: FileSpan, int: i64 },
+    Bool { span: FileSpan, bool: bool },
+    Nil { span: FileSpan },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -148,13 +134,13 @@ pub enum Parameters {
 
 #[derive(Clone, Debug)]
 pub struct Require {
-    pub source: &'static Sexpr<'static>,
+    pub span: FileSpan,
     pub module: String,
 }
 
 #[derive(Clone, Debug)]
 pub struct DefMacro {
-    pub source: &'static Sexpr<'static>,
+    pub span: FileSpan,
     pub name: String,
     pub parameters: Parameters,
     pub body: Vec<Ast>,
@@ -162,7 +148,7 @@ pub struct DefMacro {
 
 #[derive(Clone, Debug)]
 pub struct Lambda {
-    pub source: &'static Sexpr<'static>,
+    pub span: FileSpan,
     pub r#type: Option<Type>,
     pub parameters: Parameters,
     pub body: Vec<Ast>,
@@ -170,46 +156,46 @@ pub struct Lambda {
 
 #[derive(Clone, Debug)]
 pub struct Def {
-    pub source: &'static Sexpr<'static>,
+    pub span: FileSpan,
     pub parameter: Parameter,
     pub body: std::boxed::Box<Ast>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Decl {
-    pub source: &'static Sexpr<'static>,
+    pub span: FileSpan,
     pub parameter: Parameter,
 }
 
 #[derive(Clone, Debug)]
 pub struct Set {
-    pub source: &'static Sexpr<'static>,
+    pub span: FileSpan,
     pub target: String,
     pub body: std::boxed::Box<Ast>,
 }
 
 #[derive(Clone, Debug)]
 pub struct SetBox {
-    pub source: &'static Sexpr<'static>,
+    pub span: FileSpan,
     pub target: std::boxed::Box<Ast>,
     pub body: std::boxed::Box<Ast>,
 }
 
 #[derive(Clone, Debug)]
 pub struct UnBox {
-    pub source: &'static Sexpr<'static>,
+    pub span: FileSpan,
     pub body: std::boxed::Box<Ast>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Box {
-    pub source: &'static Sexpr<'static>,
+    pub span: FileSpan,
     pub body: std::boxed::Box<Ast>,
 }
 
 #[derive(Clone, Debug)]
 pub struct If {
-    pub source: &'static Sexpr<'static>,
+    pub span: FileSpan,
     pub predicate: std::boxed::Box<Ast>,
     pub then: std::boxed::Box<Ast>,
     pub r#else: std::boxed::Box<Ast>,
@@ -217,7 +203,7 @@ pub struct If {
 
 #[derive(Clone, Debug)]
 pub struct Apply {
-    pub source: &'static Sexpr<'static>,
+    pub span: FileSpan,
     pub function: std::boxed::Box<Ast>,
     pub list: std::boxed::Box<Ast>,
 }
@@ -232,7 +218,7 @@ pub enum BinaryArithmeticOperator {
 
 #[derive(Clone, Debug)]
 pub struct BinaryArithmeticOperation {
-    pub source: &'static Sexpr<'static>,
+    pub span: FileSpan,
     pub operator: BinaryArithmeticOperator,
     pub lhs: std::boxed::Box<Ast>,
     pub rhs: std::boxed::Box<Ast>,
@@ -247,7 +233,7 @@ pub enum ComparisonOperator {
 
 #[derive(Clone, Debug)]
 pub struct ComparisonOperation {
-    pub source: &'static Sexpr<'static>,
+    pub span: FileSpan,
     pub operator: ComparisonOperator,
     pub lhs: std::boxed::Box<Ast>,
     pub rhs: std::boxed::Box<Ast>,
@@ -255,46 +241,46 @@ pub struct ComparisonOperation {
 
 #[derive(Clone, Debug)]
 pub struct List {
-    pub source: &'static Sexpr<'static>,
+    pub span: FileSpan,
     pub exprs: Vec<Ast>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Cons {
-    pub source: &'static Sexpr<'static>,
+    pub span: FileSpan,
     pub lhs: std::boxed::Box<Ast>,
     pub rhs: std::boxed::Box<Ast>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Car {
-    pub source: &'static Sexpr<'static>,
+    pub span: FileSpan,
     pub body: std::boxed::Box<Ast>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Cdr {
-    pub source: &'static Sexpr<'static>,
+    pub span: FileSpan,
     pub body: std::boxed::Box<Ast>,
 }
 
 #[derive(Clone, Debug)]
 pub struct FnCall {
-    pub source: &'static Sexpr<'static>,
+    pub span: FileSpan,
     pub function: std::boxed::Box<Ast>,
     pub exprs: Vec<Ast>,
 }
 
 #[derive(Clone, Debug)]
 pub struct MacroCall {
-    pub source: &'static Sexpr<'static>,
+    pub span: FileSpan,
     pub r#macro: String,
     pub args: Vec<Quoted>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Quote {
-    pub source: &'static Sexpr<'static>,
+    pub span: FileSpan,
     pub body: Quoted,
 }
 
@@ -312,25 +298,25 @@ pub enum IsTypeParameter {
 
 #[derive(Clone, Debug)]
 pub struct IsType {
-    pub source: &'static Sexpr<'static>,
+    pub span: FileSpan,
     pub parameter: IsTypeParameter,
     pub body: std::boxed::Box<Ast>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Assert {
-    pub source: &'static Sexpr<'static>,
+    pub span: FileSpan,
     pub body: std::boxed::Box<Ast>,
 }
 
 #[derive(Clone, Debug)]
 pub struct MapCreate {
-    pub source: &'static Sexpr<'static>,
+    pub span: FileSpan,
 }
 
 #[derive(Clone, Debug)]
 pub struct MapInsert {
-    pub source: &'static Sexpr<'static>,
+    pub span: FileSpan,
     pub map: std::boxed::Box<Ast>,
     pub key: std::boxed::Box<Ast>,
     pub value: std::boxed::Box<Ast>,
@@ -338,56 +324,36 @@ pub struct MapInsert {
 
 #[derive(Clone, Debug)]
 pub struct MapRetrieve {
-    pub source: &'static Sexpr<'static>,
+    pub span: FileSpan,
     pub map: std::boxed::Box<Ast>,
     pub key: std::boxed::Box<Ast>,
 }
 
 #[derive(Clone, Debug)]
 pub struct MapItems {
-    pub source: &'static Sexpr<'static>,
+    pub span: FileSpan,
     pub map: std::boxed::Box<Ast>,
 }
 
 #[derive(Clone, Debug)]
 pub enum Quoted {
-    List {
-        source: &'static Sexpr<'static>,
-        list: Vec<Quoted>,
-    },
-    Symbol {
-        source: &'static Sexpr<'static>,
-        symbol: String,
-    },
-    String {
-        source: &'static Sexpr<'static>,
-        string: String,
-    },
-    Char {
-        source: &'static Sexpr<'static>,
-        char: char,
-    },
-    Int {
-        source: &'static Sexpr<'static>,
-        int: i64,
-    },
-    Bool {
-        source: &'static Sexpr<'static>,
-        bool: bool,
-    },
-    Nil {
-        source: &'static Sexpr<'static>,
-    },
+    List { span: FileSpan, list: Vec<Quoted> },
+    Symbol { span: FileSpan, symbol: String },
+    String { span: FileSpan, string: String },
+    Char { span: FileSpan, char: char },
+    Int { span: FileSpan, int: i64 },
+    Bool { span: FileSpan, bool: bool },
+    Nil { span: FileSpan },
 }
 
 #[derive(Clone, Debug)]
 pub struct GenSym {
-    pub source: &'static Sexpr<'static>,
+    pub span: FileSpan,
 }
 
 #[derive(Clone, Debug)]
 pub struct LetType {
-    pub source: &'static Sexpr<'static>,
+    pub span: FileSpan,
     pub name: String,
     pub r#type: Type,
 }
@@ -400,7 +366,7 @@ impl Compiler {
         }
     }
 
-    pub fn compile(&mut self, sexpr: &'static Sexpr<'static>) -> Result<Ast, Error> {
+    pub fn compile(&mut self, sexpr: &Sexpr) -> Result<Ast, Error> {
         use Sexpr::*;
         Ok(match sexpr {
             Sexpr::List { list, .. }
@@ -501,7 +467,7 @@ impl Compiler {
                         self.compile_assert(sexpr, body)?
                     }
                     [Symbol { symbol, .. }] if symbol == "map-create" => {
-                        Ast::MapCreate(MapCreate { source: sexpr })
+                        Ast::MapCreate(MapCreate { span: sexpr.span() })
                     }
                     [Symbol { symbol, .. }, map, key, value] if symbol == "map-insert!" => {
                         self.compile_map_insert(sexpr, map, key, value)?
@@ -513,7 +479,7 @@ impl Compiler {
                         self.compile_map_items(sexpr, map)?
                     }
                     [Symbol { symbol, .. }] if symbol == "gensym" => {
-                        Ast::GenSym(GenSym { source: sexpr })
+                        Ast::GenSym(GenSym { span: sexpr.span() })
                     }
                     [Symbol { symbol, .. }, Symbol { symbol: name, .. }, r#type]
                         if symbol == "let-type" =>
@@ -522,7 +488,7 @@ impl Compiler {
                     }
                     _ => {
                         return Err(Error {
-                            sexpr,
+                            span: sexpr.span(),
                             message: "invalid expression".to_string(),
                         })
                     }
@@ -544,48 +510,40 @@ impl Compiler {
                 self.compile_fncall(sexpr, list.first().unwrap(), &list.as_slice()[1..])?
             }
             Symbol { symbol, .. } => Ast::Variable(Variable {
-                source: sexpr,
+                span: sexpr.span(),
                 name: symbol.clone(),
             }),
             String { string, .. } => Ast::Constant(Constant::String {
-                source: sexpr,
+                span: sexpr.span(),
                 string: string.clone(),
             }),
             Char { char, .. } => Ast::Constant(Constant::Char {
-                source: sexpr,
+                span: sexpr.span(),
                 char: *char,
             }),
             Int { int, .. } => Ast::Constant(Constant::Int {
-                source: sexpr,
+                span: sexpr.span(),
                 int: *int,
             }),
             Bool { bool, .. } => Ast::Constant(Constant::Bool {
-                source: sexpr,
+                span: sexpr.span(),
                 bool: *bool,
             }),
-            Nil { .. } => Ast::Constant(Constant::Nil { source: sexpr }),
+            Nil { .. } => Ast::Constant(Constant::Nil { span: sexpr.span() }),
             _ => unreachable!(),
         })
     }
 
-    fn compile_require(
-        &mut self,
-        source: &'static Sexpr<'static>,
-        module: &str,
-    ) -> Result<Ast, Error> {
+    fn compile_require(&mut self, sexpr: &Sexpr, module: &str) -> Result<Ast, Error> {
         Ok(Ast::Require(Require {
-            source,
+            span: sexpr.span(),
             module: module.to_string(),
         }))
     }
 
-    fn compile_eval_when_compile(
-        &mut self,
-        source: &'static Sexpr<'static>,
-        args: &'static [Sexpr<'static>],
-    ) -> Result<Ast, Error> {
+    fn compile_eval_when_compile(&mut self, sexpr: &Sexpr, args: &[Sexpr]) -> Result<Ast, Error> {
         Ok(Ast::EvalWhenCompile(EvalWhenCompile {
-            source,
+            span: sexpr.span(),
             exprs: args
                 .iter()
                 .map(|arg| self.compile(arg))
@@ -595,27 +553,27 @@ impl Compiler {
 
     fn compile_defmacro(
         &mut self,
-        source: &'static Sexpr<'static>,
+        sexpr: &Sexpr,
         name: &str,
-        parameters: &'static Sexpr<'static>,
-        rest: &'static [Sexpr<'static>],
+        parameters: &Sexpr,
+        rest: &[Sexpr],
     ) -> Result<Ast, Error> {
         self.macros.insert(name.to_string());
 
         Ok(Ast::DefMacro(DefMacro {
-            source,
+            span: sexpr.span(),
             name: name.to_string(),
             parameters: match parameters {
                 Sexpr::List { list, .. } => {
-                    parse_parameters(source, list.as_slice()).map_err(|_| Error {
-                        sexpr: source,
+                    parse_parameters(sexpr, list.as_slice()).map_err(|_| Error {
+                        span: sexpr.span(),
                         message: "failed to parse parameters".to_string(),
                     })?
                 }
                 Sexpr::Nil { .. } => Parameters::Normal(Vec::new()),
                 _ => {
                     return Err(Error {
-                        sexpr: source,
+                        span: sexpr.span(),
                         message: "expected list for parameters".to_string(),
                     })
                 }
@@ -629,18 +587,18 @@ impl Compiler {
 
     fn compile_lambda(
         &mut self,
-        source: &'static Sexpr<'static>,
-        parameters: &'static Sexpr<'static>,
-        r#type: Option<&'static Sexpr<'static>>,
-        rest: &'static [Sexpr<'static>],
+        sexpr: &Sexpr,
+        parameters: &Sexpr,
+        r#type: Option<&Sexpr>,
+        rest: &[Sexpr],
     ) -> Result<Ast, Error> {
         Ok(Ast::Lambda(Lambda {
-            source,
+            span: sexpr.span(),
             r#type: match r#type.map(Type::from_sexpr) {
                 Some(Ok(t)) => Some(t),
                 Some(Err(_)) => {
                     return Err(Error {
-                        sexpr: source,
+                        span: sexpr.span(),
                         message: "failed to parse type".to_string(),
                     })
                 }
@@ -648,15 +606,15 @@ impl Compiler {
             },
             parameters: match parameters {
                 Sexpr::List { list, .. } => {
-                    parse_parameters(source, list.as_slice()).map_err(|_| Error {
-                        sexpr: source,
+                    parse_parameters(sexpr, list.as_slice()).map_err(|_| Error {
+                        span: sexpr.span(),
                         message: "failed to parse parameters".to_string(),
                     })?
                 }
                 Sexpr::Nil { .. } => Parameters::Normal(Vec::new()),
                 _ => {
                     return Err(Error {
-                        sexpr: source,
+                        span: sexpr.span(),
                         message: "expectes list for parameters".to_string(),
                     })
                 }
@@ -670,42 +628,33 @@ impl Compiler {
 
     fn compile_def(
         &mut self,
-        source: &'static Sexpr<'static>,
-        parameter: &'static Sexpr<'static>,
-        body: &'static Sexpr<'static>,
+        sexpr: &Sexpr,
+        parameter: &Sexpr,
+        body: &Sexpr,
     ) -> Result<Ast, Error> {
         Ok(Ast::Def(Def {
-            source,
+            span: sexpr.span(),
             parameter: Parameter::from_sexpr(parameter).map_err(|_| Error {
-                sexpr: source,
+                span: sexpr.span(),
                 message: "failed to parse parameter".to_string(),
             })?,
             body: std::boxed::Box::new(self.compile(body)?),
         }))
     }
 
-    fn compile_decl(
-        &mut self,
-        source: &'static Sexpr<'static>,
-        parameter: &'static Sexpr<'static>,
-    ) -> Result<Ast, Error> {
+    fn compile_decl(&mut self, sexpr: &Sexpr, parameter: &Sexpr) -> Result<Ast, Error> {
         Ok(Ast::Decl(Decl {
-            source,
+            span: sexpr.span(),
             parameter: Parameter::from_sexpr(parameter).map_err(|_| Error {
-                sexpr: source,
+                span: sexpr.span(),
                 message: "failed to parse parameter".to_string(),
             })?,
         }))
     }
 
-    fn compile_set(
-        &mut self,
-        source: &'static Sexpr<'static>,
-        target: &str,
-        body: &'static Sexpr<'static>,
-    ) -> Result<Ast, Error> {
+    fn compile_set(&mut self, sexpr: &Sexpr, target: &str, body: &Sexpr) -> Result<Ast, Error> {
         Ok(Ast::Set(Set {
-            source,
+            span: sexpr.span(),
             target: target.to_string(),
             body: std::boxed::Box::new(self.compile(body)?),
         }))
@@ -713,48 +662,40 @@ impl Compiler {
 
     fn compile_set_box(
         &mut self,
-        source: &'static Sexpr<'static>,
-        target: &'static Sexpr<'static>,
-        body: &'static Sexpr<'static>,
+        sexpr: &Sexpr,
+        target: &Sexpr,
+        body: &Sexpr,
     ) -> Result<Ast, Error> {
         Ok(Ast::SetBox(SetBox {
-            source,
+            span: sexpr.span(),
             target: std::boxed::Box::new(self.compile(target)?),
             body: std::boxed::Box::new(self.compile(body)?),
         }))
     }
 
-    fn compile_box(
-        &mut self,
-        source: &'static Sexpr<'static>,
-        body: &'static Sexpr<'static>,
-    ) -> Result<Ast, Error> {
+    fn compile_box(&mut self, sexpr: &Sexpr, body: &Sexpr) -> Result<Ast, Error> {
         Ok(Ast::Box(Box {
-            source,
+            span: sexpr.span(),
             body: std::boxed::Box::new(self.compile(body)?),
         }))
     }
 
-    fn compile_unbox(
-        &mut self,
-        source: &'static Sexpr<'static>,
-        body: &'static Sexpr<'static>,
-    ) -> Result<Ast, Error> {
+    fn compile_unbox(&mut self, sexpr: &Sexpr, body: &Sexpr) -> Result<Ast, Error> {
         Ok(Ast::UnBox(UnBox {
-            source,
+            span: sexpr.span(),
             body: std::boxed::Box::new(self.compile(body)?),
         }))
     }
 
     fn compile_if(
         &mut self,
-        source: &'static Sexpr<'static>,
-        predicate: &'static Sexpr<'static>,
-        then: &'static Sexpr<'static>,
-        r#else: &'static Sexpr<'static>,
+        sexpr: &Sexpr,
+        predicate: &Sexpr,
+        then: &Sexpr,
+        r#else: &Sexpr,
     ) -> Result<Ast, Error> {
         Ok(Ast::If(If {
-            source,
+            span: sexpr.span(),
             predicate: std::boxed::Box::new(self.compile(predicate)?),
             then: std::boxed::Box::new(self.compile(then)?),
             r#else: std::boxed::Box::new(self.compile(r#else)?),
@@ -763,12 +704,12 @@ impl Compiler {
 
     fn compile_apply(
         &mut self,
-        source: &'static Sexpr<'static>,
-        function: &'static Sexpr<'static>,
-        list: &'static Sexpr<'static>,
+        sexpr: &Sexpr,
+        function: &Sexpr,
+        list: &Sexpr,
     ) -> Result<Ast, Error> {
         Ok(Ast::Apply(Apply {
-            source,
+            span: sexpr.span(),
             function: std::boxed::Box::new(self.compile(function)?),
             list: std::boxed::Box::new(self.compile(list)?),
         }))
@@ -776,13 +717,13 @@ impl Compiler {
 
     fn compile_binary_arithmetic_op(
         &mut self,
-        source: &'static Sexpr<'static>,
+        sexpr: &Sexpr,
         operator: &str,
-        lhs: &'static Sexpr<'static>,
-        rhs: &'static Sexpr<'static>,
+        lhs: &Sexpr,
+        rhs: &Sexpr,
     ) -> Result<Ast, Error> {
         Ok(Ast::BinaryArithemticOperation(BinaryArithmeticOperation {
-            source,
+            span: sexpr.span(),
             operator: match operator {
                 "+" => BinaryArithmeticOperator::Add,
                 "-" => BinaryArithmeticOperator::Sub,
@@ -797,13 +738,13 @@ impl Compiler {
 
     fn compile_comparison_op(
         &mut self,
-        source: &'static Sexpr<'static>,
+        sexpr: &Sexpr,
         operator: &str,
-        lhs: &'static Sexpr<'static>,
-        rhs: &'static Sexpr<'static>,
+        lhs: &Sexpr,
+        rhs: &Sexpr,
     ) -> Result<Ast, Error> {
         Ok(Ast::ComparisonOperation(ComparisonOperation {
-            source,
+            span: sexpr.span(),
             operator: match operator {
                 "=" => ComparisonOperator::Eq,
                 "<" => ComparisonOperator::Lt,
@@ -815,13 +756,9 @@ impl Compiler {
         }))
     }
 
-    fn compile_list(
-        &mut self,
-        source: &'static Sexpr<'static>,
-        args: &'static [Sexpr<'static>],
-    ) -> Result<Ast, Error> {
+    fn compile_list(&mut self, sexpr: &Sexpr, args: &[Sexpr]) -> Result<Ast, Error> {
         Ok(Ast::List(List {
-            source,
+            span: sexpr.span(),
             exprs: args
                 .iter()
                 .map(|arg| self.compile(arg))
@@ -829,49 +766,36 @@ impl Compiler {
         }))
     }
 
-    fn compile_cons(
-        &mut self,
-        source: &'static Sexpr<'static>,
-        lhs: &'static Sexpr<'static>,
-        rhs: &'static Sexpr<'static>,
-    ) -> Result<Ast, Error> {
+    fn compile_cons(&mut self, sexpr: &Sexpr, lhs: &Sexpr, rhs: &Sexpr) -> Result<Ast, Error> {
         Ok(Ast::Cons(Cons {
-            source,
+            span: sexpr.span(),
             lhs: std::boxed::Box::new(self.compile(lhs)?),
             rhs: std::boxed::Box::new(self.compile(rhs)?),
         }))
     }
 
-    fn compile_car(
-        &mut self,
-        source: &'static Sexpr<'static>,
-        body: &'static Sexpr<'static>,
-    ) -> Result<Ast, Error> {
+    fn compile_car(&mut self, sexpr: &Sexpr, body: &Sexpr) -> Result<Ast, Error> {
         Ok(Ast::Car(Car {
-            source,
+            span: sexpr.span(),
             body: std::boxed::Box::new(self.compile(body)?),
         }))
     }
 
-    fn compile_cdr(
-        &mut self,
-        source: &'static Sexpr<'static>,
-        body: &'static Sexpr<'static>,
-    ) -> Result<Ast, Error> {
+    fn compile_cdr(&mut self, sexpr: &Sexpr, body: &Sexpr) -> Result<Ast, Error> {
         Ok(Ast::Cdr(Cdr {
-            source,
+            span: sexpr.span(),
             body: std::boxed::Box::new(self.compile(body)?),
         }))
     }
 
     fn compile_fncall(
         &mut self,
-        source: &'static Sexpr<'static>,
-        function: &'static Sexpr<'static>,
-        args: &'static [Sexpr<'static>],
+        sexpr: &Sexpr,
+        function: &Sexpr,
+        args: &[Sexpr],
     ) -> Result<Ast, Error> {
         Ok(Ast::FnCall(FnCall {
-            source,
+            span: sexpr.span(),
             function: std::boxed::Box::new(self.compile(function)?),
             exprs: args
                 .iter()
@@ -882,36 +806,32 @@ impl Compiler {
 
     fn compile_macro_call(
         &mut self,
-        source: &'static Sexpr<'static>,
+        sexpr: &Sexpr,
         r#macro: &str,
-        args: &'static [Sexpr<'static>],
+        args: &[Sexpr],
     ) -> Result<Ast, Error> {
         Ok(Ast::MacroCall(MacroCall {
-            source,
+            span: sexpr.span(),
             r#macro: r#macro.to_string(),
-            args: args.iter().map(|arg| quote(source, arg)).collect(),
+            args: args.iter().map(|arg| quote(sexpr, arg)).collect(),
         }))
     }
 
-    fn compile_quote(
-        &mut self,
-        source: &'static Sexpr<'static>,
-        body: &'static Sexpr<'static>,
-    ) -> Result<Ast, Error> {
+    fn compile_quote(&mut self, sexpr: &Sexpr, body: &Sexpr) -> Result<Ast, Error> {
         Ok(Ast::Quote(Quote {
-            source,
-            body: quote(source, body),
+            span: sexpr.span(),
+            body: quote(sexpr, body),
         }))
     }
 
     fn compile_is_type(
         &mut self,
-        source: &'static Sexpr<'static>,
+        sexpr: &Sexpr,
         parameter: &str,
-        body: &'static Sexpr<'static>,
+        body: &Sexpr,
     ) -> Result<Ast, Error> {
         Ok(Ast::IsType(IsType {
-            source,
+            span: sexpr.span(),
             parameter: match parameter {
                 "function?" => IsTypeParameter::Function,
                 "cons?" => IsTypeParameter::Cons,
@@ -927,26 +847,22 @@ impl Compiler {
         }))
     }
 
-    fn compile_assert(
-        &mut self,
-        source: &'static Sexpr<'static>,
-        body: &'static Sexpr<'static>,
-    ) -> Result<Ast, Error> {
+    fn compile_assert(&mut self, sexpr: &Sexpr, body: &Sexpr) -> Result<Ast, Error> {
         Ok(Ast::Assert(Assert {
-            source,
+            span: sexpr.span(),
             body: std::boxed::Box::new(self.compile(body)?),
         }))
     }
 
     fn compile_map_insert(
         &mut self,
-        source: &'static Sexpr<'static>,
-        map: &'static Sexpr<'static>,
-        key: &'static Sexpr<'static>,
-        value: &'static Sexpr<'static>,
+        sexpr: &Sexpr,
+        map: &Sexpr,
+        key: &Sexpr,
+        value: &Sexpr,
     ) -> Result<Ast, Error> {
         Ok(Ast::MapInsert(MapInsert {
-            source,
+            span: sexpr.span(),
             map: std::boxed::Box::new(self.compile(map)?),
             key: std::boxed::Box::new(self.compile(key)?),
             value: std::boxed::Box::new(self.compile(value)?),
@@ -955,39 +871,35 @@ impl Compiler {
 
     fn compile_map_retrieve(
         &mut self,
-        source: &'static Sexpr<'static>,
-        map: &'static Sexpr<'static>,
-        key: &'static Sexpr<'static>,
+        sexpr: &Sexpr,
+        map: &Sexpr,
+        key: &Sexpr,
     ) -> Result<Ast, Error> {
         Ok(Ast::MapRetrieve(MapRetrieve {
-            source,
+            span: sexpr.span(),
             map: std::boxed::Box::new(self.compile(map)?),
             key: std::boxed::Box::new(self.compile(key)?),
         }))
     }
 
-    fn compile_map_items(
-        &mut self,
-        source: &'static Sexpr<'static>,
-        map: &'static Sexpr<'static>,
-    ) -> Result<Ast, Error> {
+    fn compile_map_items(&mut self, sexpr: &Sexpr, map: &Sexpr) -> Result<Ast, Error> {
         Ok(Ast::MapItems(MapItems {
-            source,
+            span: sexpr.span(),
             map: std::boxed::Box::new(self.compile(map)?),
         }))
     }
 
     fn compile_let_type(
         &mut self,
-        source: &'static Sexpr<'static>,
+        sexpr: &Sexpr,
         name: &str,
-        r#type: &'static Sexpr<'static>,
+        r#type: &Sexpr,
     ) -> Result<Ast, Error> {
         Ok(Ast::LetType(LetType {
-            source,
+            span: sexpr.span(),
             name: name.to_string(),
             r#type: Type::from_sexpr(r#type).map_err(|_| Error {
-                sexpr: source,
+                span: sexpr.span(),
                 message: "failed to parse type".to_string(),
             })?,
         }))
@@ -996,48 +908,48 @@ impl Compiler {
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "error: {}\n{}", self.message, self.sexpr)
+        write!(f, "error: {}", self.message)
     }
 }
 
 impl Ast {
-    pub fn source_sexpr(&self) -> &'static Sexpr<'static> {
+    pub fn span(&self) -> FileSpan {
         match self {
-            Self::Require(Require { source, .. })
-            | Self::EvalWhenCompile(EvalWhenCompile { source, .. })
-            | Self::DefMacro(DefMacro { source, .. })
-            | Self::Lambda(Lambda { source, .. })
-            | Self::Def(Def { source, .. })
-            | Self::Decl(Decl { source, .. })
-            | Self::Set(Set { source, .. })
-            | Self::SetBox(SetBox { source, .. })
-            | Self::Box(Box { source, .. })
-            | Self::UnBox(UnBox { source, .. })
-            | Self::If(If { source, .. })
-            | Self::Apply(Apply { source, .. })
-            | Self::BinaryArithemticOperation(BinaryArithmeticOperation { source, .. })
-            | Self::ComparisonOperation(ComparisonOperation { source, .. })
-            | Self::List(List { source, .. })
-            | Self::Cons(Cons { source, .. })
-            | Self::Car(Car { source, .. })
-            | Self::Cdr(Cdr { source, .. })
-            | Self::FnCall(FnCall { source, .. })
-            | Self::MacroCall(MacroCall { source, .. })
-            | Self::Quote(Quote { source, .. })
-            | Self::IsType(IsType { source, .. })
-            | Self::Assert(Assert { source, .. })
-            | Self::MapCreate(MapCreate { source, .. })
-            | Self::MapInsert(MapInsert { source, .. })
-            | Self::MapRetrieve(MapRetrieve { source, .. })
-            | Self::MapItems(MapItems { source, .. })
-            | Self::GenSym(GenSym { source })
-            | Self::LetType(LetType { source, .. })
-            | Self::Variable(Variable { source, .. })
-            | Self::Constant(Constant::String { source, .. })
-            | Self::Constant(Constant::Char { source, .. })
-            | Self::Constant(Constant::Int { source, .. })
-            | Self::Constant(Constant::Bool { source, .. })
-            | Self::Constant(Constant::Nil { source }) => source,
+            Self::Require(Require { span, .. })
+            | Self::EvalWhenCompile(EvalWhenCompile { span, .. })
+            | Self::DefMacro(DefMacro { span, .. })
+            | Self::Lambda(Lambda { span, .. })
+            | Self::Def(Def { span, .. })
+            | Self::Decl(Decl { span, .. })
+            | Self::Set(Set { span, .. })
+            | Self::SetBox(SetBox { span, .. })
+            | Self::Box(Box { span, .. })
+            | Self::UnBox(UnBox { span, .. })
+            | Self::If(If { span, .. })
+            | Self::Apply(Apply { span, .. })
+            | Self::BinaryArithemticOperation(BinaryArithmeticOperation { span, .. })
+            | Self::ComparisonOperation(ComparisonOperation { span, .. })
+            | Self::List(List { span, .. })
+            | Self::Cons(Cons { span, .. })
+            | Self::Car(Car { span, .. })
+            | Self::Cdr(Cdr { span, .. })
+            | Self::FnCall(FnCall { span, .. })
+            | Self::MacroCall(MacroCall { span, .. })
+            | Self::Quote(Quote { span, .. })
+            | Self::IsType(IsType { span, .. })
+            | Self::Assert(Assert { span, .. })
+            | Self::MapCreate(MapCreate { span, .. })
+            | Self::MapInsert(MapInsert { span, .. })
+            | Self::MapRetrieve(MapRetrieve { span, .. })
+            | Self::MapItems(MapItems { span, .. })
+            | Self::GenSym(GenSym { span })
+            | Self::LetType(LetType { span, .. })
+            | Self::Variable(Variable { span, .. })
+            | Self::Constant(Constant::String { span, .. })
+            | Self::Constant(Constant::Char { span, .. })
+            | Self::Constant(Constant::Int { span, .. })
+            | Self::Constant(Constant::Bool { span, .. })
+            | Self::Constant(Constant::Nil { span }) => *span,
         }
     }
 }
@@ -1096,16 +1008,13 @@ impl Parameters {
     }
 }
 
-fn parse_parameters(
-    source: &'static Sexpr<'static>,
-    list: &'static [Sexpr<'static>],
-) -> Result<Parameters, Error> {
+fn parse_parameters(sexpr: &Sexpr, list: &[Sexpr]) -> Result<Parameters, Error> {
     let parameters = list
         .iter()
         .map(Parameter::from_sexpr)
         .collect::<Result<Vec<_>, ()>>()
         .map_err(|_| Error {
-            sexpr: source,
+            span: sexpr.span(),
             message: "failed to parse parameter".to_string(),
         })?;
 
@@ -1131,7 +1040,7 @@ fn parse_parameters(
         Ok((_, p)) => p,
         Err(_) => {
             return Err(Error {
-                sexpr: source,
+                span: sexpr.span(),
                 message: "failed to parse parameters".to_string(),
             })
         }
@@ -1140,55 +1049,61 @@ fn parse_parameters(
     Ok(p)
 }
 
-fn quote(source: &'static Sexpr<'static>, sexpr: &'static Sexpr<'static>) -> Quoted {
-    match sexpr {
-        Sexpr::List { list, .. } => quote_list(source, list.as_slice()),
+fn quote(sexpr: &Sexpr, quoted: &Sexpr) -> Quoted {
+    match quoted {
+        Sexpr::List { list, .. } => quote_list(sexpr, list.as_slice()),
         Sexpr::Symbol { symbol, .. } => Quoted::Symbol {
-            source,
+            span: sexpr.span(),
             symbol: symbol.clone(),
         },
         Sexpr::String { string, .. } => Quoted::String {
-            source,
+            span: sexpr.span(),
             string: string.clone(),
         },
         Sexpr::Char { char, .. } => Quoted::Char {
-            source,
+            span: sexpr.span(),
             char: *char,
         },
-        Sexpr::Int { int, .. } => Quoted::Int { source, int: *int },
+        Sexpr::Int { int, .. } => Quoted::Int {
+            span: sexpr.span(),
+            int: *int,
+        },
         Sexpr::Bool { bool, .. } => Quoted::Bool {
-            source,
+            span: sexpr.span(),
             bool: *bool,
         },
-        Sexpr::Nil { .. } => Quoted::Nil { source },
+        Sexpr::Nil { .. } => Quoted::Nil { span: sexpr.span() },
     }
 }
 
-fn quote_list(source: &'static Sexpr<'static>, list: &'static [Sexpr<'static>]) -> Quoted {
+fn quote_list(sexpr: &Sexpr, list: &[Sexpr]) -> Quoted {
     Quoted::List {
-        source,
+        span: sexpr.span(),
         list: list
             .iter()
             .map(|sexpr| match sexpr {
-                Sexpr::List { list, .. } => quote_list(source, list.as_slice()),
+                Sexpr::List { list, .. } => quote_list(sexpr, list.as_slice()),
                 Sexpr::Symbol { symbol, .. } => Quoted::Symbol {
-                    source,
+                    span: sexpr.span(),
                     symbol: symbol.clone(),
                 },
                 Sexpr::String { string, .. } => Quoted::String {
-                    source,
+                    span: sexpr.span(),
                     string: string.clone(),
                 },
                 Sexpr::Char { char, .. } => Quoted::Char {
-                    source,
+                    span: sexpr.span(),
                     char: *char,
                 },
-                Sexpr::Int { int, .. } => Quoted::Int { source, int: *int },
+                Sexpr::Int { int, .. } => Quoted::Int {
+                    span: sexpr.span(),
+                    int: *int,
+                },
                 Sexpr::Bool { bool, .. } => Quoted::Bool {
-                    source,
+                    span: sexpr.span(),
                     bool: *bool,
                 },
-                Sexpr::Nil { .. } => Quoted::Nil { source },
+                Sexpr::Nil { .. } => Quoted::Nil { span: sexpr.span() },
             })
             .collect(),
     }
@@ -1204,11 +1119,7 @@ mod tests {
     #[test]
     fn test_parse_parameters() {
         let input = "(a b &rest c)";
-        let context = std::boxed::Box::leak(std::boxed::Box::new(reader::Context::new(
-            input,
-            "test_parse_parameters",
-        )));
-        let mut reader = Reader::new(context);
+        let mut reader = Reader::new(input, 0);
         let sexpr = std::boxed::Box::leak(std::boxed::Box::new(reader.next().unwrap().unwrap()));
         let list = sexpr.as_list().unwrap();
         let parameters = parse_parameters(sexpr, list).unwrap();
@@ -1222,11 +1133,7 @@ mod tests {
     #[test]
     fn test_parse_only_rest_parameters() {
         let input = "(&rest c)";
-        let context = std::boxed::Box::leak(std::boxed::Box::new(reader::Context::new(
-            input,
-            "test_parse_parameters",
-        )));
-        let mut reader = Reader::new(context);
+        let mut reader = Reader::new(input, 0);
         let sexpr = std::boxed::Box::leak(std::boxed::Box::new(reader.next().unwrap().unwrap()));
         let list = sexpr.as_list().unwrap();
         let parameters = parse_parameters(sexpr, list).unwrap();

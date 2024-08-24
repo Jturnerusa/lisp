@@ -3,17 +3,17 @@ use crate::{
     bytecode,
     environment::{self, Environment, Variable},
 };
-use reader::{Reader, Sexpr};
+use reader::{FileSpan, Reader};
 use unwrap_enum::{EnumAs, EnumIs};
 use vm::{Arity, OpCodeTable, UpValue, Vm};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("il compiler error: {message}")]
-    Il { ast: Ast, message: String },
+    Il { span: FileSpan, message: String },
 
     #[error("reader error: {0}")]
-    Reader(#[from] reader::Error<'static>),
+    Reader(#[from] reader::Error),
 
     #[error("ast error: {0}")]
     Ast(#[from] ast::Error),
@@ -24,11 +24,8 @@ pub enum Error {
     #[error("vm error: {0}")]
     Vm(#[from] vm::Error),
 
-    #[error("vm error: {sexpr}")]
-    VmWithDebug {
-        error: vm::Error,
-        sexpr: &'static Sexpr<'static>,
-    },
+    #[error("vm error")]
+    VmWithDebug { error: vm::Error, span: FileSpan },
 }
 
 #[derive(Clone, Debug, EnumAs, EnumIs)]
@@ -60,41 +57,41 @@ pub enum Il {
 
 #[derive(Clone, Debug)]
 pub struct Module {
-    pub source: Ast,
+    pub span: FileSpan,
     pub name: String,
 }
 
 #[derive(Clone, Debug)]
 pub enum Constant {
-    Symbol { source: Ast, symbol: String },
-    String { source: Ast, string: String },
-    Char { source: Ast, char: char },
-    Int { source: Ast, int: i64 },
-    Bool { source: Ast, bool: bool },
-    Nil { source: Ast },
+    Symbol { span: FileSpan, symbol: String },
+    String { span: FileSpan, string: String },
+    Char { span: FileSpan, char: char },
+    Int { span: FileSpan, int: i64 },
+    Bool { span: FileSpan, bool: bool },
+    Nil { span: FileSpan },
 }
 
 #[derive(Clone, Debug)]
 pub enum VarRef {
     Local {
-        source: Ast,
+        span: FileSpan,
         name: String,
         index: usize,
     },
     UpValue {
-        source: Ast,
+        span: FileSpan,
         name: String,
         index: usize,
     },
     Global {
-        source: Ast,
+        span: FileSpan,
         name: String,
     },
 }
 
 #[derive(Clone, Debug)]
 pub struct Parameter {
-    pub source: Ast,
+    pub span: FileSpan,
     pub name: String,
     pub r#type: Option<Type>,
 }
@@ -107,7 +104,7 @@ pub enum Parameters {
 
 #[derive(Clone, Debug)]
 pub struct Lambda {
-    pub source: Ast,
+    pub span: FileSpan,
     pub parameters: Parameters,
     pub r#type: Option<Type>,
     pub arity: Arity,
@@ -117,7 +114,7 @@ pub struct Lambda {
 
 #[derive(Clone, Debug)]
 pub struct If {
-    pub source: Ast,
+    pub span: FileSpan,
     pub predicate: std::boxed::Box<Il>,
     pub then: std::boxed::Box<Il>,
     pub r#else: std::boxed::Box<Il>,
@@ -125,40 +122,40 @@ pub struct If {
 
 #[derive(Clone, Debug)]
 pub struct FnCall {
-    pub source: Ast,
+    pub span: FileSpan,
     pub function: std::boxed::Box<Il>,
     pub args: Vec<Il>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Apply {
-    pub source: Ast,
+    pub span: FileSpan,
     pub function: std::boxed::Box<Il>,
     pub list: std::boxed::Box<Il>,
 }
 
 #[derive(Clone, Debug)]
 pub struct List {
-    pub source: Ast,
+    pub span: FileSpan,
     pub exprs: Vec<Il>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Cons {
-    pub source: Ast,
+    pub span: FileSpan,
     pub lhs: std::boxed::Box<Il>,
     pub rhs: std::boxed::Box<Il>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Car {
-    pub source: Ast,
+    pub span: FileSpan,
     pub body: std::boxed::Box<Il>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Cdr {
-    pub source: Ast,
+    pub span: FileSpan,
     pub body: std::boxed::Box<Il>,
 }
 
@@ -172,7 +169,7 @@ pub enum ArithmeticOperator {
 
 #[derive(Clone, Debug)]
 pub struct ArithmeticOperation {
-    pub source: Ast,
+    pub span: FileSpan,
     pub operator: ArithmeticOperator,
     pub lhs: std::boxed::Box<Il>,
     pub rhs: std::boxed::Box<Il>,
@@ -187,7 +184,7 @@ pub enum ComparisonOperator {
 
 #[derive(Clone, Debug)]
 pub struct ComparisonOperation {
-    pub source: Ast,
+    pub span: FileSpan,
     pub operator: ComparisonOperator,
     pub lhs: std::boxed::Box<Il>,
     pub rhs: std::boxed::Box<Il>,
@@ -195,45 +192,45 @@ pub struct ComparisonOperation {
 
 #[derive(Clone, Debug)]
 pub struct Def {
-    pub source: Ast,
+    pub span: FileSpan,
     pub parameter: Parameter,
     pub body: std::boxed::Box<Il>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Set {
-    pub source: Ast,
+    pub span: FileSpan,
     pub target: VarRef,
     pub body: std::boxed::Box<Il>,
 }
 
 #[derive(Clone, Debug)]
 pub struct SetBox {
-    pub source: Ast,
+    pub span: FileSpan,
     pub target: std::boxed::Box<Il>,
     pub body: std::boxed::Box<Il>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Box {
-    pub source: Ast,
+    pub span: FileSpan,
     pub body: std::boxed::Box<Il>,
 }
 
 #[derive(Clone, Debug)]
 pub struct UnBox {
-    pub source: Ast,
+    pub span: FileSpan,
     pub body: std::boxed::Box<Il>,
 }
 
 #[derive(Clone, Debug)]
 pub struct MapCreate {
-    pub source: Ast,
+    pub span: FileSpan,
 }
 
 #[derive(Clone, Debug)]
 pub struct MapInsert {
-    pub source: Ast,
+    pub span: FileSpan,
     pub map: std::boxed::Box<Il>,
     pub key: std::boxed::Box<Il>,
     pub value: std::boxed::Box<Il>,
@@ -241,14 +238,14 @@ pub struct MapInsert {
 
 #[derive(Clone, Debug)]
 pub struct MapRetrieve {
-    pub source: Ast,
+    pub span: FileSpan,
     pub map: std::boxed::Box<Il>,
     pub key: std::boxed::Box<Il>,
 }
 
 #[derive(Clone, Debug)]
 pub struct MapItems {
-    pub source: Ast,
+    pub span: FileSpan,
     pub map: std::boxed::Box<Il>,
 }
 
@@ -266,14 +263,14 @@ pub enum IsTypeParameter {
 
 #[derive(Clone, Debug)]
 pub struct IsType {
-    pub source: Ast,
+    pub span: FileSpan,
     pub r#type: IsTypeParameter,
     pub body: std::boxed::Box<Il>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Assert {
-    pub source: Ast,
+    pub span: FileSpan,
     pub body: std::boxed::Box<Il>,
 }
 
@@ -282,70 +279,70 @@ pub struct Compiler {
 }
 
 impl VarRef {
-    pub fn source(&self) -> &Ast {
+    pub fn span(&self) -> FileSpan {
         match self {
-            Self::Local { source, .. }
-            | Self::UpValue { source, .. }
-            | Self::Global { source, .. } => source,
+            Self::Local { span, .. } | Self::UpValue { span, .. } | Self::Global { span, .. } => {
+                *span
+            }
         }
     }
 }
 
 impl Constant {
-    pub fn source(&self) -> &Ast {
+    pub fn span(&self) -> FileSpan {
         match self {
-            Self::Symbol { source, .. }
-            | Self::String { source, .. }
-            | Self::Char { source, .. }
-            | Self::Int { source, .. }
-            | Self::Bool { source, .. }
-            | Self::Nil { source } => source,
+            Self::Symbol { span, .. }
+            | Self::String { span, .. }
+            | Self::Char { span, .. }
+            | Self::Int { span, .. }
+            | Self::Bool { span, .. }
+            | Self::Nil { span } => *span,
         }
     }
 }
 
 impl Il {
-    pub fn source_ast(&self) -> &Ast {
+    pub fn span(&self) -> FileSpan {
         match self {
-            Self::Lambda(Lambda { source, .. })
-            | Self::ArithmeticOperation(ArithmeticOperation { source, .. })
-            | Self::ComparisonOperation(ComparisonOperation { source, .. })
-            | Self::Def(Def { source, .. })
-            | Self::Set(Set { source, .. })
-            | Self::SetBox(SetBox { source, .. })
-            | Self::Box(Box { source, .. })
-            | Self::UnBox(UnBox { source, .. })
-            | Self::If(If { source, .. })
-            | Self::FnCall(FnCall { source, .. })
-            | Self::Apply(Apply { source, .. })
-            | Self::List(List { source, .. })
-            | Self::Cons(Cons { source, .. })
-            | Self::Car(Car { source, .. })
-            | Self::Cdr(Cdr { source, .. })
-            | Self::MapCreate(MapCreate { source, .. })
-            | Self::MapInsert(MapInsert { source, .. })
-            | Self::MapRetrieve(MapRetrieve { source, .. })
-            | Self::MapItems(MapItems { source, .. })
-            | Self::IsType(IsType { source, .. })
-            | Self::Assert(Assert { source, .. })
-            | Self::VarRef(VarRef::Local { source, .. })
-            | Self::VarRef(VarRef::UpValue { source, .. })
-            | Self::VarRef(VarRef::Global { source, .. })
-            | Self::Constant(Constant::Symbol { source, .. })
-            | Self::Constant(Constant::String { source, .. })
-            | Self::Constant(Constant::Char { source, .. })
-            | Self::Constant(Constant::Int { source, .. })
-            | Self::Constant(Constant::Bool { source, .. })
-            | Self::Constant(Constant::Nil { source, .. }) => source,
+            Self::Lambda(Lambda { span, .. })
+            | Self::ArithmeticOperation(ArithmeticOperation { span, .. })
+            | Self::ComparisonOperation(ComparisonOperation { span, .. })
+            | Self::Def(Def { span, .. })
+            | Self::Set(Set { span, .. })
+            | Self::SetBox(SetBox { span, .. })
+            | Self::Box(Box { span, .. })
+            | Self::UnBox(UnBox { span, .. })
+            | Self::If(If { span, .. })
+            | Self::FnCall(FnCall { span, .. })
+            | Self::Apply(Apply { span, .. })
+            | Self::List(List { span, .. })
+            | Self::Cons(Cons { span, .. })
+            | Self::Car(Car { span, .. })
+            | Self::Cdr(Cdr { span, .. })
+            | Self::MapCreate(MapCreate { span, .. })
+            | Self::MapInsert(MapInsert { span, .. })
+            | Self::MapRetrieve(MapRetrieve { span, .. })
+            | Self::MapItems(MapItems { span, .. })
+            | Self::IsType(IsType { span, .. })
+            | Self::Assert(Assert { span, .. })
+            | Self::VarRef(VarRef::Local { span, .. })
+            | Self::VarRef(VarRef::UpValue { span, .. })
+            | Self::VarRef(VarRef::Global { span, .. })
+            | Self::Constant(Constant::Symbol { span, .. })
+            | Self::Constant(Constant::String { span, .. })
+            | Self::Constant(Constant::Char { span, .. })
+            | Self::Constant(Constant::Int { span, .. })
+            | Self::Constant(Constant::Bool { span, .. })
+            | Self::Constant(Constant::Nil { span, .. }) => *span,
         }
     }
 }
 
 impl Parameter {
     #[allow(clippy::result_unit_err)]
-    pub fn from_ast(source: &Ast, parameter: &ast::Parameter) -> Result<Self, ()> {
+    pub fn from_ast(ast: &Ast, parameter: &ast::Parameter) -> Result<Self, ()> {
         Ok(Self {
-            source: source.clone(),
+            span: ast.span(),
             name: parameter.name.clone(),
             r#type: parameter.r#type.clone(),
         })
@@ -354,19 +351,19 @@ impl Parameter {
 
 impl Parameters {
     #[allow(clippy::result_unit_err)]
-    pub fn from_ast(source: &Ast, parameters: &ast::Parameters) -> Result<Self, ()> {
+    pub fn from_ast(ast: &Ast, parameters: &ast::Parameters) -> Result<Self, ()> {
         Ok(match parameters {
             ast::Parameters::Normal(params) => Parameters::Nary(
                 params
                     .iter()
-                    .map(|param| Parameter::from_ast(source, param))
+                    .map(|param| Parameter::from_ast(ast, param))
                     .collect::<Result<Vec<Parameter>, ()>>()?,
             ),
             ast::Parameters::Rest(params, rest) => Parameters::Variadic(
                 params
                     .iter()
                     .chain(std::iter::once(rest))
-                    .map(|param| Parameter::from_ast(source, param))
+                    .map(|param| Parameter::from_ast(ast, param))
                     .collect::<Result<Vec<Parameter>, _>>()?,
             ),
         })
@@ -388,7 +385,7 @@ impl Compiler {
     pub fn compile(
         &mut self,
         ast: &Ast,
-        vm: &mut Vm<&'static Sexpr<'static>>,
+        vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
     ) -> Result<Il, Error> {
         match ast {
@@ -432,53 +429,51 @@ impl Compiler {
         }
     }
 
-    fn compile_constant(&mut self, source: &Ast, constant: &ast::Constant) -> Result<Il, Error> {
+    fn compile_constant(&mut self, ast: &Ast, constant: &ast::Constant) -> Result<Il, Error> {
         Ok(match constant {
             ast::Constant::String { string, .. } => Il::Constant(Constant::String {
-                source: source.clone(),
+                span: ast.span(),
                 string: string.clone(),
             }),
             ast::Constant::Char { char, .. } => Il::Constant(Constant::Char {
-                source: source.clone(),
+                span: ast.span(),
                 char: *char,
             }),
             ast::Constant::Int { int, .. } => Il::Constant(Constant::Int {
-                source: source.clone(),
+                span: ast.span(),
                 int: *int,
             }),
             ast::Constant::Bool { bool, .. } => Il::Constant(Constant::Bool {
-                source: source.clone(),
+                span: ast.span(),
                 bool: *bool,
             }),
-            ast::Constant::Nil { .. } => Il::Constant(Constant::Nil {
-                source: source.clone(),
-            }),
+            ast::Constant::Nil { .. } => Il::Constant(Constant::Nil { span: ast.span() }),
         })
     }
 
     fn compile_variable_reference(
         &mut self,
-        source: &Ast,
+        ast: &Ast,
         variable: &ast::Variable,
     ) -> Result<Il, Error> {
         Ok(match self.environment.resolve(variable.name.as_str()) {
             Some(environment::Variable::Local(index)) => Il::VarRef(VarRef::Local {
-                source: source.clone(),
+                span: ast.span(),
                 name: variable.name.clone(),
                 index,
             }),
             Some(environment::Variable::Upvalue(index)) => Il::VarRef(VarRef::UpValue {
-                source: source.clone(),
+                span: ast.span(),
                 name: variable.name.clone(),
                 index,
             }),
             Some(environment::Variable::Global) => Il::VarRef(VarRef::Global {
-                source: source.clone(),
+                span: ast.span(),
                 name: variable.name.clone(),
             }),
             None => {
                 return Err(Error::Il {
-                    ast: source.clone(),
+                    span: ast.span(),
                     message: format!("unknown variable referenced: {}", variable.name.as_str()),
                 })
             }
@@ -487,9 +482,9 @@ impl Compiler {
 
     fn compile_defmacro(
         &mut self,
-        source: &Ast,
+        ast: &Ast,
         defmacro: &ast::DefMacro,
-        vm: &mut Vm<&'static Sexpr<'static>>,
+        vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
     ) -> Result<Il, Error> {
         let arity = match &defmacro.parameters {
@@ -499,8 +494,8 @@ impl Compiler {
         };
 
         let parameters =
-            Parameters::from_ast(source, &defmacro.parameters).map_err(|_| Error::Il {
-                ast: source.clone(),
+            Parameters::from_ast(ast, &defmacro.parameters).map_err(|_| Error::Il {
+                span: ast.span(),
                 message: "failed to compile parameters".to_string(),
             })?;
 
@@ -513,86 +508,77 @@ impl Compiler {
             .map(|ast| self.compile(ast, vm, ast_compiler))
             .collect::<Result<Vec<Il>, Error>>()?;
 
-        let lambda = std::boxed::Box::leak(std::boxed::Box::new(Il::Lambda(self::Lambda {
-            source: source.clone(),
+        let lambda = Il::Lambda(self::Lambda {
+            span: ast.span(),
             parameters,
             r#type: None,
             upvalues: Vec::new(),
             arity,
             body,
-        })));
+        });
 
         let mut opcodes = OpCodeTable::new();
 
-        bytecode::compile(lambda, &mut opcodes)?;
+        bytecode::compile(&lambda, &mut opcodes)?;
 
         vm.eval(&opcodes)
-            .map_err(|(error, sexpr)| Error::VmWithDebug { error, sexpr })?;
+            .map_err(|(error, span)| Error::VmWithDebug { error, span })?;
 
         vm.def_global(defmacro.name.as_str())?;
 
-        Ok(Il::Constant(Constant::Nil {
-            source: source.clone(),
-        }))
+        Ok(Il::Constant(Constant::Nil { span: ast.span() }))
     }
 
     fn eval_macro(
         &mut self,
-        source: &Ast,
+        ast: &Ast,
         macro_call: &ast::MacroCall,
-        vm: &mut Vm<&'static Sexpr<'static>>,
+        vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
     ) -> Result<Il, Error> {
         let mut opcode_table = OpCodeTable::new();
 
         for arg in &macro_call.args {
-            let il = std::boxed::Box::leak(std::boxed::Box::new(self.compile_quoted(source, arg)?));
-            bytecode::compile(
-                std::boxed::Box::leak(std::boxed::Box::new(il)),
-                &mut opcode_table,
-            )
-            .unwrap();
+            let il = self.compile_quoted(ast, arg)?;
+
+            bytecode::compile(&il, &mut opcode_table).unwrap();
         }
 
         vm.get_global(macro_call.r#macro.as_str())?;
 
         vm.eval(&opcode_table)
-            .map_err(|(error, sexpr)| Error::VmWithDebug { error, sexpr })?;
+            .map_err(|(error, span)| Error::VmWithDebug { error, span })?;
 
         vm.call(macro_call.args.len())?;
 
         vm.eval(&OpCodeTable::new())
-            .map_err(|(error, sexpr)| Error::VmWithDebug { error, sexpr })?;
+            .map_err(|(error, span)| Error::VmWithDebug { error, span })?;
 
         let Some(object) = vm.pop().map(|local| local.into_object()) else {
-            return Ok(Il::Constant(Constant::Nil {
-                source: source.clone(),
-            }));
+            return Ok(Il::Constant(Constant::Nil { span: ast.span() }));
         };
 
         let mut buff = String::new();
 
         object.print(&mut buff).map_err(|_| Error::Il {
-            ast: source.clone(),
+            span: ast.span(),
             message: "failed to print macro result".to_string(),
         })?;
 
-        let context: &'static _ = std::boxed::Box::leak(std::boxed::Box::new(
-            reader::Context::new(buff.as_str(), source.source_sexpr().context().display()),
-        ));
-        let mut reader = Reader::new(context);
-        let sexpr: &'static _ =
-            std::boxed::Box::leak(std::boxed::Box::new(reader.next().unwrap()?));
-        let ast = ast_compiler.compile(sexpr)?;
+        let mut reader = Reader::new(buff.as_str(), 0);
+
+        let sexpr = reader.next().unwrap()?;
+
+        let ast = ast_compiler.compile(&sexpr)?;
 
         self.compile(&ast, vm, ast_compiler)
     }
 
     fn compile_lambda(
         &mut self,
-        source: &Ast,
+        ast: &Ast,
         lambda: &ast::Lambda,
-        vm: &mut Vm<&'static Sexpr<'static>>,
+        vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
     ) -> Result<Il, Error> {
         let arity = match &lambda.parameters {
@@ -601,11 +587,10 @@ impl Compiler {
             ast::Parameters::Rest(..) => Arity::Variadic(lambda.parameters.len() - 1),
         };
 
-        let parameters =
-            Parameters::from_ast(source, &lambda.parameters).map_err(|_| Error::Il {
-                ast: source.clone(),
-                message: "failed to compile parameters".to_string(),
-            })?;
+        let parameters = Parameters::from_ast(ast, &lambda.parameters).map_err(|_| Error::Il {
+            span: ast.span(),
+            message: "failed to compile parameters".to_string(),
+        })?;
 
         self.environment
             .push_scope(parameters.iter().map(|param| param.name));
@@ -623,7 +608,7 @@ impl Compiler {
         self.environment.pop_scope();
 
         Ok(Il::Lambda(Lambda {
-            source: source.clone(),
+            span: ast.span(),
             parameters,
             r#type,
             arity,
@@ -634,13 +619,13 @@ impl Compiler {
 
     fn compile_if(
         &mut self,
-        source: &Ast,
+        ast: &Ast,
         r#if: &ast::If,
-        vm: &mut Vm<&'static Sexpr<'static>>,
+        vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
     ) -> Result<Il, Error> {
         Ok(Il::If(If {
-            source: source.clone(),
+            span: ast.span(),
             predicate: std::boxed::Box::new(self.compile(&r#if.predicate, vm, ast_compiler)?),
             then: std::boxed::Box::new(self.compile(&r#if.then, vm, ast_compiler)?),
             r#else: std::boxed::Box::new(self.compile(&r#if.r#else, vm, ast_compiler)?),
@@ -649,60 +634,58 @@ impl Compiler {
 
     fn compile_def(
         &mut self,
-        source: &Ast,
+        ast: &Ast,
         def: &ast::Def,
-        vm: &mut Vm<&'static Sexpr<'static>>,
+        vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
     ) -> Result<Il, Error> {
         self.environment.insert_global(def.parameter.name.as_str());
 
-        let parameter = Parameter::from_ast(source, &def.parameter).map_err(|_| Error::Il {
-            ast: source.clone(),
+        let parameter = Parameter::from_ast(ast, &def.parameter).map_err(|_| Error::Il {
+            span: ast.span(),
             message: "failed to parse parameter".to_string(),
         })?;
 
         Ok(Il::Def(Def {
-            source: source.clone(),
+            span: ast.span(),
             parameter,
             body: std::boxed::Box::new(self.compile(&def.body, vm, ast_compiler)?),
         }))
     }
 
-    fn compile_decl(&mut self, source: &Ast, decl: &ast::Decl) -> Result<Il, Error> {
+    fn compile_decl(&mut self, ast: &Ast, decl: &ast::Decl) -> Result<Il, Error> {
         self.environment.insert_global(decl.parameter.name.as_str());
 
-        Ok(Il::Constant(Constant::Nil {
-            source: source.clone(),
-        }))
+        Ok(Il::Constant(Constant::Nil { span: ast.span() }))
     }
 
     fn compile_set(
         &mut self,
-        source: &Ast,
+        ast: &Ast,
         set: &ast::Set,
-        vm: &mut Vm<&'static Sexpr<'static>>,
+        vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
     ) -> Result<Il, Error> {
         Ok(Il::Set(Set {
-            source: source.clone(),
+            span: ast.span(),
             target: match self.environment.resolve(set.target.as_str()) {
                 Some(Variable::Local(index)) => VarRef::Local {
-                    source: source.clone(),
+                    span: ast.span(),
                     name: set.target.clone(),
                     index,
                 },
                 Some(Variable::Upvalue(index)) => VarRef::UpValue {
-                    source: source.clone(),
+                    span: ast.span(),
                     name: set.target.clone(),
                     index,
                 },
                 Some(Variable::Global) => VarRef::Global {
-                    source: source.clone(),
+                    span: ast.span(),
                     name: set.target.clone(),
                 },
                 None => {
                     return Err(Error::Il {
-                        ast: source.clone(),
+                        span: ast.span(),
                         message: "unknown variable".to_string(),
                     })
                 }
@@ -714,13 +697,13 @@ impl Compiler {
 
     fn compile_set_box(
         &mut self,
-        source: &Ast,
+        ast: &Ast,
         setbox: &ast::SetBox,
-        vm: &mut Vm<&'static Sexpr<'static>>,
+        vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
     ) -> Result<Il, Error> {
         Ok(Il::SetBox(SetBox {
-            source: source.clone(),
+            span: ast.span(),
             target: std::boxed::Box::new(self.compile(&setbox.target, vm, ast_compiler)?),
             body: std::boxed::Box::new(self.compile(&setbox.body, vm, ast_compiler)?),
         }))
@@ -728,93 +711,89 @@ impl Compiler {
 
     fn compile_box(
         &mut self,
-        source: &Ast,
+        ast: &Ast,
         r#box: &ast::Box,
-        vm: &mut Vm<&'static Sexpr<'static>>,
+        vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
     ) -> Result<Il, Error> {
         Ok(Il::Box(Box {
-            source: source.clone(),
+            span: ast.span(),
             body: std::boxed::Box::new(self.compile(&r#box.body, vm, ast_compiler)?),
         }))
     }
 
     fn compile_unbox(
         &mut self,
-        source: &Ast,
+        ast: &Ast,
         unbox: &ast::UnBox,
-        vm: &mut Vm<&'static Sexpr<'static>>,
+        vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
     ) -> Result<Il, Error> {
         Ok(Il::UnBox(UnBox {
-            source: source.clone(),
+            span: ast.span(),
             body: std::boxed::Box::new(self.compile(&unbox.body, vm, ast_compiler)?),
         }))
     }
 
-    fn compile_quoted(&mut self, source: &Ast, quoted: &ast::Quoted) -> Result<Il, Error> {
+    fn compile_quoted(&mut self, ast: &Ast, quoted: &ast::Quoted) -> Result<Il, Error> {
         Ok(match &quoted {
-            Quoted::List { list, .. } => self.compile_quoted_list(source, list.as_slice())?,
+            Quoted::List { list, .. } => self.compile_quoted_list(ast, list.as_slice())?,
             Quoted::Symbol { symbol, .. } => Il::Constant(Constant::Symbol {
-                source: source.clone(),
+                span: ast.span(),
                 symbol: symbol.clone(),
             }),
             Quoted::String { string, .. } => Il::Constant(Constant::String {
-                source: source.clone(),
+                span: ast.span(),
                 string: string.clone(),
             }),
             Quoted::Char { char, .. } => Il::Constant(Constant::Char {
-                source: source.clone(),
+                span: ast.span(),
                 char: *char,
             }),
             Quoted::Int { int, .. } => Il::Constant(Constant::Int {
-                source: source.clone(),
+                span: ast.span(),
                 int: *int,
             }),
             Quoted::Bool { bool, .. } => Il::Constant(Constant::Bool {
-                source: source.clone(),
+                span: ast.span(),
                 bool: *bool,
             }),
-            Quoted::Nil { .. } => Il::Constant(Constant::Nil {
-                source: source.clone(),
-            }),
+            Quoted::Nil { .. } => Il::Constant(Constant::Nil { span: ast.span() }),
         })
     }
 
     #[allow(clippy::only_used_in_recursion)]
-    fn compile_quoted_list(&mut self, source: &Ast, list: &[Quoted]) -> Result<Il, Error> {
+    fn compile_quoted_list(&mut self, ast: &Ast, list: &[Quoted]) -> Result<Il, Error> {
         Ok(Il::List(List {
-            source: source.clone(),
+            span: ast.span(),
             exprs: list
                 .iter()
                 .map(|quoted| {
                     Ok(match quoted {
                         Quoted::List { list, .. } => {
-                            self.compile_quoted_list(source, list.as_slice())?
+                            self.compile_quoted_list(ast, list.as_slice())?
                         }
                         Quoted::Symbol { symbol, .. } => Il::Constant(Constant::Symbol {
-                            source: source.clone(),
+                            span: ast.span(),
                             symbol: symbol.clone(),
                         }),
                         Quoted::String { string, .. } => Il::Constant(Constant::String {
-                            source: source.clone(),
+                            span: ast.span(),
                             string: string.clone(),
                         }),
                         Quoted::Char { char, .. } => Il::Constant(Constant::Char {
-                            source: source.clone(),
+                            span: ast.span(),
                             char: *char,
                         }),
                         Quoted::Int { int, .. } => Il::Constant(Constant::Int {
-                            source: source.clone(),
+                            span: ast.span(),
                             int: *int,
                         }),
                         Quoted::Bool { bool, .. } => Il::Constant(Constant::Bool {
-                            source: source.clone(),
+                            span: ast.span(),
                             bool: *bool,
                         }),
-                        Quoted::Nil { .. } => Il::Constant(Constant::Nil {
-                            source: source.clone(),
-                        }),
+                        Quoted::Nil { .. } => Il::Constant(Constant::Nil { span: ast.span() }),
                     })
                 })
                 .collect::<Result<Vec<_>, Error>>()?,
@@ -823,13 +802,13 @@ impl Compiler {
 
     fn compile_fncall(
         &mut self,
-        source: &Ast,
+        ast: &Ast,
         fncall: &ast::FnCall,
-        vm: &mut Vm<&'static Sexpr<'static>>,
+        vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
     ) -> Result<Il, Error> {
         Ok(Il::FnCall(FnCall {
-            source: source.clone(),
+            span: ast.span(),
             function: std::boxed::Box::new(self.compile(&fncall.function, vm, ast_compiler)?),
             args: fncall
                 .exprs
@@ -841,13 +820,13 @@ impl Compiler {
 
     fn compile_apply(
         &mut self,
-        source: &Ast,
+        ast: &Ast,
         apply: &ast::Apply,
-        vm: &mut Vm<&'static Sexpr<'static>>,
+        vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
     ) -> Result<Il, Error> {
         Ok(Il::Apply(Apply {
-            source: source.clone(),
+            span: ast.span(),
             function: std::boxed::Box::new(self.compile(&apply.function, vm, ast_compiler)?),
             list: std::boxed::Box::new(self.compile(&apply.list, vm, ast_compiler)?),
         }))
@@ -855,13 +834,13 @@ impl Compiler {
 
     fn compile_arithmetic_operation(
         &mut self,
-        source: &Ast,
+        ast: &Ast,
         op: &ast::BinaryArithmeticOperation,
-        vm: &mut Vm<&'static Sexpr<'static>>,
+        vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
     ) -> Result<Il, Error> {
         Ok(Il::ArithmeticOperation(ArithmeticOperation {
-            source: source.clone(),
+            span: ast.span(),
             operator: match op.operator {
                 ast::BinaryArithmeticOperator::Add => ArithmeticOperator::Add,
                 ast::BinaryArithmeticOperator::Sub => ArithmeticOperator::Sub,
@@ -875,13 +854,13 @@ impl Compiler {
 
     fn compile_comparison_operation(
         &mut self,
-        source: &Ast,
+        ast: &Ast,
         op: &ast::ComparisonOperation,
-        vm: &mut Vm<&'static Sexpr<'static>>,
+        vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
     ) -> Result<Il, Error> {
         Ok(Il::ComparisonOperation(ComparisonOperation {
-            source: source.clone(),
+            span: ast.span(),
             operator: match op.operator {
                 ast::ComparisonOperator::Eq => ComparisonOperator::Eq,
                 ast::ComparisonOperator::Lt => ComparisonOperator::Lt,
@@ -894,13 +873,13 @@ impl Compiler {
 
     fn compile_list(
         &mut self,
-        source: &Ast,
+        ast: &Ast,
         list: &ast::List,
-        vm: &mut Vm<&'static Sexpr<'static>>,
+        vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
     ) -> Result<Il, Error> {
         Ok(Il::List(List {
-            source: source.clone(),
+            span: ast.span(),
             exprs: list
                 .exprs
                 .iter()
@@ -911,13 +890,13 @@ impl Compiler {
 
     fn compile_cons(
         &mut self,
-        source: &Ast,
+        ast: &Ast,
         cons: &ast::Cons,
-        vm: &mut Vm<&'static Sexpr<'static>>,
+        vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
     ) -> Result<Il, Error> {
         Ok(Il::Cons(Cons {
-            source: source.clone(),
+            span: ast.span(),
             lhs: std::boxed::Box::new(self.compile(&cons.lhs, vm, ast_compiler)?),
             rhs: std::boxed::Box::new(self.compile(&cons.rhs, vm, ast_compiler)?),
         }))
@@ -925,39 +904,39 @@ impl Compiler {
 
     fn compile_car(
         &mut self,
-        source: &Ast,
+        ast: &Ast,
         car: &ast::Car,
-        vm: &mut Vm<&'static Sexpr<'static>>,
+        vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
     ) -> Result<Il, Error> {
         Ok(Il::Car(Car {
-            source: source.clone(),
+            span: ast.span(),
             body: std::boxed::Box::new(self.compile(&car.body, vm, ast_compiler)?),
         }))
     }
 
     fn compile_cdr(
         &mut self,
-        source: &Ast,
+        ast: &Ast,
         cdr: &ast::Cdr,
-        vm: &mut Vm<&'static Sexpr<'static>>,
+        vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
     ) -> Result<Il, Error> {
         Ok(Il::Cdr(Cdr {
-            source: source.clone(),
+            span: ast.span(),
             body: std::boxed::Box::new(self.compile(&cdr.body, vm, ast_compiler)?),
         }))
     }
 
     fn compile_is_type(
         &mut self,
-        source: &Ast,
+        ast: &Ast,
         is_type: &ast::IsType,
-        vm: &mut Vm<&'static Sexpr<'static>>,
+        vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
     ) -> Result<Il, Error> {
         Ok(Il::IsType(IsType {
-            source: source.clone(),
+            span: ast.span(),
             r#type: match is_type.parameter {
                 ast::IsTypeParameter::Function => IsTypeParameter::Function,
                 ast::IsTypeParameter::Cons => IsTypeParameter::Cons,
@@ -974,43 +953,41 @@ impl Compiler {
 
     fn compile_assert(
         &mut self,
-        source: &Ast,
+        ast: &Ast,
         assert: &ast::Assert,
-        vm: &mut Vm<&'static Sexpr<'static>>,
+        vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
     ) -> Result<Il, Error> {
         Ok(Il::Assert(Assert {
-            source: source.clone(),
+            span: ast.span(),
             body: std::boxed::Box::new(self.compile(&assert.body, vm, ast_compiler)?),
         }))
     }
 
-    fn compile_gensym(&mut self, source: &Ast) -> Result<Il, Error> {
+    fn compile_gensym(&mut self, ast: &Ast) -> Result<Il, Error> {
         let suffix = rand::random::<u32>();
 
         let symbol = format!("e{suffix}");
 
         Ok(Il::Constant(Constant::Symbol {
-            source: source.clone(),
+            span: ast.span(),
             symbol,
         }))
     }
 
-    fn compile_map_create(&mut self, source: &Ast) -> Result<Il, Error> {
-        Ok(Il::MapCreate(MapCreate {
-            source: source.clone(),
-        }))
+    fn compile_map_create(&mut self, ast: &Ast) -> Result<Il, Error> {
+        Ok(Il::MapCreate(MapCreate { span: ast.span() }))
     }
 
     fn compile_map_insert(
         &mut self,
-        source: &Ast,
+        ast: &Ast,
         map_insert: &ast::MapInsert,
-        vm: &mut Vm<&'static Sexpr<'static>>,
+        vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
     ) -> Result<Il, Error> {
         Ok(Il::MapInsert(MapInsert {
-            source: source.clone(),
+            span: ast.span(),
             map: std::boxed::Box::new(self.compile(&map_insert.map, vm, ast_compiler)?),
             key: std::boxed::Box::new(self.compile(&map_insert.key, vm, ast_compiler)?),
             value: std::boxed::Box::new(self.compile(&map_insert.value, vm, ast_compiler)?),
@@ -1019,13 +996,13 @@ impl Compiler {
 
     fn compile_map_retrieve(
         &mut self,
-        source: &Ast,
+        ast: &Ast,
         map_retrieve: &ast::MapRetrieve,
-        vm: &mut Vm<&'static Sexpr<'static>>,
+        vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
     ) -> Result<Il, Error> {
         Ok(Il::MapRetrieve(MapRetrieve {
-            source: source.clone(),
+            span: ast.span(),
             map: std::boxed::Box::new(self.compile(&map_retrieve.map, vm, ast_compiler)?),
             key: std::boxed::Box::new(self.compile(&map_retrieve.key, vm, ast_compiler)?),
         }))
@@ -1033,13 +1010,13 @@ impl Compiler {
 
     fn compile_map_items(
         &mut self,
-        source: &Ast,
+        ast: &Ast,
         map_items: &ast::MapItems,
-        vm: &mut Vm<&'static Sexpr<'static>>,
+        vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
     ) -> Result<Il, Error> {
         Ok(Il::MapItems(MapItems {
-            source: source.clone(),
+            span: ast.span(),
             map: std::boxed::Box::new(self.compile(&map_items.map, vm, ast_compiler)?),
         }))
     }
