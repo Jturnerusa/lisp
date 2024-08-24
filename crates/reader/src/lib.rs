@@ -67,87 +67,40 @@ enum Macro {
     Splice,
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, EnumIs)]
-pub enum Sexpr<'context> {
-    List {
-        list: Vec<Sexpr<'context>>,
-        context: &'context Context,
-        span: Range<usize>,
-    },
-    Symbol {
-        symbol: String,
-        context: &'context Context,
-        span: Range<usize>,
-    },
-    String {
-        string: String,
-        context: &'context Context,
-        span: Range<usize>,
-    },
-    Char {
-        char: char,
-        context: &'context Context,
-        span: Range<usize>,
-    },
-    Int {
-        int: i64,
-        context: &'context Context,
-        span: Range<usize>,
-    },
-    Bool {
-        bool: bool,
-        context: &'context Context,
-        span: Range<usize>,
-    },
-    Nil {
-        context: &'context Context,
-        span: Range<usize>,
-    },
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct FileSpan {
+    id: u64,
+    start: usize,
+    stop: usize,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Context {
-    display: String,
-    source: String,
+#[derive(Clone, Debug, PartialEq, Eq, Hash, EnumIs)]
+pub enum Sexpr {
+    List { list: Vec<Sexpr>, span: FileSpan },
+    Symbol { symbol: String, span: FileSpan },
+    String { string: String, span: FileSpan },
+    Char { char: char, span: FileSpan },
+    Int { int: i64, span: FileSpan },
+    Bool { bool: bool, span: FileSpan },
+    Nil { span: FileSpan },
 }
 
 #[derive(Clone, Debug)]
-pub struct Reader<'context> {
-    lexer: Lexer<'context, Token>,
-    context: &'context Context,
+pub struct Reader<'src> {
+    lexer: Lexer<'src, Token>,
+    file_id: u64,
 }
 
-impl Context {
-    pub fn new(source: &str, display: &str) -> Self {
+impl<'src> Reader<'src> {
+    pub fn new(source: &'src str, file_id: u64) -> Self {
         Self {
-            display: display.to_string(),
-            source: source.to_string(),
-        }
-    }
-
-    pub fn source(&self) -> &str {
-        self.source.as_str()
-    }
-
-    pub fn span(&self, span: Range<usize>) -> &str {
-        &self.source[span.start..span.end]
-    }
-
-    pub fn display(&self) -> &str {
-        &self.display
-    }
-}
-
-impl<'context> Reader<'context> {
-    pub fn new(context: &'context Context) -> Self {
-        Self {
-            lexer: Lexer::new(context.source()),
-            context,
+            lexer: Lexer::new(source),
+            file_id,
         }
     }
 }
 
-impl<'context> Sexpr<'context> {
+impl Sexpr {
     pub fn as_list(&self) -> Option<&[Sexpr]> {
         match self {
             Self::List { list, .. } => Some(list.as_slice()),
@@ -190,19 +143,7 @@ impl<'context> Sexpr<'context> {
         }
     }
 
-    pub fn context(&self) -> &Context {
-        match self {
-            Self::List { context, .. }
-            | Self::Symbol { context, .. }
-            | Self::String { context, .. }
-            | Self::Char { context, .. }
-            | Self::Int { context, .. }
-            | Self::Bool { context, .. }
-            | Self::Nil { context, .. } => context,
-        }
-    }
-
-    pub fn span(&self) -> Range<usize> {
+    pub fn span(&self) -> FileSpan {
         match self {
             Self::List { span, .. }
             | Self::Symbol { span, .. }
@@ -210,44 +151,19 @@ impl<'context> Sexpr<'context> {
             | Self::Char { span, .. }
             | Self::Int { span, .. }
             | Self::Bool { span, .. }
-            | Self::Nil { span, .. } => span.clone(),
-        }
-    }
-
-    pub fn line_number(&self) -> usize {
-        self.context()
-            .source()
-            .bytes()
-            .take(self.span().start)
-            .filter(|b| *b == b'\n')
-            .count()
-    }
-}
-
-impl<'context> Sexpr<'context> {
-    pub fn quote(&'context self) -> Sexpr<'context> {
-        let quote = Sexpr::Symbol {
-            symbol: "quote".to_string(),
-            context: self.context(),
-            span: self.span(),
-        };
-
-        Sexpr::List {
-            list: vec![quote, self.clone()],
-            context: self.context(),
-            span: self.span(),
+            | Self::Nil { span, .. } => *span,
         }
     }
 }
 
-impl<'context> Iterator for Reader<'context> {
-    type Item = Result<Sexpr<'context>, Error<'context>>;
+impl<'src> Iterator for Reader<'src> {
+    type Item = Result<Sexpr, Error<'src>>;
     fn next(&mut self) -> Option<Self::Item> {
-        read(&mut self.lexer, self.context)
+        read(&mut self.lexer, self.file_id)
     }
 }
 
-impl<'context> fmt::Display for Sexpr<'context> {
+impl fmt::Display for Sexpr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Sexpr::List { list, .. } => {
@@ -272,132 +188,173 @@ impl<'context> fmt::Display for Sexpr<'context> {
     }
 }
 
-fn read<'context>(
-    lexer: &mut Lexer<'context, Token>,
-    context: &'context Context,
-) -> Option<Result<Sexpr<'context>, Error<'context>>> {
+fn read<'src>(lexer: &mut Lexer<'src, Token>, file_id: u64) -> Option<Result<Sexpr, Error<'src>>> {
     Some(Ok(match lexer.next()? {
-        Ok(Token::LeftParen) => match read_list(lexer, context) {
+        Ok(Token::LeftParen) => match read_list(lexer, file_id) {
             Ok(sexpr) => sexpr,
             Err(_) => return Some(Err(Error::Lexer(lexer.remainder()))),
         },
         Ok(Token::RightParen) => return Some(Err(Error::UnbalancedParens)),
-        Ok(Token::Quote) => match expand_macro(lexer, context, Macro::Quote) {
+        Ok(Token::Quote) => match expand_macro(lexer, file_id, Macro::Quote) {
             Ok(sexpr) => sexpr,
             Err(_) => return Some(Err(Error::Lexer(lexer.remainder()))),
         },
-        Ok(Token::QuasiQuote) => match expand_macro(lexer, context, Macro::QuasiQuote) {
+        Ok(Token::QuasiQuote) => match expand_macro(lexer, file_id, Macro::QuasiQuote) {
             Ok(sexpr) => sexpr,
             Err(_) => return Some(Err(Error::Lexer(lexer.remainder()))),
         },
-        Ok(Token::UnQuote) => match expand_macro(lexer, context, Macro::UnQuote) {
+        Ok(Token::UnQuote) => match expand_macro(lexer, file_id, Macro::UnQuote) {
             Ok(sexpr) => sexpr,
             Err(_) => return Some(Err(Error::Lexer(lexer.remainder()))),
         },
-        Ok(Token::Splice) => match expand_macro(lexer, context, Macro::Splice) {
+        Ok(Token::Splice) => match expand_macro(lexer, file_id, Macro::Splice) {
             Ok(sexpr) => sexpr,
             Err(_) => return Some(Err(Error::Lexer(lexer.remainder()))),
         },
         Ok(Token::Symbol) => Sexpr::Symbol {
             symbol: lexer.slice().to_string(),
-            context,
-            span: lexer.span(),
+            span: FileSpan {
+                id: file_id,
+                start: lexer.span().start,
+                stop: lexer.span().end,
+            },
         },
         Ok(Token::String) => Sexpr::String {
             string: lexer.slice()[1..lexer.slice().len() - 1].to_string(),
-            context,
-            span: lexer.span(),
+            span: FileSpan {
+                id: file_id,
+                start: lexer.span().start,
+                stop: lexer.span().end,
+            },
         },
         Ok(Token::Char) => Sexpr::Char {
             char: lexer.slice()[1..lexer.slice().len()].parse().unwrap(),
-            context,
-            span: lexer.span(),
+            span: FileSpan {
+                id: file_id,
+                start: lexer.span().start,
+                stop: lexer.span().end,
+            },
         },
         Ok(Token::Int) => Sexpr::Int {
             int: lexer.slice().parse().unwrap(),
-            context,
-            span: lexer.span(),
+            span: FileSpan {
+                id: file_id,
+                start: lexer.span().start,
+                stop: lexer.span().end,
+            },
         },
         Ok(Token::True) => Sexpr::Bool {
             bool: true,
-            context,
-            span: lexer.span(),
+            span: FileSpan {
+                id: file_id,
+                start: lexer.span().start,
+                stop: lexer.span().end,
+            },
         },
         Ok(Token::False) => Sexpr::Bool {
             bool: false,
-            context,
-            span: lexer.span(),
+            span: FileSpan {
+                id: file_id,
+                start: lexer.span().start,
+                stop: lexer.span().end,
+            },
         },
         Ok(Token::Nil) => Sexpr::Nil {
-            context,
-            span: lexer.span(),
+            span: FileSpan {
+                id: file_id,
+                start: lexer.span().start,
+                stop: lexer.span().end,
+            },
         },
         Err(_) => return Some(Err(Error::Lexer(lexer.remainder()))),
     }))
 }
 
-fn read_list<'context>(
-    lexer: &mut Lexer<'context, Token>,
-    context: &'context Context,
-) -> Result<Sexpr<'context>, Error<'context>> {
+fn read_list<'src>(lexer: &mut Lexer<'src, Token>, file_id: u64) -> Result<Sexpr, Error<'src>> {
     let mut list = Vec::new();
-    let start = lexer.span().start;
 
     loop {
         match lexer.next() {
-            Some(Ok(Token::LeftParen)) => list.push(read_list(lexer, context)?),
+            Some(Ok(Token::LeftParen)) => list.push(read_list(lexer, file_id)?),
             Some(Ok(Token::RightParen)) if list.is_empty() => {
                 return Ok(Sexpr::Nil {
-                    context,
-                    span: lexer.span(),
+                    span: FileSpan {
+                        id: file_id,
+                        start: lexer.span().start,
+                        stop: lexer.span().end,
+                    },
                 })
             }
             Some(Ok(Token::RightParen)) => {
                 return Ok(Sexpr::List {
                     list,
-                    context,
-                    span: start..lexer.span().end,
+                    span: FileSpan {
+                        id: file_id,
+                        start: lexer.span().start,
+                        stop: lexer.span().end,
+                    },
                 })
             }
-            Some(Ok(Token::Quote)) => list.push(expand_macro(lexer, context, Macro::Quote)?),
+            Some(Ok(Token::Quote)) => list.push(expand_macro(lexer, file_id, Macro::Quote)?),
             Some(Ok(Token::QuasiQuote)) => {
-                list.push(expand_macro(lexer, context, Macro::QuasiQuote)?)
+                list.push(expand_macro(lexer, file_id, Macro::QuasiQuote)?)
             }
-            Some(Ok(Token::UnQuote)) => list.push(expand_macro(lexer, context, Macro::UnQuote)?),
-            Some(Ok(Token::Splice)) => list.push(expand_macro(lexer, context, Macro::Splice)?),
+            Some(Ok(Token::UnQuote)) => list.push(expand_macro(lexer, file_id, Macro::UnQuote)?),
+            Some(Ok(Token::Splice)) => list.push(expand_macro(lexer, file_id, Macro::Splice)?),
             Some(Ok(Token::Symbol)) => list.push(Sexpr::Symbol {
                 symbol: lexer.slice().to_string(),
-                context,
-                span: lexer.span(),
+                span: FileSpan {
+                    id: file_id,
+                    start: lexer.span().start,
+                    stop: lexer.span().end,
+                },
             }),
             Some(Ok(Token::String)) => list.push(Sexpr::String {
                 string: lexer.slice()[1..lexer.slice().len() - 1].to_string(),
-                context,
-                span: lexer.span(),
+                span: FileSpan {
+                    id: file_id,
+                    start: lexer.span().start,
+                    stop: lexer.span().end,
+                },
             }),
             Some(Ok(Token::Char)) => list.push(Sexpr::Char {
                 char: lexer.slice()[1..lexer.slice().len()].parse().unwrap(),
-                context,
-                span: lexer.span(),
+                span: FileSpan {
+                    id: file_id,
+                    start: lexer.span().start,
+                    stop: lexer.span().end,
+                },
             }),
             Some(Ok(Token::Int)) => list.push(Sexpr::Int {
                 int: lexer.slice().parse().unwrap(),
-                context,
-                span: lexer.span(),
+                span: FileSpan {
+                    id: file_id,
+                    start: lexer.span().start,
+                    stop: lexer.span().end,
+                },
             }),
             Some(Ok(Token::True)) => list.push(Sexpr::Bool {
                 bool: true,
-                context,
-                span: lexer.span(),
+                span: FileSpan {
+                    id: file_id,
+                    start: lexer.span().start,
+                    stop: lexer.span().end,
+                },
             }),
             Some(Ok(Token::False)) => list.push(Sexpr::Bool {
                 bool: false,
-                context,
-                span: lexer.span(),
+                span: FileSpan {
+                    id: file_id,
+                    start: lexer.span().start,
+                    stop: lexer.span().end,
+                },
             }),
             Some(Ok(Token::Nil)) => list.push(Sexpr::Nil {
-                context,
-                span: lexer.span(),
+                span: FileSpan {
+                    id: file_id,
+                    start: lexer.span().start,
+                    stop: lexer.span().end,
+                },
             }),
             Some(Err(_)) => return Err(Error::Lexer(lexer.remainder())),
             None => return Err(Error::UnExpectedEof),
@@ -405,12 +362,16 @@ fn read_list<'context>(
     }
 }
 
-fn expand_macro<'context>(
-    lexer: &mut Lexer<'context, Token>,
-    context: &'context Context,
+fn expand_macro<'src>(
+    lexer: &mut Lexer<'src, Token>,
+    file_id: u64,
     r#macro: Macro,
-) -> Result<Sexpr<'context>, Error<'context>> {
-    let span = lexer.span();
+) -> Result<Sexpr, Error<'src>> {
+    let span = FileSpan {
+        id: file_id,
+        start: lexer.span().start,
+        stop: lexer.span().end,
+    };
 
     let symbol = Sexpr::Symbol {
         symbol: match r#macro {
@@ -420,11 +381,10 @@ fn expand_macro<'context>(
             Macro::Splice => "unquote-splice",
         }
         .to_string(),
-        context,
         span: span.clone(),
     };
 
-    let body = match read(lexer, context) {
+    let body = match read(lexer, file_id) {
         Some(Ok(sexpr)) => sexpr,
         Some(Err(_)) => return Err(Error::Lexer(lexer.remainder())),
         None => return Err(Error::UnExpectedEof),
@@ -432,12 +392,15 @@ fn expand_macro<'context>(
 
     Ok(Sexpr::List {
         list: vec![symbol, body],
-        context,
-        span,
+        span: FileSpan {
+            id: file_id,
+            start: lexer.span().start,
+            stop: lexer.span().end,
+        },
     })
 }
 
-impl<'a> PartialOrd for Sexpr<'a> {
+impl PartialOrd for Sexpr {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match (self, other) {
             (Self::List { list: a, .. }, Self::List { list: b, .. }) => a.partial_cmp(b),
@@ -452,7 +415,7 @@ impl<'a> PartialOrd for Sexpr<'a> {
     }
 }
 
-impl<'context> fmt::Debug for Error<'context> {
+impl<'src> fmt::Debug for Error<'src> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Lexer(remainder) => {
@@ -462,27 +425,4 @@ impl<'context> fmt::Debug for Error<'context> {
             Self::UnbalancedParens => write!(f, "unbalanced parens"),
         }
     }
-}
-
-impl<'context> fmt::Debug for Sexpr<'context> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let source = get_source(self, self.span());
-        let line_number = self
-            .context()
-            .source()
-            .bytes()
-            .take(self.span().start)
-            .filter(|b| *b == b'\n')
-            .count();
-
-        write!(
-            f,
-            "{}:{line_number}:\n{source}",
-            self.context().display.as_str()
-        )
-    }
-}
-
-fn get_source<'sexpr>(sexpr: &'sexpr Sexpr, span: Range<usize>) -> &'sexpr str {
-    &sexpr.context().source()[span]
 }
