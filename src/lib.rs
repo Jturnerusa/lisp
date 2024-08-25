@@ -1,5 +1,4 @@
 use compiler::ast::Ast;
-use core::fmt;
 use error::FileSpan;
 use reader::Reader;
 use std::collections::HashMap;

@@ -43,7 +43,7 @@ fn main() {
             std::process::exit(1);
         }
         Err(lisp::Error::Spanned(error)) => {
-            display_error(&*error, &files, &mut std::io::stderr());
+            display_error(&*error, &files, &mut std::io::stderr()).unwrap();
             std::process::exit(1);
         }
     }

@@ -1,4 +1,3 @@
-use core::fmt;
 
 use crate::{
     ast::{self, Ast, Quoted, Type},

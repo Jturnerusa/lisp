@@ -176,7 +176,7 @@ impl fmt::Display for Sexpr {
     }
 }
 
-fn read<'src>(lexer: &mut Lexer<'src, Token>, file_id: u64) -> Option<Result<Sexpr, Error>> {
+fn read(lexer: &mut Lexer<'_, Token>, file_id: u64) -> Option<Result<Sexpr, Error>> {
     Some(Ok(match lexer.next()? {
         Ok(Token::LeftParen) => match read_list(lexer, file_id) {
             Ok(sexpr) => sexpr,
@@ -258,7 +258,7 @@ fn read<'src>(lexer: &mut Lexer<'src, Token>, file_id: u64) -> Option<Result<Sex
     }))
 }
 
-fn read_list<'src>(lexer: &mut Lexer<'src, Token>, file_id: u64) -> Result<Sexpr, Error> {
+fn read_list(lexer: &mut Lexer<'_, Token>, file_id: u64) -> Result<Sexpr, Error> {
     let mut list = Vec::new();
 
     loop {
@@ -350,8 +350,8 @@ fn read_list<'src>(lexer: &mut Lexer<'src, Token>, file_id: u64) -> Result<Sexpr
     }
 }
 
-fn expand_macro<'src>(
-    lexer: &mut Lexer<'src, Token>,
+fn expand_macro(
+    lexer: &mut Lexer<'_, Token>,
     file_id: u64,
     r#macro: Macro,
 ) -> Result<Sexpr, Error> {

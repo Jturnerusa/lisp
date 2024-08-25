@@ -3,7 +3,6 @@ use std::{collections::HashMap, path::PathBuf};
 use compiler::{ast, tree};
 use error::FileSpan;
 use lisp::{compile_source, display_error};
-use reader::Sexpr;
 use vm::{OpCodeTable, Vm};
 
 macro_rules! deftest {
