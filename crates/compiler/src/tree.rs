@@ -553,7 +553,7 @@ impl Compiler {
             message: "failed to print macro result".to_string(),
         })?;
 
-        let mut reader = Reader::new(buff.as_str(), 0);
+        let mut reader = Reader::new(buff.as_str(), ast.span().id);
 
         let sexpr = reader.next().unwrap()?;
 
