@@ -1,4 +1,3 @@
-
 use crate::{
     ast::{self, Ast, Quoted, Type},
     bytecode,
@@ -512,7 +511,7 @@ impl Compiler {
 
         bytecode::compile(&lambda, &mut opcodes).map_err(std::boxed::Box::new)?;
 
-        vm.eval(&opcodes).map_err(std::boxed::Box::new)?;
+        vm.eval(&opcodes)?;
 
         vm.def_global(defmacro.name.as_str())
             .map_err(std::boxed::Box::new)?;
