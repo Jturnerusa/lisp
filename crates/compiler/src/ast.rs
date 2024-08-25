@@ -48,8 +48,8 @@ static BUILT_INS: &[&str] = &[
 
 #[derive(Clone, Debug, thiserror::Error)]
 pub struct Error {
-    span: FileSpan,
-    message: String,
+    pub span: FileSpan,
+    pub message: String,
 }
 
 #[derive(Clone, Debug)]
