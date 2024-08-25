@@ -23,6 +23,12 @@ pub enum Arity {
     Variadic(usize),
 }
 
+#[derive(Debug)]
+pub struct ErrorWithDebug<D> {
+    pub error: Error,
+    pub debug: D,
+}
+
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("type error: expected {expected}: received: {recieved}")]
@@ -152,7 +158,7 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
             .insert(name.to_string(), Object::NativeFunction(native_function));
     }
 
-    pub fn eval(&mut self, opcode_table: &OpCodeTable<D>) -> Result<(), (Error, D)> {
+    pub fn eval(&mut self, opcode_table: &OpCodeTable<D>) -> Result<(), ErrorWithDebug<D>> {
         loop {
             let opcode = if let Some(function) = &self.current_function {
                 function.borrow().opcodes.opcodes[self.pc].clone()
@@ -167,13 +173,13 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
 
             match self.dispatch(opcode) {
                 Ok(_) => continue,
-                Err(e) => {
+                Err(error) => {
                     let debug = if let Some(function) = &self.current_function {
                         function.borrow().opcodes.debug[self.pc - 1].clone()
                     } else {
                         opcode_table.debug[self.pc - 1].clone()
                     };
-                    return Err((e, debug));
+                    return Err(ErrorWithDebug { error, debug });
                 }
             }
         }
@@ -942,3 +948,11 @@ impl<D> fmt::Debug for OpCodeTable<D> {
         write!(f, "OpCodeTable")
     }
 }
+
+impl<D> fmt::Display for ErrorWithDebug<D> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.error)
+    }
+}
+
+impl<D: fmt::Debug> std::error::Error for ErrorWithDebug<D> {}

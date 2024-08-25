@@ -25,7 +25,7 @@ pub enum Error {
     Vm(#[from] vm::Error),
 
     #[error("vm error")]
-    VmWithDebug { error: vm::Error, span: FileSpan },
+    VmWithDebug(#[from] vm::ErrorWithDebug<FileSpan>),
 }
 
 #[derive(Clone, Debug, EnumAs, EnumIs)]
@@ -521,8 +521,7 @@ impl Compiler {
 
         bytecode::compile(&lambda, &mut opcodes)?;
 
-        vm.eval(&opcodes)
-            .map_err(|(error, span)| Error::VmWithDebug { error, span })?;
+        vm.eval(&opcodes)?;
 
         vm.def_global(defmacro.name.as_str())?;
 
@@ -546,13 +545,11 @@ impl Compiler {
 
         vm.get_global(macro_call.r#macro.as_str())?;
 
-        vm.eval(&opcode_table)
-            .map_err(|(error, span)| Error::VmWithDebug { error, span })?;
+        vm.eval(&opcode_table)?;
 
         vm.call(macro_call.args.len())?;
 
-        vm.eval(&OpCodeTable::new())
-            .map_err(|(error, span)| Error::VmWithDebug { error, span })?;
+        vm.eval(&OpCodeTable::new())?;
 
         let Some(object) = vm.pop().map(|local| local.into_object()) else {
             return Ok(Il::Constant(Constant::Nil { span: ast.span() }));
