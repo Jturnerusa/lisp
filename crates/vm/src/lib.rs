@@ -4,6 +4,7 @@ pub mod object;
 
 use crate::object::{Cons, Lambda, NativeFunction, Type};
 use core::fmt;
+use error::FileSpan;
 use gc::{Gc, GcCell, Trace};
 use object::HashMapKey;
 use std::cmp::{Ordering, PartialOrd};
@@ -955,4 +956,12 @@ impl<D> fmt::Display for ErrorWithDebug<D> {
     }
 }
 
-impl<D: fmt::Debug> std::error::Error for ErrorWithDebug<D> {}
+impl error::Error for ErrorWithDebug<FileSpan> {
+    fn span(&self) -> Option<error::FileSpan> {
+        Some(self.debug)
+    }
+
+    fn message(&self, writer: &mut dyn std::io::Write) {
+        write!(writer, "{}", self.error).unwrap();
+    }
+}
