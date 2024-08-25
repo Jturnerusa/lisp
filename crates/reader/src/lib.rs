@@ -69,9 +69,9 @@ enum Macro {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct FileSpan {
-    id: u64,
-    start: usize,
-    stop: usize,
+    pub id: u64,
+    pub start: usize,
+    pub stop: usize,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, EnumIs)]
