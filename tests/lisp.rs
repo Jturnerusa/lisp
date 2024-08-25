@@ -77,10 +77,7 @@ fn eval(input: &'static str) -> Result<Option<vm::Object<FileSpan>>, lisp::Error
 
     match vm.eval(&opcode_table) {
         Ok(_) => Ok(vm.pop().map(|local| local.into_object())),
-        Err(error) => {
-            display_error(&error, &files, &mut std::io::stderr()).unwrap();
-            Err(lisp::Error::Spanned(Box::new(error)))
-        }
+        Err(error) => Err(lisp::Error::Spanned(Box::new(error))),
     }
 }
 
