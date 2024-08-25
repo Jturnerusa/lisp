@@ -7,3 +7,4 @@ edition = "2021"
 gc = { path = "../gc" }
 unwrap-enum = { workspace = true }
 thiserror = { workspace = true }
+error = { path = "../error" }

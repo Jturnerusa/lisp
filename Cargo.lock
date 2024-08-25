@@ -291,6 +291,7 @@ dependencies = [
 name = "vm"
 version = "0.1.0"
 dependencies = [
+ "error",
  "gc",
  "thiserror",
  "unwrap-enum",
