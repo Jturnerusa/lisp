@@ -1,18 +1,13 @@
 use core::fmt;
+use error::FileSpan;
 use logos::{Lexer, Logos};
 use std::cmp::Ordering;
-use thiserror::Error;
 use unwrap_enum::EnumIs;
 
-#[derive(Clone, Error)]
+#[derive(Clone, Debug)]
 pub enum Error {
-    #[error("lexer error: remaining input: {0}")]
     Lexer(String),
-
-    #[error("unbalanced parens")]
     UnbalancedParens,
-
-    #[error("unexpected end of file")]
     UnExpectedEof,
 }
 
@@ -65,13 +60,6 @@ enum Macro {
     QuasiQuote,
     UnQuote,
     Splice,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct FileSpan {
-    pub id: u64,
-    pub start: usize,
-    pub stop: usize,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, EnumIs)]
@@ -415,14 +403,16 @@ impl PartialOrd for Sexpr {
     }
 }
 
-impl fmt::Debug for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl error::Error for Error {
+    fn span(&self) -> Option<FileSpan> {
+        None
+    }
+
+    fn message(&self, writer: &mut dyn std::io::Write) {
         match self {
-            Self::Lexer(remainder) => {
-                write!(f, "lexer error: {}", remainder)
-            }
-            Self::UnExpectedEof => write!(f, "unexpected eof"),
-            Self::UnbalancedParens => write!(f, "unbalanced parens"),
+            Self::Lexer(remainder) => write!(writer, "lexer error:\n{remainder}").unwrap(),
+            Self::UnbalancedParens => write!(writer, "lexer error: unbalanced parens").unwrap(),
+            Self::UnExpectedEof => write!(writer, "lexer error: unexpected eof").unwrap(),
         }
     }
 }

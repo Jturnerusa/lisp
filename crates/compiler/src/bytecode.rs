@@ -2,8 +2,8 @@ mod optimizer;
 
 use crate::tree::{self, Il};
 use core::fmt;
+use error::FileSpan;
 use gc::Gc;
-use reader::FileSpan;
 use vm::{OpCode, OpCodeTable};
 
 #[derive(Clone, Debug)]

@@ -18,11 +18,11 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 name = "compiler"
 version = "0.1.0"
 dependencies = [
+ "error",
  "gc",
  "micro-nom",
  "rand",
  "reader",
- "thiserror",
  "unwrap-enum",
  "vm",
 ]
@@ -32,6 +32,10 @@ name = "either"
 version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "11157ac094ffbdde99aa67b23417ebdd801842852b500e395a45a9c0aac03e4a"
+
+[[package]]
+name = "error"
+version = "0.1.0"
 
 [[package]]
 name = "fnv"
@@ -80,6 +84,7 @@ name = "lisp"
 version = "0.0.1"
 dependencies = [
  "compiler",
+ "error",
  "gc",
  "native-functions",
  "reader",
@@ -212,6 +217,7 @@ dependencies = [
 name = "reader"
 version = "0.1.0"
 dependencies = [
+ "error",
  "logos",
  "thiserror",
  "unwrap-enum",

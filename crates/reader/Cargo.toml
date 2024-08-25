@@ -7,3 +7,4 @@ edition = "2021"
 unwrap-enum = { workspace = true }
 logos = "0.14.0"
 thiserror = { workspace = true }
+error = { path = "../error" }

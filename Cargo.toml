@@ -1,5 +1,5 @@
 [workspace]
-members = [ "crates/gc","lib/native"]
+members = [ "crates/error", "crates/gc","lib/native"]
 
 [workspace.dependencies]
 micro-nom = { path = "vendor//micro-nom" }
@@ -12,9 +12,6 @@ name = "lisp"
 version = "0.0.1"
 edition = "2021"
 
-[[bin]]
-name = "disasm"
-
 [dependencies]
 reader = { path = "crates/reader" }
 compiler = { path = "crates/compiler" }
@@ -22,3 +19,4 @@ vm = { path = "crates/vm" }
 native-functions = { path = "lib/native" }
 gc = { path = "crates/gc" }
 thiserror = { workspace = true }
+error = { path = "crates/error" }

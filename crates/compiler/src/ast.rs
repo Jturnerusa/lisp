@@ -1,7 +1,8 @@
 use core::fmt;
 use std::collections::HashSet;
 
-use reader::{FileSpan, Sexpr};
+use error::FileSpan;
+use reader::Sexpr;
 use unwrap_enum::{EnumAs, EnumIs};
 
 static BUILT_INS: &[&str] = &[
@@ -46,7 +47,7 @@ static BUILT_INS: &[&str] = &[
     "let-type",
 ];
 
-#[derive(Clone, Debug, thiserror::Error)]
+#[derive(Clone, Debug)]
 pub struct Error {
     pub span: FileSpan,
     pub message: String,
@@ -1005,6 +1006,16 @@ impl Parameters {
 
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+}
+
+impl error::Error for Error {
+    fn span(&self) -> Option<error::FileSpan> {
+        Some(self.span)
+    }
+
+    fn message(&self, writer: &mut dyn std::io::Write) {
+        write!(writer, "{}", self.message).unwrap()
     }
 }
 

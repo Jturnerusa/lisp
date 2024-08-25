@@ -1,64 +1,67 @@
-use compiler::{
-    ast::{self, Ast},
-    bytecode,
-    tree::{self, Il},
-};
-use reader::{Reader, Sexpr};
+use compiler::ast::Ast;
+use core::fmt;
+use error::FileSpan;
+use reader::Reader;
+use std::collections::HashMap;
+use std::env;
 use std::fs::{self, File};
+use std::hash::{Hash, Hasher};
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::{env, error::Error};
 use vm::{OpCodeTable, Vm};
 
-type CheckTypes = dyn Fn(&Il, &mut compiler::types::Checker) -> Result<(), Box<dyn Error>>;
+#[derive(Debug)]
+pub enum Error {
+    Std(Box<dyn std::error::Error>),
+    Spanned(Box<dyn error::Error>),
+}
 
 pub fn compile_file(
     path: &Path,
-    tree_compiler: &mut tree::Compiler,
-    ast_compiler: &mut ast::Compiler,
-    type_checker: &mut compiler::types::Checker,
-    check_types: &CheckTypes,
-    vm: &mut Vm<&'static Sexpr<'static>>,
-    opcode_table: &mut OpCodeTable<&'static Sexpr<'static>>,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let mut source = String::new();
-    let mut file = match File::open(path) {
-        Ok(f) => f,
-        Err(e) => return Err(format!("failed to open {}: {e}", path.to_str().unwrap()).into()),
-    };
+    files: &mut HashMap<u64, PathBuf>,
+    ast_compiler: &mut compiler::ast::Compiler,
+    tree_compiler: &mut compiler::tree::Compiler,
+    vm: &mut Vm<FileSpan>,
+    opcode_table: &mut OpCodeTable<FileSpan>,
+) -> Result<(), Error> {
+    let absolute = fs::canonicalize(path).map_err(|e| Error::Std(Box::new(e)))?;
+    let file_id = hash_path(absolute.as_path());
+    let mut buff = String::new();
+    let mut file = File::open(path).map_err(|e| Error::Std(Box::new(e)))?;
 
-    file.read_to_string(&mut source)?;
+    files.insert(file_id, absolute);
+
+    file.read_to_string(&mut buff)
+        .map_err(|e| Error::Std(Box::new(e)))?;
 
     compile_source(
-        source.as_str(),
-        path.to_str().unwrap(),
-        tree_compiler,
+        buff.as_str(),
+        file_id,
+        files,
         ast_compiler,
-        type_checker,
-        check_types,
+        tree_compiler,
         vm,
         opcode_table,
     )
 }
 
-#[allow(clippy::too_many_arguments)]
 pub fn compile_source(
     source: &str,
-    context: &str,
-    tree_compiler: &mut tree::Compiler,
-    ast_compiler: &mut ast::Compiler,
-    type_checker: &mut compiler::types::Checker,
-    check_types: &CheckTypes,
-    vm: &mut Vm<&'static Sexpr<'static>>,
-    opcode_table: &mut OpCodeTable<&'static Sexpr<'static>>,
-) -> Result<(), Box<dyn Error>> {
-    let context = Box::leak(Box::new(reader::Context::new(source, context)));
-
-    let reader = Reader::new(context);
+    file_id: u64,
+    files: &mut HashMap<u64, PathBuf>,
+    ast_compiler: &mut compiler::ast::Compiler,
+    tree_compiler: &mut compiler::tree::Compiler,
+    vm: &mut Vm<FileSpan>,
+    opcode_table: &mut OpCodeTable<FileSpan>,
+) -> Result<(), Error> {
+    let reader = Reader::new(source, file_id);
 
     for expr in reader {
-        let sexpr: &'static _ = Box::leak(Box::new(expr?));
-        let ast = ast_compiler.compile(sexpr)?;
+        let sexpr = expr.map_err(|e| Error::Spanned(Box::new(e)))?;
+
+        let ast = ast_compiler
+            .compile(&sexpr)
+            .map_err(|e| Error::Spanned(Box::new(e)))?;
 
         if let Ast::EvalWhenCompile(eval_when_compile) = &ast {
             let mut opcode_table = OpCodeTable::new();
@@ -66,56 +69,76 @@ pub fn compile_source(
             for expr in &eval_when_compile.exprs {
                 let tree = tree_compiler.compile(expr, vm, ast_compiler)?;
 
-                check_types(&tree, type_checker)?;
-
-                bytecode::compile(&tree, &mut opcode_table)?;
+                compiler::bytecode::compile(&tree, &mut opcode_table)
+                    .map_err(|e| Error::Spanned(Box::new(e)))?;
             }
 
-            match vm.eval(&opcode_table) {
-                Ok(()) => (),
-                Err((error, sexpr)) => return Err(format!("{error}\n{sexpr}").into()),
-            }
+            vm.eval(&opcode_table)
+                .map_err(|e| Error::Spanned(Box::new(e)))?;
 
             continue;
         } else if let Ast::Require(require) = &ast {
-            let path = PathBuf::from(require.module.as_str());
-
+            let path = PathBuf::from(require.module.clone());
             let module = match find_module(path.as_path()) {
-                Some(Ok(m)) => m,
-                Some(Err(e)) => return Err(e),
+                Some(Ok(module)) => module,
+                Some(Err(e)) => return Err(Error::Std(e)),
                 None => {
-                    return Err(format!("failed to find module {}", require.module.as_str()).into())
+                    return Err(Error::Std(
+                        format!("failed to load module {}", path.to_str().unwrap()).into(),
+                    ))
                 }
             };
 
             compile_file(
                 module.as_path(),
-                tree_compiler,
+                files,
                 ast_compiler,
-                type_checker,
-                check_types,
+                tree_compiler,
                 vm,
                 opcode_table,
             )?;
-
-            continue;
-        } else if let Ast::Decl(decl) = &ast {
-            type_checker.decl(decl).unwrap();
-
-            let _ = tree_compiler.compile(&ast, vm, ast_compiler)?;
-
-            continue;
-        } else if let Ast::LetType(let_type) = &ast {
-            type_checker.create_type_alias(let_type)?;
 
             continue;
         }
 
         let tree = tree_compiler.compile(&ast, vm, ast_compiler)?;
 
-        check_types(&tree, type_checker)?;
+        compiler::bytecode::compile(&tree, opcode_table)
+            .map_err(|e| Error::Spanned(Box::new(e)))?;
+    }
 
-        bytecode::compile(&tree, opcode_table)?;
+    Ok(())
+}
+
+pub fn display_error(
+    error: &dyn error::Error,
+    files: &HashMap<u64, PathBuf>,
+    mut writer: impl std::io::Write,
+) -> Result<(), Box<dyn std::error::Error>> {
+    error.message(&mut writer);
+
+    if let Some(span) = error.span() {
+        let mut buff = String::new();
+        let path = files[&span.id].as_path();
+        let mut file = File::open(path)?;
+
+        file.read_to_string(&mut buff)?;
+
+        let line_number = buff
+            .bytes()
+            .filter(|byte| *byte == b'\n')
+            .take(span.start)
+            .count();
+        let slice = &buff[span.start..span.stop];
+
+        write!(
+            writer,
+            "\n{}:{}\n{}\n",
+            path.to_str().unwrap(),
+            line_number,
+            slice
+        )
+        .unwrap();
     }
 
     Ok(())
@@ -146,5 +169,23 @@ pub fn find_module(name: &Path) -> Option<Result<PathBuf, Box<dyn std::error::Er
             None
         }
         Err(e) => Some(Err(format!("failed to read CARPET_LISP_PATH: {e}").into())),
+    }
+}
+
+pub fn hash_path(path: &Path) -> u64 {
+    let mut hasher = std::hash::DefaultHasher::new();
+    path.hash(&mut hasher);
+    hasher.finish()
+}
+
+impl From<Box<dyn error::Error>> for Error {
+    fn from(value: Box<dyn error::Error>) -> Self {
+        Self::Spanned(value)
+    }
+}
+
+impl From<Box<dyn std::error::Error>> for Error {
+    fn from(value: Box<dyn std::error::Error>) -> Self {
+        Self::Std(value)
     }
 }

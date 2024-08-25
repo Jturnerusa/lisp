@@ -1,31 +1,20 @@
+use core::fmt;
+
 use crate::{
     ast::{self, Ast, Quoted, Type},
     bytecode,
     environment::{self, Environment, Variable},
 };
-use reader::{FileSpan, Reader};
+
+use error::FileSpan;
+use reader::Reader;
 use unwrap_enum::{EnumAs, EnumIs};
 use vm::{Arity, OpCodeTable, UpValue, Vm};
 
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-    #[error("il compiler error: {message}")]
-    Il { span: FileSpan, message: String },
-
-    #[error("reader error: {0}")]
-    Reader(#[from] reader::Error),
-
-    #[error("ast error: {0}")]
-    Ast(#[from] ast::Error),
-
-    #[error("bytecode compiler error: {0}")]
-    Bytecode(#[from] bytecode::Error),
-
-    #[error("vm error: {0}")]
-    Vm(#[from] vm::Error),
-
-    #[error("vm error")]
-    VmWithDebug(#[from] vm::ErrorWithDebug<FileSpan>),
+#[derive(Debug)]
+pub struct Error {
+    span: FileSpan,
+    message: String,
 }
 
 #[derive(Clone, Debug, EnumAs, EnumIs)]
@@ -387,7 +376,7 @@ impl Compiler {
         ast: &Ast,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, Error> {
+    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
         match ast {
             Ast::DefMacro(defmacro) => self.compile_defmacro(ast, defmacro, vm, ast_compiler),
             Ast::Lambda(lambda) => self.compile_lambda(ast, lambda, vm, ast_compiler),
@@ -429,7 +418,11 @@ impl Compiler {
         }
     }
 
-    fn compile_constant(&mut self, ast: &Ast, constant: &ast::Constant) -> Result<Il, Error> {
+    fn compile_constant(
+        &mut self,
+        ast: &Ast,
+        constant: &ast::Constant,
+    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
         Ok(match constant {
             ast::Constant::String { string, .. } => Il::Constant(Constant::String {
                 span: ast.span(),
@@ -455,7 +448,7 @@ impl Compiler {
         &mut self,
         ast: &Ast,
         variable: &ast::Variable,
-    ) -> Result<Il, Error> {
+    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
         Ok(match self.environment.resolve(variable.name.as_str()) {
             Some(environment::Variable::Local(index)) => Il::VarRef(VarRef::Local {
                 span: ast.span(),
@@ -472,10 +465,10 @@ impl Compiler {
                 name: variable.name.clone(),
             }),
             None => {
-                return Err(Error::Il {
+                return Err(std::boxed::Box::new(Error {
                     span: ast.span(),
                     message: format!("unknown variable referenced: {}", variable.name.as_str()),
-                })
+                }))
             }
         })
     }
@@ -486,18 +479,17 @@ impl Compiler {
         defmacro: &ast::DefMacro,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, Error> {
+    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
         let arity = match &defmacro.parameters {
             ast::Parameters::Normal(_) if defmacro.parameters.is_empty() => Arity::Nullary,
             ast::Parameters::Normal(_) => Arity::Nary(defmacro.parameters.len()),
             ast::Parameters::Rest(..) => Arity::Variadic(defmacro.parameters.len() - 1),
         };
 
-        let parameters =
-            Parameters::from_ast(ast, &defmacro.parameters).map_err(|_| Error::Il {
-                span: ast.span(),
-                message: "failed to compile parameters".to_string(),
-            })?;
+        let parameters = Parameters::from_ast(ast, &defmacro.parameters).map_err(|_| Error {
+            span: ast.span(),
+            message: "failed to compile parameters".to_string(),
+        })?;
 
         self.environment
             .push_scope(parameters.iter().map(|param| param.name));
@@ -506,7 +498,7 @@ impl Compiler {
             .body
             .iter()
             .map(|ast| self.compile(ast, vm, ast_compiler))
-            .collect::<Result<Vec<Il>, Error>>()?;
+            .collect::<Result<Vec<Il>, _>>()?;
 
         let lambda = Il::Lambda(self::Lambda {
             span: ast.span(),
@@ -519,11 +511,12 @@ impl Compiler {
 
         let mut opcodes = OpCodeTable::new();
 
-        bytecode::compile(&lambda, &mut opcodes)?;
+        bytecode::compile(&lambda, &mut opcodes).map_err(std::boxed::Box::new)?;
 
-        vm.eval(&opcodes)?;
+        vm.eval(&opcodes).map_err(std::boxed::Box::new)?;
 
-        vm.def_global(defmacro.name.as_str())?;
+        vm.def_global(defmacro.name.as_str())
+            .map_err(std::boxed::Box::new)?;
 
         Ok(Il::Constant(Constant::Nil { span: ast.span() }))
     }
@@ -534,7 +527,7 @@ impl Compiler {
         macro_call: &ast::MacroCall,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, Error> {
+    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
         let mut opcode_table = OpCodeTable::new();
 
         for arg in &macro_call.args {
@@ -557,7 +550,7 @@ impl Compiler {
 
         let mut buff = String::new();
 
-        object.print(&mut buff).map_err(|_| Error::Il {
+        object.print(&mut buff).map_err(|_| Error {
             span: ast.span(),
             message: "failed to print macro result".to_string(),
         })?;
@@ -577,14 +570,14 @@ impl Compiler {
         lambda: &ast::Lambda,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, Error> {
+    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
         let arity = match &lambda.parameters {
             ast::Parameters::Normal(_) if lambda.parameters.is_empty() => Arity::Nullary,
             ast::Parameters::Normal(_) => Arity::Nary(lambda.parameters.len()),
             ast::Parameters::Rest(..) => Arity::Variadic(lambda.parameters.len() - 1),
         };
 
-        let parameters = Parameters::from_ast(ast, &lambda.parameters).map_err(|_| Error::Il {
+        let parameters = Parameters::from_ast(ast, &lambda.parameters).map_err(|_| Error {
             span: ast.span(),
             message: "failed to compile parameters".to_string(),
         })?;
@@ -596,7 +589,7 @@ impl Compiler {
             .body
             .iter()
             .map(|ast| self.compile(ast, vm, ast_compiler))
-            .collect::<Result<Vec<Il>, Error>>()?;
+            .collect::<Result<Vec<Il>, _>>()?;
 
         let upvalues = self.environment.upvalues().collect::<Vec<UpValue>>();
 
@@ -620,7 +613,7 @@ impl Compiler {
         r#if: &ast::If,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, Error> {
+    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
         Ok(Il::If(If {
             span: ast.span(),
             predicate: std::boxed::Box::new(self.compile(&r#if.predicate, vm, ast_compiler)?),
@@ -635,10 +628,10 @@ impl Compiler {
         def: &ast::Def,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, Error> {
+    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
         self.environment.insert_global(def.parameter.name.as_str());
 
-        let parameter = Parameter::from_ast(ast, &def.parameter).map_err(|_| Error::Il {
+        let parameter = Parameter::from_ast(ast, &def.parameter).map_err(|_| Error {
             span: ast.span(),
             message: "failed to parse parameter".to_string(),
         })?;
@@ -650,7 +643,11 @@ impl Compiler {
         }))
     }
 
-    fn compile_decl(&mut self, ast: &Ast, decl: &ast::Decl) -> Result<Il, Error> {
+    fn compile_decl(
+        &mut self,
+        ast: &Ast,
+        decl: &ast::Decl,
+    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
         self.environment.insert_global(decl.parameter.name.as_str());
 
         Ok(Il::Constant(Constant::Nil { span: ast.span() }))
@@ -662,7 +659,7 @@ impl Compiler {
         set: &ast::Set,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, Error> {
+    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
         Ok(Il::Set(Set {
             span: ast.span(),
             target: match self.environment.resolve(set.target.as_str()) {
@@ -681,10 +678,10 @@ impl Compiler {
                     name: set.target.clone(),
                 },
                 None => {
-                    return Err(Error::Il {
+                    return Err(std::boxed::Box::new(Error {
                         span: ast.span(),
                         message: "unknown variable".to_string(),
-                    })
+                    }))
                 }
             },
 
@@ -698,7 +695,7 @@ impl Compiler {
         setbox: &ast::SetBox,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, Error> {
+    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
         Ok(Il::SetBox(SetBox {
             span: ast.span(),
             target: std::boxed::Box::new(self.compile(&setbox.target, vm, ast_compiler)?),
@@ -712,7 +709,7 @@ impl Compiler {
         r#box: &ast::Box,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, Error> {
+    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
         Ok(Il::Box(Box {
             span: ast.span(),
             body: std::boxed::Box::new(self.compile(&r#box.body, vm, ast_compiler)?),
@@ -725,14 +722,18 @@ impl Compiler {
         unbox: &ast::UnBox,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, Error> {
+    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
         Ok(Il::UnBox(UnBox {
             span: ast.span(),
             body: std::boxed::Box::new(self.compile(&unbox.body, vm, ast_compiler)?),
         }))
     }
 
-    fn compile_quoted(&mut self, ast: &Ast, quoted: &ast::Quoted) -> Result<Il, Error> {
+    fn compile_quoted(
+        &mut self,
+        ast: &Ast,
+        quoted: &ast::Quoted,
+    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
         Ok(match &quoted {
             Quoted::List { list, .. } => self.compile_quoted_list(ast, list.as_slice())?,
             Quoted::Symbol { symbol, .. } => Il::Constant(Constant::Symbol {
@@ -760,7 +761,11 @@ impl Compiler {
     }
 
     #[allow(clippy::only_used_in_recursion)]
-    fn compile_quoted_list(&mut self, ast: &Ast, list: &[Quoted]) -> Result<Il, Error> {
+    fn compile_quoted_list(
+        &mut self,
+        ast: &Ast,
+        list: &[Quoted],
+    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
         Ok(Il::List(List {
             span: ast.span(),
             exprs: list
@@ -793,7 +798,7 @@ impl Compiler {
                         Quoted::Nil { .. } => Il::Constant(Constant::Nil { span: ast.span() }),
                     })
                 })
-                .collect::<Result<Vec<_>, Error>>()?,
+                .collect::<Result<Vec<_>, std::boxed::Box<dyn error::Error>>>()?,
         }))
     }
 
@@ -803,7 +808,7 @@ impl Compiler {
         fncall: &ast::FnCall,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, Error> {
+    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
         Ok(Il::FnCall(FnCall {
             span: ast.span(),
             function: std::boxed::Box::new(self.compile(&fncall.function, vm, ast_compiler)?),
@@ -821,7 +826,7 @@ impl Compiler {
         apply: &ast::Apply,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, Error> {
+    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
         Ok(Il::Apply(Apply {
             span: ast.span(),
             function: std::boxed::Box::new(self.compile(&apply.function, vm, ast_compiler)?),
@@ -835,7 +840,7 @@ impl Compiler {
         op: &ast::BinaryArithmeticOperation,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, Error> {
+    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
         Ok(Il::ArithmeticOperation(ArithmeticOperation {
             span: ast.span(),
             operator: match op.operator {
@@ -855,7 +860,7 @@ impl Compiler {
         op: &ast::ComparisonOperation,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, Error> {
+    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
         Ok(Il::ComparisonOperation(ComparisonOperation {
             span: ast.span(),
             operator: match op.operator {
@@ -874,7 +879,7 @@ impl Compiler {
         list: &ast::List,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, Error> {
+    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
         Ok(Il::List(List {
             span: ast.span(),
             exprs: list
@@ -891,7 +896,7 @@ impl Compiler {
         cons: &ast::Cons,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, Error> {
+    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
         Ok(Il::Cons(Cons {
             span: ast.span(),
             lhs: std::boxed::Box::new(self.compile(&cons.lhs, vm, ast_compiler)?),
@@ -905,7 +910,7 @@ impl Compiler {
         car: &ast::Car,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, Error> {
+    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
         Ok(Il::Car(Car {
             span: ast.span(),
             body: std::boxed::Box::new(self.compile(&car.body, vm, ast_compiler)?),
@@ -918,7 +923,7 @@ impl Compiler {
         cdr: &ast::Cdr,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, Error> {
+    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
         Ok(Il::Cdr(Cdr {
             span: ast.span(),
             body: std::boxed::Box::new(self.compile(&cdr.body, vm, ast_compiler)?),
@@ -931,7 +936,7 @@ impl Compiler {
         is_type: &ast::IsType,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, Error> {
+    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
         Ok(Il::IsType(IsType {
             span: ast.span(),
             r#type: match is_type.parameter {
@@ -954,14 +959,14 @@ impl Compiler {
         assert: &ast::Assert,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, Error> {
+    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
         Ok(Il::Assert(Assert {
             span: ast.span(),
             body: std::boxed::Box::new(self.compile(&assert.body, vm, ast_compiler)?),
         }))
     }
 
-    fn compile_gensym(&mut self, ast: &Ast) -> Result<Il, Error> {
+    fn compile_gensym(&mut self, ast: &Ast) -> Result<Il, std::boxed::Box<dyn error::Error>> {
         let suffix = rand::random::<u32>();
 
         let symbol = format!("e{suffix}");
@@ -972,7 +977,7 @@ impl Compiler {
         }))
     }
 
-    fn compile_map_create(&mut self, ast: &Ast) -> Result<Il, Error> {
+    fn compile_map_create(&mut self, ast: &Ast) -> Result<Il, std::boxed::Box<dyn error::Error>> {
         Ok(Il::MapCreate(MapCreate { span: ast.span() }))
     }
 
@@ -982,7 +987,7 @@ impl Compiler {
         map_insert: &ast::MapInsert,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, Error> {
+    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
         Ok(Il::MapInsert(MapInsert {
             span: ast.span(),
             map: std::boxed::Box::new(self.compile(&map_insert.map, vm, ast_compiler)?),
@@ -997,7 +1002,7 @@ impl Compiler {
         map_retrieve: &ast::MapRetrieve,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, Error> {
+    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
         Ok(Il::MapRetrieve(MapRetrieve {
             span: ast.span(),
             map: std::boxed::Box::new(self.compile(&map_retrieve.map, vm, ast_compiler)?),
@@ -1011,7 +1016,7 @@ impl Compiler {
         map_items: &ast::MapItems,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, Error> {
+    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
         Ok(Il::MapItems(MapItems {
             span: ast.span(),
             map: std::boxed::Box::new(self.compile(&map_items.map, vm, ast_compiler)?),
@@ -1027,5 +1032,15 @@ impl<'parameters> IntoIterator for &'parameters Parameters {
         match self {
             Parameters::Nary(params) | Parameters::Variadic(params) => params.iter().cloned(),
         }
+    }
+}
+
+impl error::Error for Error {
+    fn span(&self) -> Option<FileSpan> {
+        Some(self.span)
+    }
+
+    fn message(&self, writer: &mut dyn std::io::Write) {
+        write!(writer, "{}", self.message).unwrap();
     }
 }
