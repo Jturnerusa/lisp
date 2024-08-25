@@ -1,5 +1,8 @@
-use compiler::{ast, tree, types};
-use lisp::compile_source;
+use std::{collections::HashMap, path::PathBuf};
+
+use compiler::{ast, tree};
+use error::FileSpan;
+use lisp::{compile_source, display_error};
 use reader::Sexpr;
 use vm::{OpCodeTable, Vm};
 
@@ -14,85 +17,70 @@ macro_rules! deftest {
     };
 }
 
+static BOOTSTRAP_PATH: &str = "../lib/bootstrap/bootstrap.lisp";
 static BOOTSTRAP_SOURCE: &str = include_str!("../lib/bootstrap/bootstrap.lisp");
-static LIST_UTILS_SOURCE: &str = include_str!("../lib/lisp/list.lisp");
 
-fn eval_with_bootstrap(
-    input: &str,
-) -> Result<Option<vm::Object<FileSpan>>, Box<dyn std::error::Error>> {
+fn eval_with_bootstrap(input: &str) -> Result<Option<vm::Object<FileSpan>>, lisp::Error> {
     let mut tree_compiler = tree::Compiler::new();
     let mut ast_compiler = ast::Compiler::new();
-    let mut type_checker = types::Checker::new();
     let mut opcode_table = OpCodeTable::new();
     let mut vm = Vm::new();
-    let ignore_types = &mut |_: &_, _: &mut _| Ok(());
+    let mut files = HashMap::new();
+
+    let bootstrap_path = PathBuf::from(BOOTSTRAP_PATH);
+    let bootstrap_file_id = lisp::hash_path(bootstrap_path.as_path());
 
     compile_source(
         BOOTSTRAP_SOURCE,
-        "bootstrap.lisp",
-        &mut tree_compiler,
+        bootstrap_file_id,
+        &mut files,
         &mut ast_compiler,
-        &mut type_checker,
-        ignore_types,
-        &mut vm,
-        &mut opcode_table,
-    )?;
-
-    compile_source(
-        LIST_UTILS_SOURCE,
-        "list.lisp",
         &mut tree_compiler,
-        &mut ast_compiler,
-        &mut type_checker,
-        ignore_types,
         &mut vm,
         &mut opcode_table,
     )?;
 
     compile_source(
         input,
-        "test input",
-        &mut tree_compiler,
+        0,
+        &mut files,
         &mut ast_compiler,
-        &mut type_checker,
-        ignore_types,
+        &mut tree_compiler,
         &mut vm,
         &mut opcode_table,
     )?;
 
     match vm.eval(&opcode_table) {
         Ok(_) => Ok(vm.pop().map(|local| local.into_object())),
-        Err((e, sexpr)) => {
-            eprintln!("error in: {}:\nat: {sexpr}", sexpr.context().display());
-            Err(Box::new(e))
+        Err(error) => {
+            lisp::display_error(&error, &files, &mut std::io::stderr()).unwrap();
+            Err(lisp::Error::Spanned(Box::new(error)))
         }
     }
 }
 
-fn eval(input: &'static str) -> Result<Option<vm::Object<&Sexpr>>, Box<dyn std::error::Error>> {
+fn eval(input: &'static str) -> Result<Option<vm::Object<FileSpan>>, lisp::Error> {
     let mut tree_compiler = tree::Compiler::new();
     let mut ast_compiler = ast::Compiler::new();
-    let mut type_checker = types::Checker::new();
     let mut opcode_table = OpCodeTable::new();
     let mut vm = Vm::new();
-    let ignore_types = &mut |_: &_, _: &mut _| Ok(());
+    let mut files = HashMap::new();
 
     compile_source(
         input,
-        "test input",
-        &mut tree_compiler,
+        0,
+        &mut files,
         &mut ast_compiler,
-        &mut type_checker,
-        ignore_types,
+        &mut tree_compiler,
         &mut vm,
         &mut opcode_table,
     )?;
 
     match vm.eval(&opcode_table) {
         Ok(_) => Ok(vm.pop().map(|local| local.into_object())),
-        Err((e, sexpr)) => {
-            eprintln!("error in: {}:\nat: {sexpr}", sexpr.context().display());
-            Err(Box::new(e))
+        Err(error) => {
+            display_error(&error, &files, &mut std::io::stderr()).unwrap();
+            Err(lisp::Error::Spanned(Box::new(error)))
         }
     }
 }
