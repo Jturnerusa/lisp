@@ -10,4 +10,4 @@ gc = { path = "../gc" }
 unwrap-enum = { workspace = true }
 micro-nom = { workspace = true }
 rand = { workspace = true }
-thiserror = "1.0.61"
+thiserror = { workspace = true }

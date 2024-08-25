@@ -4,7 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-value = { path = "../value" }
 gc = { path = "../gc" }
 unwrap-enum = { workspace = true }
-thiserror = "1.0.61"
+thiserror = { workspace = true }

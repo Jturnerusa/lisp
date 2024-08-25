@@ -83,7 +83,7 @@ dependencies = [
  "gc",
  "native-functions",
  "reader",
- "value",
+ "thiserror",
  "vm",
 ]
 
@@ -215,7 +215,6 @@ dependencies = [
  "logos",
  "thiserror",
  "unwrap-enum",
- "value",
 ]
 
 [[package]]
@@ -283,20 +282,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "value"
-version = "0.1.0"
-dependencies = [
- "unwrap-enum",
-]
-
-[[package]]
 name = "vm"
 version = "0.1.0"
 dependencies = [
  "gc",
  "thiserror",
  "unwrap-enum",
- "value",
 ]
 
 [[package]]

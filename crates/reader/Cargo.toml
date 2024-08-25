@@ -6,5 +6,4 @@ edition = "2021"
 [dependencies]
 unwrap-enum = { workspace = true }
 logos = "0.14.0"
-value = { path = "../value" }
-thiserror = "1.0.61"
+thiserror = { workspace = true }
