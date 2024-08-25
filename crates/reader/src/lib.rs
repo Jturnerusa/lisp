@@ -260,6 +260,7 @@ fn read(lexer: &mut Lexer<'_, Token>, file_id: u64) -> Option<Result<Sexpr, Erro
 
 fn read_list(lexer: &mut Lexer<'_, Token>, file_id: u64) -> Result<Sexpr, Error> {
     let mut list = Vec::new();
+    let start = lexer.span().start;
 
     loop {
         match lexer.next() {
@@ -268,7 +269,7 @@ fn read_list(lexer: &mut Lexer<'_, Token>, file_id: u64) -> Result<Sexpr, Error>
                 return Ok(Sexpr::Nil {
                     span: FileSpan {
                         id: file_id,
-                        start: lexer.span().start,
+                        start,
                         stop: lexer.span().end,
                     },
                 })
@@ -278,7 +279,7 @@ fn read_list(lexer: &mut Lexer<'_, Token>, file_id: u64) -> Result<Sexpr, Error>
                     list,
                     span: FileSpan {
                         id: file_id,
-                        start: lexer.span().start,
+                        start,
                         stop: lexer.span().end,
                     },
                 })
