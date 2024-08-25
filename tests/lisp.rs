@@ -19,7 +19,7 @@ static LIST_UTILS_SOURCE: &str = include_str!("../lib/lisp/list.lisp");
 
 fn eval_with_bootstrap(
     input: &str,
-) -> Result<Option<vm::Object<&'static Sexpr>>, Box<dyn std::error::Error>> {
+) -> Result<Option<vm::Object<FileSpan>>, Box<dyn std::error::Error>> {
     let mut tree_compiler = tree::Compiler::new();
     let mut ast_compiler = ast::Compiler::new();
     let mut type_checker = types::Checker::new();
