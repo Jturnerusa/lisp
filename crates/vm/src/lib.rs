@@ -82,6 +82,7 @@ pub enum OpCode<D> {
     Pop,
     Dup,
     Peek(usize),
+    Swap,
     Add,
     Sub,
     Mul,
@@ -223,6 +224,7 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
             }
             OpCode::Dup => self.dup()?,
             OpCode::Peek(i) => self.peek(i)?,
+            OpCode::Swap => self.swap()?,
             OpCode::Add => self.add()?,
             OpCode::Sub => self.sub()?,
             OpCode::Mul => self.mul()?,
@@ -255,6 +257,16 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
         let val = self.stack.get(self.stack.len() - i - 1).unwrap().clone();
 
         self.stack.push(val);
+
+        Ok(())
+    }
+
+    pub fn swap(&mut self) -> Result<(), Error> {
+        let a = self.stack.pop().unwrap();
+        let b = self.stack.pop().unwrap();
+
+        self.stack.push(a);
+        self.stack.push(b);
 
         Ok(())
     }
