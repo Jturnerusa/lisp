@@ -68,8 +68,10 @@ pub fn compile_source(
             for expr in &eval_when_compile.exprs {
                 let tree = tree_compiler.compile(expr, vm, ast_compiler)?;
 
-                compiler::bytecode::compile(&tree, &mut opcode_table)
-                    .map_err(|e| Error::Spanned(Box::new(e)))?;
+                if let Some(t) = &tree {
+                    compiler::bytecode::compile(t, &mut opcode_table)
+                        .map_err(|e| Error::Spanned(Box::new(e)))?;
+                }
             }
 
             vm.eval(&opcode_table)
@@ -102,8 +104,10 @@ pub fn compile_source(
 
         let tree = tree_compiler.compile(&ast, vm, ast_compiler)?;
 
-        compiler::bytecode::compile(&tree, opcode_table)
-            .map_err(|e| Error::Spanned(Box::new(e)))?;
+        if let Some(t) = &tree {
+            compiler::bytecode::compile(t, opcode_table)
+                .map_err(|e| Error::Spanned(Box::new(e)))?;
+        }
     }
 
     Ok(())

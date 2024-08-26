@@ -9,6 +9,21 @@ use reader::Reader;
 use unwrap_enum::{EnumAs, EnumIs};
 use vm::{Arity, OpCodeTable, UpValue, Vm};
 
+macro_rules! expect_expression {
+    ($e:expr, $span:expr) => {
+        match $e {
+            Ok(Some(x)) => x,
+            Err(e) => return Err(e),
+            Ok(None) => {
+                return Err(std::boxed::Box::new(Error {
+                    span: $span,
+                    message: "unexpected expression".to_string(),
+                }))
+            }
+        }
+    };
+}
+
 #[derive(Debug)]
 pub struct Error {
     span: FileSpan,
@@ -397,7 +412,7 @@ impl Compiler {
         ast: &Ast,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
+    ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
         match ast {
             Ast::DefMacro(defmacro) => self.compile_defmacro(ast, defmacro, vm, ast_compiler),
             Ast::Lambda(lambda) => self.compile_lambda(ast, lambda, vm, ast_compiler),
@@ -435,7 +450,7 @@ impl Compiler {
             Ast::GenSym(_) => self.compile_gensym(ast),
             Ast::Constant(constant) => self.compile_constant(ast, constant),
             Ast::Variable(variable) => self.compile_variable_reference(ast, variable),
-            Ast::DefType(deftype) => Ok(Il::DefType(deftype.clone())),
+            Ast::DefType(deftype) => Ok(Some(Il::DefType(deftype.clone()))),
             Ast::MakeType(make_type) => self.compile_make_type(ast, make_type, vm, ast_compiler),
             Ast::IfLet(if_let) => self.compile_if_let(ast, if_let, vm, ast_compiler),
             _ => unreachable!("{ast:?}"),
@@ -446,8 +461,8 @@ impl Compiler {
         &mut self,
         ast: &Ast,
         constant: &ast::Constant,
-    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
-        Ok(match constant {
+    ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
+        Ok(Some(match constant {
             ast::Constant::String { string, .. } => Il::Constant(Constant::String {
                 span: ast.span(),
                 string: string.clone(),
@@ -465,36 +480,38 @@ impl Compiler {
                 bool: *bool,
             }),
             ast::Constant::Nil { .. } => Il::Constant(Constant::Nil { span: ast.span() }),
-        })
+        }))
     }
 
     fn compile_variable_reference(
         &mut self,
         ast: &Ast,
         variable: &ast::Variable,
-    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
-        Ok(match self.environment.resolve(variable.name.as_str()) {
-            Some(environment::Variable::Local(index)) => Il::VarRef(VarRef::Local {
-                span: ast.span(),
-                name: variable.name.clone(),
-                index,
-            }),
-            Some(environment::Variable::Upvalue(index)) => Il::VarRef(VarRef::UpValue {
-                span: ast.span(),
-                name: variable.name.clone(),
-                index,
-            }),
-            Some(environment::Variable::Global) => Il::VarRef(VarRef::Global {
-                span: ast.span(),
-                name: variable.name.clone(),
-            }),
-            None => {
-                return Err(std::boxed::Box::new(Error {
+    ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
+        Ok(Some(
+            match self.environment.resolve(variable.name.as_str()) {
+                Some(environment::Variable::Local(index)) => Il::VarRef(VarRef::Local {
                     span: ast.span(),
-                    message: format!("unknown variable referenced: {}", variable.name.as_str()),
-                }))
-            }
-        })
+                    name: variable.name.clone(),
+                    index,
+                }),
+                Some(environment::Variable::Upvalue(index)) => Il::VarRef(VarRef::UpValue {
+                    span: ast.span(),
+                    name: variable.name.clone(),
+                    index,
+                }),
+                Some(environment::Variable::Global) => Il::VarRef(VarRef::Global {
+                    span: ast.span(),
+                    name: variable.name.clone(),
+                }),
+                None => {
+                    return Err(std::boxed::Box::new(Error {
+                        span: ast.span(),
+                        message: format!("unknown variable referenced: {}", variable.name.as_str()),
+                    }))
+                }
+            },
+        ))
     }
 
     fn compile_defmacro(
@@ -503,7 +520,7 @@ impl Compiler {
         defmacro: &ast::DefMacro,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
+    ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
         let arity = match &defmacro.parameters {
             ast::Parameters::Normal(_) if defmacro.parameters.is_empty() => Arity::Nullary,
             ast::Parameters::Normal(_) => Arity::Nary(defmacro.parameters.len()),
@@ -521,7 +538,11 @@ impl Compiler {
         let body = defmacro
             .body
             .iter()
-            .map(|ast| self.compile(ast, vm, ast_compiler))
+            .filter_map(|ast| match self.compile(ast, vm, ast_compiler) {
+                Ok(Some(tree)) => Some(Ok(tree)),
+                Ok(None) => None,
+                Err(e) => Some(Err(e)),
+            })
             .collect::<Result<Vec<Il>, _>>()?;
 
         let lambda = Il::Lambda(self::Lambda {
@@ -542,7 +563,7 @@ impl Compiler {
         vm.def_global(defmacro.name.as_str())
             .map_err(std::boxed::Box::new)?;
 
-        Ok(Il::Constant(Constant::Nil { span: ast.span() }))
+        Ok(None)
     }
 
     fn eval_macro(
@@ -551,11 +572,11 @@ impl Compiler {
         macro_call: &ast::MacroCall,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
+    ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
         let mut opcode_table = OpCodeTable::new();
 
         for arg in &macro_call.args {
-            let il = self.compile_quoted(ast, arg)?;
+            let il = self.compile_quoted(ast, arg)?.unwrap();
 
             bytecode::compile(&il, &mut opcode_table).unwrap();
         }
@@ -569,7 +590,7 @@ impl Compiler {
         vm.eval(&OpCodeTable::new())?;
 
         let Some(object) = vm.pop().map(|local| local.into_object()) else {
-            return Ok(Il::Constant(Constant::Nil { span: ast.span() }));
+            return Ok(Some(Il::Constant(Constant::Nil { span: ast.span() })));
         };
 
         let mut buff = String::new();
@@ -594,7 +615,7 @@ impl Compiler {
         lambda: &ast::Lambda,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
+    ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
         let arity = match &lambda.parameters {
             ast::Parameters::Normal(_) if lambda.parameters.is_empty() => Arity::Nullary,
             ast::Parameters::Normal(_) => Arity::Nary(lambda.parameters.len()),
@@ -612,7 +633,11 @@ impl Compiler {
         let body = lambda
             .body
             .iter()
-            .map(|ast| self.compile(ast, vm, ast_compiler))
+            .filter_map(|ast| match self.compile(ast, vm, ast_compiler) {
+                Ok(Some(tree)) => Some(Ok(tree)),
+                Ok(None) => None,
+                Err(e) => Some(Err(e)),
+            })
             .collect::<Result<Vec<Il>, _>>()?;
 
         let upvalues = self.environment.upvalues().collect::<Vec<UpValue>>();
@@ -621,14 +646,14 @@ impl Compiler {
 
         self.environment.pop_scope();
 
-        Ok(Il::Lambda(Lambda {
+        Ok(Some(Il::Lambda(Lambda {
             span: ast.span(),
             parameters,
             r#type,
             arity,
             upvalues,
             body,
-        }))
+        })))
     }
 
     fn compile_if(
@@ -637,13 +662,22 @@ impl Compiler {
         r#if: &ast::If,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
-        Ok(Il::If(If {
+    ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
+        Ok(Some(Il::If(If {
             span: ast.span(),
-            predicate: std::boxed::Box::new(self.compile(&r#if.predicate, vm, ast_compiler)?),
-            then: std::boxed::Box::new(self.compile(&r#if.then, vm, ast_compiler)?),
-            r#else: std::boxed::Box::new(self.compile(&r#if.r#else, vm, ast_compiler)?),
-        }))
+            predicate: std::boxed::Box::new(expect_expression!(
+                self.compile(&r#if.predicate, vm, ast_compiler),
+                ast.span()
+            )),
+            then: std::boxed::Box::new(expect_expression!(
+                self.compile(&r#if.then, vm, ast_compiler),
+                ast.span()
+            )),
+            r#else: std::boxed::Box::new(expect_expression!(
+                self.compile(&r#if.r#else, vm, ast_compiler),
+                ast.span()
+            )),
+        })))
     }
 
     fn compile_def(
@@ -652,7 +686,7 @@ impl Compiler {
         def: &ast::Def,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
+    ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
         self.environment.insert_global(def.parameter.name.as_str());
 
         let parameter = Parameter::from_ast(ast, &def.parameter).map_err(|_| Error {
@@ -660,21 +694,24 @@ impl Compiler {
             message: "failed to parse parameter".to_string(),
         })?;
 
-        Ok(Il::Def(Def {
+        Ok(Some(Il::Def(Def {
             span: ast.span(),
             parameter,
-            body: std::boxed::Box::new(self.compile(&def.body, vm, ast_compiler)?),
-        }))
+            body: std::boxed::Box::new(expect_expression!(
+                self.compile(&def.body, vm, ast_compiler),
+                ast.span()
+            )),
+        })))
     }
 
     fn compile_decl(
         &mut self,
         ast: &Ast,
         decl: &ast::Decl,
-    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
+    ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
         self.environment.insert_global(decl.parameter.name.as_str());
 
-        Ok(Il::Constant(Constant::Nil { span: ast.span() }))
+        Ok(Some(Il::Constant(Constant::Nil { span: ast.span() })))
     }
 
     fn compile_set(
@@ -683,8 +720,8 @@ impl Compiler {
         set: &ast::Set,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
-        Ok(Il::Set(Set {
+    ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
+        Ok(Some(Il::Set(Set {
             span: ast.span(),
             target: match self.environment.resolve(set.target.as_str()) {
                 Some(Variable::Local(index)) => VarRef::Local {
@@ -709,8 +746,11 @@ impl Compiler {
                 }
             },
 
-            body: std::boxed::Box::new(self.compile(&set.body, vm, ast_compiler)?),
-        }))
+            body: std::boxed::Box::new(expect_expression!(
+                self.compile(&set.body, vm, ast_compiler),
+                ast.span()
+            )),
+        })))
     }
 
     fn compile_set_box(
@@ -719,12 +759,18 @@ impl Compiler {
         setbox: &ast::SetBox,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
-        Ok(Il::SetBox(SetBox {
+    ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
+        Ok(Some(Il::SetBox(SetBox {
             span: ast.span(),
-            target: std::boxed::Box::new(self.compile(&setbox.target, vm, ast_compiler)?),
-            body: std::boxed::Box::new(self.compile(&setbox.body, vm, ast_compiler)?),
-        }))
+            target: std::boxed::Box::new(expect_expression!(
+                self.compile(&setbox.target, vm, ast_compiler),
+                ast.span()
+            )),
+            body: std::boxed::Box::new(expect_expression!(
+                self.compile(&setbox.body, vm, ast_compiler),
+                ast.span()
+            )),
+        })))
     }
 
     fn compile_box(
@@ -733,11 +779,14 @@ impl Compiler {
         r#box: &ast::Box,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
-        Ok(Il::Box(Box {
+    ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
+        Ok(Some(Il::Box(Box {
             span: ast.span(),
-            body: std::boxed::Box::new(self.compile(&r#box.body, vm, ast_compiler)?),
-        }))
+            body: std::boxed::Box::new(expect_expression!(
+                self.compile(&r#box.body, vm, ast_compiler),
+                ast.span()
+            )),
+        })))
     }
 
     fn compile_unbox(
@@ -746,19 +795,22 @@ impl Compiler {
         unbox: &ast::UnBox,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
-        Ok(Il::UnBox(UnBox {
+    ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
+        Ok(Some(Il::UnBox(UnBox {
             span: ast.span(),
-            body: std::boxed::Box::new(self.compile(&unbox.body, vm, ast_compiler)?),
-        }))
+            body: std::boxed::Box::new(expect_expression!(
+                self.compile(&unbox.body, vm, ast_compiler),
+                ast.span()
+            )),
+        })))
     }
 
     fn compile_quoted(
         &mut self,
         ast: &Ast,
         quoted: &ast::Quoted,
-    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
-        Ok(match &quoted {
+    ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
+        Ok(Some(match &quoted {
             Quoted::List { list, .. } => self.compile_quoted_list(ast, list.as_slice())?,
             Quoted::Symbol { symbol, .. } => Il::Constant(Constant::Symbol {
                 span: ast.span(),
@@ -781,7 +833,7 @@ impl Compiler {
                 bool: *bool,
             }),
             Quoted::Nil { .. } => Il::Constant(Constant::Nil { span: ast.span() }),
-        })
+        }))
     }
 
     #[allow(clippy::only_used_in_recursion)]
@@ -832,16 +884,26 @@ impl Compiler {
         fncall: &ast::FnCall,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
-        Ok(Il::FnCall(FnCall {
+    ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
+        Ok(Some(Il::FnCall(FnCall {
             span: ast.span(),
-            function: std::boxed::Box::new(self.compile(&fncall.function, vm, ast_compiler)?),
+            function: std::boxed::Box::new(expect_expression!(
+                self.compile(&fncall.function, vm, ast_compiler),
+                ast.span()
+            )),
             args: fncall
                 .exprs
                 .iter()
-                .map(|arg| self.compile(arg, vm, ast_compiler))
-                .collect::<Result<Vec<_>, _>>()?,
-        }))
+                .map(|arg| match self.compile(arg, vm, ast_compiler) {
+                    Ok(Some(tree)) => Ok(tree),
+                    Ok(None) => Err(std::boxed::Box::new(Error {
+                        span: ast.span(),
+                        message: "unexpected expression".to_string(),
+                    }) as _),
+                    Err(e) => Err(e),
+                })
+                .collect::<Result<Vec<Il>, _>>()?,
+        })))
     }
 
     fn compile_apply(
@@ -850,12 +912,18 @@ impl Compiler {
         apply: &ast::Apply,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
-        Ok(Il::Apply(Apply {
+    ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
+        Ok(Some(Il::Apply(Apply {
             span: ast.span(),
-            function: std::boxed::Box::new(self.compile(&apply.function, vm, ast_compiler)?),
-            list: std::boxed::Box::new(self.compile(&apply.list, vm, ast_compiler)?),
-        }))
+            function: std::boxed::Box::new(expect_expression!(
+                self.compile(&apply.function, vm, ast_compiler),
+                ast.span()
+            )),
+            list: std::boxed::Box::new(expect_expression!(
+                self.compile(&apply.list, vm, ast_compiler),
+                ast.span()
+            )),
+        })))
     }
 
     fn compile_arithmetic_operation(
@@ -864,8 +932,8 @@ impl Compiler {
         op: &ast::BinaryArithmeticOperation,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
-        Ok(Il::ArithmeticOperation(ArithmeticOperation {
+    ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
+        Ok(Some(Il::ArithmeticOperation(ArithmeticOperation {
             span: ast.span(),
             operator: match op.operator {
                 ast::BinaryArithmeticOperator::Add => ArithmeticOperator::Add,
@@ -873,9 +941,15 @@ impl Compiler {
                 ast::BinaryArithmeticOperator::Mul => ArithmeticOperator::Mul,
                 ast::BinaryArithmeticOperator::Div => ArithmeticOperator::Div,
             },
-            lhs: std::boxed::Box::new(self.compile(&op.lhs, vm, ast_compiler)?),
-            rhs: std::boxed::Box::new(self.compile(&op.rhs, vm, ast_compiler)?),
-        }))
+            lhs: std::boxed::Box::new(expect_expression!(
+                self.compile(&op.lhs, vm, ast_compiler),
+                ast.span()
+            )),
+            rhs: std::boxed::Box::new(expect_expression!(
+                self.compile(&op.rhs, vm, ast_compiler),
+                ast.span()
+            )),
+        })))
     }
 
     fn compile_comparison_operation(
@@ -884,17 +958,23 @@ impl Compiler {
         op: &ast::ComparisonOperation,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
-        Ok(Il::ComparisonOperation(ComparisonOperation {
+    ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
+        Ok(Some(Il::ComparisonOperation(ComparisonOperation {
             span: ast.span(),
             operator: match op.operator {
                 ast::ComparisonOperator::Eq => ComparisonOperator::Eq,
                 ast::ComparisonOperator::Lt => ComparisonOperator::Lt,
                 ast::ComparisonOperator::Gt => ComparisonOperator::Gt,
             },
-            lhs: std::boxed::Box::new(self.compile(&op.lhs, vm, ast_compiler)?),
-            rhs: std::boxed::Box::new(self.compile(&op.rhs, vm, ast_compiler)?),
-        }))
+            lhs: std::boxed::Box::new(expect_expression!(
+                self.compile(&op.lhs, vm, ast_compiler),
+                ast.span()
+            )),
+            rhs: std::boxed::Box::new(expect_expression!(
+                self.compile(&op.rhs, vm, ast_compiler),
+                ast.span()
+            )),
+        })))
     }
 
     fn compile_list(
@@ -903,15 +983,22 @@ impl Compiler {
         list: &ast::List,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
-        Ok(Il::List(List {
+    ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
+        Ok(Some(Il::List(List {
             span: ast.span(),
             exprs: list
                 .exprs
                 .iter()
-                .map(|expr| self.compile(expr, vm, ast_compiler))
+                .map(|expr| match self.compile(expr, vm, ast_compiler) {
+                    Ok(Some(tree)) => Ok(tree),
+                    Ok(None) => Err(std::boxed::Box::new(Error {
+                        span: ast.span(),
+                        message: "unexpected expression".to_string(),
+                    }) as _),
+                    Err(e) => Err(e),
+                })
                 .collect::<Result<Vec<_>, _>>()?,
-        }))
+        })))
     }
 
     fn compile_cons(
@@ -920,12 +1007,18 @@ impl Compiler {
         cons: &ast::Cons,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
-        Ok(Il::Cons(Cons {
+    ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
+        Ok(Some(Il::Cons(Cons {
             span: ast.span(),
-            lhs: std::boxed::Box::new(self.compile(&cons.lhs, vm, ast_compiler)?),
-            rhs: std::boxed::Box::new(self.compile(&cons.rhs, vm, ast_compiler)?),
-        }))
+            lhs: std::boxed::Box::new(expect_expression!(
+                self.compile(&cons.lhs, vm, ast_compiler),
+                ast.span()
+            )),
+            rhs: std::boxed::Box::new(expect_expression!(
+                self.compile(&cons.rhs, vm, ast_compiler),
+                ast.span()
+            )),
+        })))
     }
 
     fn compile_car(
@@ -934,11 +1027,14 @@ impl Compiler {
         car: &ast::Car,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
-        Ok(Il::Car(Car {
+    ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
+        Ok(Some(Il::Car(Car {
             span: ast.span(),
-            body: std::boxed::Box::new(self.compile(&car.body, vm, ast_compiler)?),
-        }))
+            body: std::boxed::Box::new(expect_expression!(
+                self.compile(&car.body, vm, ast_compiler),
+                ast.span()
+            )),
+        })))
     }
 
     fn compile_cdr(
@@ -947,11 +1043,14 @@ impl Compiler {
         cdr: &ast::Cdr,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
-        Ok(Il::Cdr(Cdr {
+    ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
+        Ok(Some(Il::Cdr(Cdr {
             span: ast.span(),
-            body: std::boxed::Box::new(self.compile(&cdr.body, vm, ast_compiler)?),
-        }))
+            body: std::boxed::Box::new(expect_expression!(
+                self.compile(&cdr.body, vm, ast_compiler),
+                ast.span()
+            )),
+        })))
     }
 
     fn compile_is_type(
@@ -960,8 +1059,8 @@ impl Compiler {
         is_type: &ast::IsType,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
-        Ok(Il::IsType(IsType {
+    ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
+        Ok(Some(Il::IsType(IsType {
             span: ast.span(),
             r#type: match is_type.parameter {
                 ast::IsTypeParameter::Function => IsTypeParameter::Function,
@@ -973,8 +1072,11 @@ impl Compiler {
                 ast::IsTypeParameter::Bool => IsTypeParameter::Bool,
                 ast::IsTypeParameter::Nil => IsTypeParameter::Nil,
             },
-            body: std::boxed::Box::new(self.compile(&is_type.body, vm, ast_compiler)?),
-        }))
+            body: std::boxed::Box::new(expect_expression!(
+                self.compile(&is_type.body, vm, ast_compiler),
+                ast.span()
+            )),
+        })))
     }
 
     fn compile_assert(
@@ -983,26 +1085,35 @@ impl Compiler {
         assert: &ast::Assert,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
-        Ok(Il::Assert(Assert {
+    ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
+        Ok(Some(Il::Assert(Assert {
             span: ast.span(),
-            body: std::boxed::Box::new(self.compile(&assert.body, vm, ast_compiler)?),
-        }))
+            body: std::boxed::Box::new(expect_expression!(
+                self.compile(&assert.body, vm, ast_compiler),
+                ast.span()
+            )),
+        })))
     }
 
-    fn compile_gensym(&mut self, ast: &Ast) -> Result<Il, std::boxed::Box<dyn error::Error>> {
+    fn compile_gensym(
+        &mut self,
+        ast: &Ast,
+    ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
         let suffix = rand::random::<u32>();
 
         let symbol = format!("e{suffix}");
 
-        Ok(Il::Constant(Constant::Symbol {
+        Ok(Some(Il::Constant(Constant::Symbol {
             span: ast.span(),
             symbol,
-        }))
+        })))
     }
 
-    fn compile_map_create(&mut self, ast: &Ast) -> Result<Il, std::boxed::Box<dyn error::Error>> {
-        Ok(Il::MapCreate(MapCreate { span: ast.span() }))
+    fn compile_map_create(
+        &mut self,
+        ast: &Ast,
+    ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
+        Ok(Some(Il::MapCreate(MapCreate { span: ast.span() })))
     }
 
     fn compile_map_insert(
@@ -1011,13 +1122,22 @@ impl Compiler {
         map_insert: &ast::MapInsert,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
-        Ok(Il::MapInsert(MapInsert {
+    ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
+        Ok(Some(Il::MapInsert(MapInsert {
             span: ast.span(),
-            map: std::boxed::Box::new(self.compile(&map_insert.map, vm, ast_compiler)?),
-            key: std::boxed::Box::new(self.compile(&map_insert.key, vm, ast_compiler)?),
-            value: std::boxed::Box::new(self.compile(&map_insert.value, vm, ast_compiler)?),
-        }))
+            map: std::boxed::Box::new(expect_expression!(
+                self.compile(&map_insert.map, vm, ast_compiler),
+                ast.span()
+            )),
+            key: std::boxed::Box::new(expect_expression!(
+                self.compile(&map_insert.key, vm, ast_compiler),
+                ast.span()
+            )),
+            value: std::boxed::Box::new(expect_expression!(
+                self.compile(&map_insert.value, vm, ast_compiler),
+                ast.span()
+            )),
+        })))
     }
 
     fn compile_map_retrieve(
@@ -1026,12 +1146,18 @@ impl Compiler {
         map_retrieve: &ast::MapRetrieve,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
-        Ok(Il::MapRetrieve(MapRetrieve {
+    ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
+        Ok(Some(Il::MapRetrieve(MapRetrieve {
             span: ast.span(),
-            map: std::boxed::Box::new(self.compile(&map_retrieve.map, vm, ast_compiler)?),
-            key: std::boxed::Box::new(self.compile(&map_retrieve.key, vm, ast_compiler)?),
-        }))
+            map: std::boxed::Box::new(expect_expression!(
+                self.compile(&map_retrieve.map, vm, ast_compiler),
+                ast.span()
+            )),
+            key: std::boxed::Box::new(expect_expression!(
+                self.compile(&map_retrieve.key, vm, ast_compiler),
+                ast.span()
+            )),
+        })))
     }
 
     fn compile_map_items(
@@ -1040,11 +1166,14 @@ impl Compiler {
         map_items: &ast::MapItems,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
-        Ok(Il::MapItems(MapItems {
+    ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
+        Ok(Some(Il::MapItems(MapItems {
             span: ast.span(),
-            map: std::boxed::Box::new(self.compile(&map_items.map, vm, ast_compiler)?),
-        }))
+            map: std::boxed::Box::new(expect_expression!(
+                self.compile(&map_items.map, vm, ast_compiler),
+                ast.span()
+            )),
+        })))
     }
 
     fn compile_make_type(
@@ -1053,8 +1182,8 @@ impl Compiler {
         make_type: &ast::MakeType,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
-        Ok(Il::MakeType(MakeType {
+    ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
+        Ok(Some(Il::MakeType(MakeType {
             span: ast.span(),
             r#type: make_type.r#type.clone(),
             variant: make_type.variant.clone(),
@@ -1063,11 +1192,17 @@ impl Compiler {
                 .as_ref()
                 .map(|body| self.compile(&body, vm, ast_compiler))
             {
-                Some(Ok(body)) => Some(std::boxed::Box::new(body)),
+                Some(Ok(Some(body))) => Some(std::boxed::Box::new(body)),
                 Some(Err(e)) => return Err(e),
-                None => None,
+                Some(Ok(None)) => {
+                    return Err(std::boxed::Box::new(Error {
+                        span: ast.span(),
+                        message: "unexpected expression".to_string(),
+                    }))
+                }
+                _ => None,
             },
-        }))
+        })))
     }
 
     fn compile_if_let(
@@ -1076,25 +1211,25 @@ impl Compiler {
         if_let: &ast::IfLet,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
-    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
-        let body = self.compile(&if_let.body, vm, ast_compiler)?;
+    ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
+        let body = expect_expression!(self.compile(&if_let.body, vm, ast_compiler), ast.span());
 
         self.environment
             .push_scope(std::iter::once(if_let.pattern.binding.clone()));
 
-        let then = self.compile(&if_let.then, vm, ast_compiler)?;
+        let then = expect_expression!(self.compile(&if_let.then, vm, ast_compiler), ast.span());
 
         self.environment.pop_scope();
 
-        let r#else = self.compile(&if_let.r#else, vm, ast_compiler)?;
+        let r#else = expect_expression!(self.compile(&if_let.r#else, vm, ast_compiler), ast.span());
 
-        Ok(Il::IfLet(IfLet {
+        Ok(Some(Il::IfLet(IfLet {
             span: ast.span(),
             body: std::boxed::Box::new(body),
             tag: if_let.pattern.variant.clone(),
             then: std::boxed::Box::new(then),
             r#else: std::boxed::Box::new(r#else),
-        }))
+        })))
     }
 }
 
