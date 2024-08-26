@@ -45,6 +45,9 @@ pub fn compile(il: &Il, opcodes: &mut OpCodeTable<FileSpan>) -> Result<(), Error
         Il::MapInsert(map_insert) => compile_map_insert(map_insert, opcodes),
         Il::MapRetrieve(map_retrieve) => compile_map_retrieve(map_retrieve, opcodes),
         Il::MapItems(map_items) => compile_map_items(map_items, opcodes),
+        Il::MakeType(make_type) => compile_make_type(make_type, opcodes),
+        Il::IfLet(if_let) => compile_if_let(if_let, opcodes),
+        _ => Ok(()),
     }
 }
 
@@ -346,6 +349,72 @@ fn compile_map_items(
     compile(&map_items.map, opcodes)?;
 
     opcodes.push(OpCode::MapItems, map_items.span);
+
+    Ok(())
+}
+
+fn compile_make_type(
+    make_type: &tree::MakeType,
+    opcodes: &mut OpCodeTable<FileSpan>,
+) -> Result<(), Error> {
+    opcodes.push(
+        OpCode::PushSymbol(Gc::new(make_type.variant.clone())),
+        make_type.span,
+    );
+
+    if let Some(body) = &make_type.body {
+        compile(body, opcodes)?;
+    } else {
+        opcodes.push(OpCode::PushNil, make_type.span);
+    }
+
+    opcodes.push(OpCode::Cons, make_type.span);
+
+    Ok(())
+}
+
+fn compile_if_let(if_let: &tree::IfLet, opcodes: &mut OpCodeTable<FileSpan>) -> Result<(), Error> {
+    let mut then = OpCodeTable::new();
+    let mut r#else = OpCodeTable::new();
+
+    compile(&if_let.body, opcodes)?;
+    compile(&if_let.then, &mut then)?;
+    compile(&if_let.r#else, &mut r#else)?;
+
+    then.push(OpCode::Return, if_let.span);
+
+    let else_length = r#else.len();
+
+    let lambda = OpCode::Lambda {
+        arity: vm::Arity::Nary(1),
+        body: Gc::new(then),
+    };
+
+    opcodes.push(OpCode::Dup, if_let.span);
+
+    opcodes.push(OpCode::Car, if_let.span);
+
+    opcodes.push(OpCode::PushSymbol(Gc::new(if_let.tag.clone())), if_let.span);
+
+    opcodes.push(OpCode::Eq, if_let.span);
+
+    opcodes.push(OpCode::Branch(7), if_let.span);
+
+    opcodes.push(lambda, if_let.span);
+
+    opcodes.push(OpCode::Peek(1), if_let.span);
+
+    opcodes.push(OpCode::Cdr, if_let.span);
+
+    opcodes.push(OpCode::Call(1), if_let.span);
+
+    opcodes.push(OpCode::Swap, if_let.span);
+
+    opcodes.push(OpCode::Pop, if_let.span);
+
+    opcodes.push(OpCode::Jmp(else_length as isize), if_let.span);
+
+    opcodes.append(r#else);
 
     Ok(())
 }

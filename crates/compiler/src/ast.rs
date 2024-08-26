@@ -1,5 +1,5 @@
 use core::fmt;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use error::FileSpan;
 use reader::Sexpr;
@@ -45,6 +45,8 @@ static BUILT_INS: &[&str] = &[
     "unbox",
     "gensym",
     "let-type",
+    "deftype",
+    "if-let",
 ];
 
 #[derive(Clone, Debug)]
@@ -56,6 +58,7 @@ pub struct Error {
 #[derive(Clone, Debug)]
 pub struct Compiler {
     macros: HashSet<String>,
+    deftypes: HashMap<String, (String, Variant)>,
 }
 
 #[derive(Clone, Debug, EnumAs, EnumIs)]
@@ -91,6 +94,9 @@ pub enum Ast {
     Assert(Assert),
     GenSym(GenSym),
     LetType(LetType),
+    DefType(DefType),
+    MakeType(MakeType),
+    IfLet(IfLet),
 }
 
 #[derive(Clone, Debug)]
@@ -359,11 +365,48 @@ pub struct LetType {
     pub r#type: Type,
 }
 
+#[derive(Clone, Debug)]
+pub struct DefType {
+    pub span: FileSpan,
+    pub name: String,
+    pub variants: Vec<Variant>,
+}
+
+#[derive(Clone, Debug)]
+pub struct MakeType {
+    pub span: FileSpan,
+    pub r#type: String,
+    pub variant: String,
+    pub body: Option<std::boxed::Box<Ast>>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Variant {
+    pub name: String,
+    pub r#type: Option<Type>,
+}
+
+#[derive(Clone, Debug)]
+pub struct IfLet {
+    pub span: FileSpan,
+    pub body: std::boxed::Box<Ast>,
+    pub pattern: Pattern,
+    pub then: std::boxed::Box<Ast>,
+    pub r#else: std::boxed::Box<Ast>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Pattern {
+    pub variant: String,
+    pub binding: String,
+}
+
 #[allow(clippy::new_without_default)]
 impl Compiler {
     pub fn new() -> Self {
         Self {
             macros: HashSet::new(),
+            deftypes: HashMap::new(),
         }
     }
 
@@ -374,7 +417,9 @@ impl Compiler {
                 if list
                     .first()
                     .and_then(|first| first.as_symbol())
-                    .is_some_and(|symbol| BUILT_INS.iter().any(|b| symbol == *b)) =>
+                    .is_some_and(|symbol| {
+                        BUILT_INS.iter().any(|b| symbol == *b) || self.deftypes.contains_key(symbol)
+                    }) =>
             {
                 match list.as_slice() {
                     [Symbol { symbol, .. }, Symbol { symbol: module, .. }]
@@ -486,6 +531,30 @@ impl Compiler {
                         if symbol == "let-type" =>
                     {
                         self.compile_let_type(sexpr, name.as_str(), r#type)?
+                    }
+                    [Sexpr::Symbol {
+                        symbol: deftype, ..
+                    }, Sexpr::Symbol { symbol: name, .. }, variants @ ..]
+                        if deftype == "deftype" =>
+                    {
+                        self.compile_deftype(sexpr, name.as_str(), variants)?
+                    }
+                    [Sexpr::Symbol {
+                        symbol: function, ..
+                    }, body]
+                        if self.deftypes.contains_key(function) =>
+                    {
+                        self.compile_make_type(sexpr, function, Some(body))?
+                    }
+                    [Sexpr::Symbol {
+                        symbol: function, ..
+                    }] if self.deftypes.contains_key(function) => {
+                        self.compile_make_type(sexpr, function, None)?
+                    }
+                    [Sexpr::Symbol { symbol: if_let, .. }, body, pattern, then, r#else]
+                        if if_let == "if-let" =>
+                    {
+                        self.compile_if_let(sexpr, body, pattern, then, r#else)?
                     }
                     _ => {
                         return Err(Error {
@@ -905,6 +974,72 @@ impl Compiler {
             })?,
         }))
     }
+
+    fn compile_deftype(
+        &mut self,
+        sexpr: &Sexpr,
+        name: &str,
+        variants: &[Sexpr],
+    ) -> Result<Ast, Error> {
+        let variants = variants
+            .iter()
+            .map(parse_variant)
+            .collect::<Result<Vec<Variant>, _>>()
+            .map_err(|_| Error {
+                span: sexpr.span(),
+                message: "failed to parse variant".to_string(),
+            })?;
+
+        for variant in &variants {
+            let constructor = format!("{}-{}", name, variant.name);
+            self.deftypes
+                .insert(constructor, (name.to_string(), variant.clone()));
+        }
+
+        Ok(Ast::DefType(DefType {
+            span: sexpr.span(),
+            name: name.to_string(),
+            variants,
+        }))
+    }
+
+    fn compile_make_type(
+        &mut self,
+        sexpr: &Sexpr,
+        function: &str,
+        body: Option<&Sexpr>,
+    ) -> Result<Ast, Error> {
+        Ok(Ast::MakeType(MakeType {
+            span: sexpr.span(),
+            r#type: self.deftypes[function].0.clone(),
+            variant: self.deftypes[function].1.name.clone(),
+            body: match body.as_ref().map(|body| self.compile(body)) {
+                Some(Ok(body)) => Some(std::boxed::Box::new(body)),
+                Some(Err(e)) => return Err(e),
+                None => None,
+            },
+        }))
+    }
+
+    fn compile_if_let(
+        &mut self,
+        sexpr: &Sexpr,
+        body: &Sexpr,
+        pattern: &Sexpr,
+        then: &Sexpr,
+        r#else: &Sexpr,
+    ) -> Result<Ast, Error> {
+        Ok(Ast::IfLet(IfLet {
+            span: sexpr.span(),
+            body: std::boxed::Box::new(self.compile(body)?),
+            pattern: parse_pattern(pattern).map_err(|_| Error {
+                span: sexpr.span(),
+                message: "failed to parse pattern".to_string(),
+            })?,
+            then: std::boxed::Box::new(self.compile(then)?),
+            r#else: std::boxed::Box::new(self.compile(r#else)?),
+        }))
+    }
 }
 
 impl fmt::Display for Error {
@@ -945,6 +1080,9 @@ impl Ast {
             | Self::MapItems(MapItems { span, .. })
             | Self::GenSym(GenSym { span })
             | Self::LetType(LetType { span, .. })
+            | Self::DefType(DefType { span, .. })
+            | Self::MakeType(MakeType { span, .. })
+            | Self::IfLet(IfLet { span, .. })
             | Self::Variable(Variable { span, .. })
             | Self::Constant(Constant::String { span, .. })
             | Self::Constant(Constant::Char { span, .. })
@@ -1118,6 +1256,41 @@ fn quote_list(sexpr: &Sexpr, list: &[Sexpr]) -> Quoted {
             })
             .collect(),
     }
+}
+
+fn parse_variant(sexpr: &Sexpr) -> Result<Variant, ()> {
+    let Sexpr::List { list, .. } = sexpr else {
+        return Err(());
+    };
+
+    match list.as_slice() {
+        [Sexpr::Symbol { symbol: name, .. }, r#type] => Ok(Variant {
+            name: name.clone(),
+            r#type: Some(Type::from_sexpr(r#type)?),
+        }),
+        [Sexpr::Symbol { symbol: name, .. }] => Ok(Variant {
+            name: name.clone(),
+            r#type: None,
+        }),
+        _ => Err(()),
+    }
+}
+
+fn parse_pattern(sexpr: &Sexpr) -> Result<Pattern, ()> {
+    Ok(match sexpr {
+        Sexpr::List { list, .. } => match list.as_slice() {
+            [Sexpr::Symbol {
+                symbol: variant, ..
+            }, Sexpr::Symbol {
+                symbol: binding, ..
+            }] => Pattern {
+                variant: variant.clone(),
+                binding: binding.to_string(),
+            },
+            _ => return Err(()),
+        },
+        _ => return Err(()),
+    })
 }
 
 #[cfg(test)]

@@ -1,5 +1,5 @@
 use crate::{
-    ast::{self, Ast, Quoted, Type},
+    ast::{self, Ast, DefType, Quoted, Type},
     bytecode,
     environment::{self, Environment, Variable},
 };
@@ -40,6 +40,9 @@ pub enum Il {
     Assert(Assert),
     VarRef(VarRef),
     Constant(Constant),
+    DefType(DefType),
+    MakeType(MakeType),
+    IfLet(IfLet),
 }
 
 #[derive(Clone, Debug)]
@@ -261,6 +264,23 @@ pub struct Assert {
     pub body: std::boxed::Box<Il>,
 }
 
+#[derive(Clone, Debug)]
+pub struct MakeType {
+    pub span: FileSpan,
+    pub r#type: String,
+    pub variant: String,
+    pub body: Option<std::boxed::Box<Il>>,
+}
+
+#[derive(Clone, Debug)]
+pub struct IfLet {
+    pub span: FileSpan,
+    pub body: std::boxed::Box<Il>,
+    pub tag: String,
+    pub then: std::boxed::Box<Il>,
+    pub r#else: std::boxed::Box<Il>,
+}
+
 pub struct Compiler {
     environment: Environment,
 }
@@ -312,6 +332,9 @@ impl Il {
             | Self::MapItems(MapItems { span, .. })
             | Self::IsType(IsType { span, .. })
             | Self::Assert(Assert { span, .. })
+            | Self::DefType(DefType { span, .. })
+            | Self::MakeType(MakeType { span, .. })
+            | Self::IfLet(IfLet { span, .. })
             | Self::VarRef(VarRef::Local { span, .. })
             | Self::VarRef(VarRef::UpValue { span, .. })
             | Self::VarRef(VarRef::Global { span, .. })
@@ -412,6 +435,9 @@ impl Compiler {
             Ast::GenSym(_) => self.compile_gensym(ast),
             Ast::Constant(constant) => self.compile_constant(ast, constant),
             Ast::Variable(variable) => self.compile_variable_reference(ast, variable),
+            Ast::DefType(deftype) => Ok(Il::DefType(deftype.clone())),
+            Ast::MakeType(make_type) => self.compile_make_type(ast, make_type, vm, ast_compiler),
+            Ast::IfLet(if_let) => self.compile_if_let(ast, if_let, vm, ast_compiler),
             _ => unreachable!("{ast:?}"),
         }
     }
@@ -1018,6 +1044,56 @@ impl Compiler {
         Ok(Il::MapItems(MapItems {
             span: ast.span(),
             map: std::boxed::Box::new(self.compile(&map_items.map, vm, ast_compiler)?),
+        }))
+    }
+
+    fn compile_make_type(
+        &mut self,
+        ast: &Ast,
+        make_type: &ast::MakeType,
+        vm: &mut Vm<FileSpan>,
+        ast_compiler: &mut ast::Compiler,
+    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
+        Ok(Il::MakeType(MakeType {
+            span: ast.span(),
+            r#type: make_type.r#type.clone(),
+            variant: make_type.variant.clone(),
+            body: match make_type
+                .body
+                .as_ref()
+                .map(|body| self.compile(&body, vm, ast_compiler))
+            {
+                Some(Ok(body)) => Some(std::boxed::Box::new(body)),
+                Some(Err(e)) => return Err(e),
+                None => None,
+            },
+        }))
+    }
+
+    fn compile_if_let(
+        &mut self,
+        ast: &Ast,
+        if_let: &ast::IfLet,
+        vm: &mut Vm<FileSpan>,
+        ast_compiler: &mut ast::Compiler,
+    ) -> Result<Il, std::boxed::Box<dyn error::Error>> {
+        let body = self.compile(&if_let.body, vm, ast_compiler)?;
+
+        self.environment
+            .push_scope(std::iter::once(if_let.pattern.binding.clone()));
+
+        let then = self.compile(&if_let.then, vm, ast_compiler)?;
+
+        self.environment.pop_scope();
+
+        let r#else = self.compile(&if_let.r#else, vm, ast_compiler)?;
+
+        Ok(Il::IfLet(IfLet {
+            span: ast.span(),
+            body: std::boxed::Box::new(body),
+            tag: if_let.pattern.variant.clone(),
+            then: std::boxed::Box::new(then),
+            r#else: std::boxed::Box::new(r#else),
         }))
     }
 }
