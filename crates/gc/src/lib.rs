@@ -15,6 +15,8 @@ use std::ptr::NonNull;
 
 thread_local! {
     pub static HEAD: Cell<Option<NonNull<Inner<dyn Trace>>>> = Cell::new(None);
+    pub static HEAP_SIZE: Cell<usize> = Cell::new(1024usize.pow(2));
+    pub static CURRENT_SIZE: Cell<usize> = Cell::new(0);
 }
 
 #[allow(clippy::missing_safety_doc)]
@@ -22,6 +24,10 @@ pub unsafe trait Trace {
     unsafe fn root(&self);
     unsafe fn unroot(&self);
     unsafe fn trace(&self, tracer: &mut dyn FnMut(NonNull<Inner<dyn Trace>>) -> bool);
+}
+
+pub fn set_heap_size(size: usize) {
+    HEAP_SIZE.set(size);
 }
 
 pub fn collect() {
@@ -75,6 +81,12 @@ pub fn collect() {
 pub(crate) unsafe fn add_to_list(inner: NonNull<Inner<dyn Trace>>) {
     let inner_ref = inner.as_ref();
 
+    CURRENT_SIZE.set(CURRENT_SIZE.get() + mem::size_of_val(&inner_ref.data));
+
+    if CURRENT_SIZE.get() > HEAP_SIZE.get() {
+        collect();
+    }
+
     if let Some(head) = HEAD.get() {
         let head_ref = head.as_ref();
         inner_ref.next.set(Some(head));
@@ -86,6 +98,9 @@ pub(crate) unsafe fn add_to_list(inner: NonNull<Inner<dyn Trace>>) {
 
 pub(crate) unsafe fn remove_from_list(inner: NonNull<Inner<dyn Trace>>) {
     let inner_ref = inner.as_ref();
+
+    CURRENT_SIZE.set(CURRENT_SIZE.get() - mem::size_of_val(&inner_ref.data));
+
     let next = inner_ref.next.get();
     let prev = inner_ref.prev.get();
 
