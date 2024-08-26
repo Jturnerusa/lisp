@@ -80,6 +80,8 @@ pub enum OpCode<D> {
     PushBool(bool),
     PushNil,
     Pop,
+    Dup,
+    Peek(usize),
     Add,
     Sub,
     Mul,
@@ -219,6 +221,8 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
             OpCode::Pop => {
                 self.stack.pop().unwrap();
             }
+            OpCode::Dup => self.dup()?,
+            OpCode::Peek(i) => self.peek(i)?,
             OpCode::Add => self.add()?,
             OpCode::Sub => self.sub()?,
             OpCode::Mul => self.mul()?,
@@ -247,8 +251,12 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
         Ok(())
     }
 
-    pub fn peek(&self, i: usize) -> Option<&Local<D>> {
-        self.stack.get(self.stack.len() - i - 1)
+    pub fn peek(&mut self, i: usize) -> Result<(), Error> {
+        let val = self.stack.get(self.stack.len() - i - 1).unwrap().clone();
+
+        self.stack.push(val);
+
+        Ok(())
     }
 
     pub fn push(&mut self, object: Object<D>) {
@@ -257,6 +265,14 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
 
     pub fn pop(&mut self) -> Option<Local<D>> {
         self.stack.pop()
+    }
+
+    pub fn dup(&mut self) -> Result<(), Error> {
+        let val = self.stack.last().unwrap().clone();
+
+        self.stack.push(val);
+
+        Ok(())
     }
 
     pub fn def_global(&mut self, global: &str) -> Result<(), Error> {
