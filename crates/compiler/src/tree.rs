@@ -1,3 +1,5 @@
+use std::{collections::HashMap, iter};
+
 use crate::{
     ast::{self, Ast, DefType, Quoted, Type},
     bytecode,
@@ -282,8 +284,7 @@ pub struct Assert {
 #[derive(Clone, Debug)]
 pub struct MakeType {
     pub span: FileSpan,
-    pub r#type: String,
-    pub variant: String,
+    pub pattern: String,
     pub body: Option<std::boxed::Box<Il>>,
 }
 
@@ -291,13 +292,21 @@ pub struct MakeType {
 pub struct IfLet {
     pub span: FileSpan,
     pub body: std::boxed::Box<Il>,
-    pub tag: String,
+    pub pattern: String,
+    pub binding: Option<String>,
     pub then: std::boxed::Box<Il>,
     pub r#else: std::boxed::Box<Il>,
 }
 
+#[derive(Clone, Debug)]
+enum DefTypePattern {
+    Struct(Type),
+    Empty,
+}
+
 pub struct Compiler {
     environment: Environment,
+    deftype_patterns: HashMap<String, DefTypePattern>,
 }
 
 impl VarRef {
@@ -404,6 +413,7 @@ impl Compiler {
     pub fn new() -> Self {
         Self {
             environment: Environment::new(),
+            deftype_patterns: HashMap::new(),
         }
     }
 
@@ -450,7 +460,7 @@ impl Compiler {
             Ast::GenSym(_) => self.compile_gensym(ast),
             Ast::Constant(constant) => self.compile_constant(ast, constant),
             Ast::Variable(variable) => self.compile_variable_reference(ast, variable),
-            Ast::DefType(deftype) => Ok(Some(Il::DefType(deftype.clone()))),
+            Ast::DefType(deftype) => self.compile_deftype(deftype),
             Ast::MakeType(make_type) => self.compile_make_type(ast, make_type, vm, ast_compiler),
             Ast::IfLet(if_let) => self.compile_if_let(ast, if_let, vm, ast_compiler),
             _ => unreachable!("{ast:?}"),
@@ -1176,6 +1186,23 @@ impl Compiler {
         })))
     }
 
+    fn compile_deftype(
+        &mut self,
+        deftype: &ast::DefType,
+    ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
+        for variant in &deftype.variants {
+            let pattern = format!("{}-{}", deftype.name, variant.name);
+            let parameter = match variant.r#type.as_ref() {
+                Some(t) => DefTypePattern::Struct(t.clone()),
+                None => DefTypePattern::Empty,
+            };
+
+            self.deftype_patterns.insert(pattern, parameter);
+        }
+
+        Ok(Some(Il::DefType(deftype.clone())))
+    }
+
     fn compile_make_type(
         &mut self,
         ast: &Ast,
@@ -1183,14 +1210,32 @@ impl Compiler {
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
     ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
+        let body = match (
+            &self.deftype_patterns[make_type.pattern.as_str()],
+            make_type.body.as_ref(),
+        ) {
+            (DefTypePattern::Struct(_), Some(body)) => Some(body),
+            (DefTypePattern::Struct(_), None) => {
+                return Err(std::boxed::Box::new(Error {
+                    span: ast.span(),
+                    message: "tried to construct a type without a value".to_string(),
+                }))
+            }
+            (DefTypePattern::Empty, Some(_)) => {
+                return Err(std::boxed::Box::new(Error {
+                    span: ast.span(),
+                    message: "tried to construct an empty type with a value".to_string(),
+                }) as _)
+            }
+            _ => None,
+        };
+
         Ok(Some(Il::MakeType(MakeType {
             span: ast.span(),
-            r#type: make_type.r#type.clone(),
-            variant: make_type.variant.clone(),
-            body: match make_type
-                .body
+            pattern: make_type.pattern.clone(),
+            body: match body
                 .as_ref()
-                .map(|body| self.compile(&body, vm, ast_compiler))
+                .map(|body| self.compile(body, vm, ast_compiler))
             {
                 Some(Ok(Some(body))) => Some(std::boxed::Box::new(body)),
                 Some(Err(e)) => return Err(e),
@@ -1212,24 +1257,78 @@ impl Compiler {
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
     ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
-        let body = expect_expression!(self.compile(&if_let.body, vm, ast_compiler), ast.span());
+        match (
+            &self.deftype_patterns[if_let.pattern.as_str()],
+            &if_let.binding,
+        ) {
+            (DefTypePattern::Struct(_), None) => {
+                return Err(std::boxed::Box::new(Error {
+                    span: ast.span(),
+                    message: "this pattern requires a binding".to_string(),
+                }))
+            }
+            (DefTypePattern::Empty, Some(_)) => {
+                return Err(std::boxed::Box::new(Error {
+                    span: ast.span(),
+                    message: "this pattern can not have a binding".to_string(),
+                }))
+            }
+            _ => (),
+        }
 
-        self.environment
-            .push_scope(std::iter::once(if_let.pattern.binding.clone()));
+        if let Some(binding) = if_let.binding.as_ref() {
+            let body = std::boxed::Box::new(expect_expression!(
+                self.compile(&if_let.body, vm, ast_compiler),
+                ast.span()
+            ));
 
-        let then = expect_expression!(self.compile(&if_let.then, vm, ast_compiler), ast.span());
+            self.environment.push_scope(iter::once(binding.clone()));
 
-        self.environment.pop_scope();
+            let then = std::boxed::Box::new(expect_expression!(
+                self.compile(&if_let.then, vm, ast_compiler),
+                ast.span()
+            ));
 
-        let r#else = expect_expression!(self.compile(&if_let.r#else, vm, ast_compiler), ast.span());
+            let r#else = std::boxed::Box::new(expect_expression!(
+                self.compile(&if_let.r#else, vm, ast_compiler),
+                ast.span()
+            ));
 
-        Ok(Some(Il::IfLet(IfLet {
-            span: ast.span(),
-            body: std::boxed::Box::new(body),
-            tag: if_let.pattern.variant.clone(),
-            then: std::boxed::Box::new(then),
-            r#else: std::boxed::Box::new(r#else),
-        })))
+            self.environment.pop_scope();
+
+            Ok(Some(Il::IfLet(IfLet {
+                span: ast.span(),
+                body,
+                pattern: if_let.pattern.clone(),
+                binding: Some(binding.clone()),
+                then,
+                r#else,
+            })))
+        } else {
+            let body = std::boxed::Box::new(expect_expression!(
+                self.compile(&if_let.body, vm, ast_compiler),
+                ast.span()
+            ));
+
+            let then = std::boxed::Box::new(expect_expression!(
+                self.compile(&if_let.then, vm, ast_compiler),
+                ast.span()
+            ));
+
+            let r#else = std::boxed::Box::new(expect_expression!(
+                self.compile(&if_let.r#else, vm, ast_compiler),
+                ast.span()
+            ));
+
+            Ok(Some(Il::IfLet(IfLet {
+                span: ast.span(),
+                body,
+                pattern: if_let.pattern.clone(),
+                binding: None,
+                then,
+                r#else,
+            })))
+        }
     }
 }
 

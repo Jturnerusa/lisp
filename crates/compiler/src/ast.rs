@@ -58,7 +58,7 @@ pub struct Error {
 #[derive(Clone, Debug)]
 pub struct Compiler {
     macros: HashSet<String>,
-    deftypes: HashMap<String, (String, Variant)>,
+    deftypes: HashMap<String, Variant>,
 }
 
 #[derive(Clone, Debug, EnumAs, EnumIs)]
@@ -375,8 +375,7 @@ pub struct DefType {
 #[derive(Clone, Debug)]
 pub struct MakeType {
     pub span: FileSpan,
-    pub r#type: String,
-    pub variant: String,
+    pub pattern: String,
     pub body: Option<std::boxed::Box<Ast>>,
 }
 
@@ -390,15 +389,10 @@ pub struct Variant {
 pub struct IfLet {
     pub span: FileSpan,
     pub body: std::boxed::Box<Ast>,
-    pub pattern: Pattern,
+    pub pattern: String,
+    pub binding: Option<String>,
     pub then: std::boxed::Box<Ast>,
     pub r#else: std::boxed::Box<Ast>,
-}
-
-#[derive(Clone, Debug)]
-pub struct Pattern {
-    pub variant: String,
-    pub binding: String,
 }
 
 #[allow(clippy::new_without_default)]
@@ -991,9 +985,8 @@ impl Compiler {
             })?;
 
         for variant in &variants {
-            let constructor = format!("{}-{}", name, variant.name);
-            self.deftypes
-                .insert(constructor, (name.to_string(), variant.clone()));
+            let pattern = format!("{}-{}", name, variant.name);
+            self.deftypes.insert(pattern.clone(), variant.clone());
         }
 
         Ok(Ast::DefType(DefType {
@@ -1006,13 +999,12 @@ impl Compiler {
     fn compile_make_type(
         &mut self,
         sexpr: &Sexpr,
-        function: &str,
+        pattern: &str,
         body: Option<&Sexpr>,
     ) -> Result<Ast, Error> {
         Ok(Ast::MakeType(MakeType {
             span: sexpr.span(),
-            r#type: self.deftypes[function].0.clone(),
-            variant: self.deftypes[function].1.name.clone(),
+            pattern: pattern.to_string(),
             body: match body.as_ref().map(|body| self.compile(body)) {
                 Some(Ok(body)) => Some(std::boxed::Box::new(body)),
                 Some(Err(e)) => return Err(e),
@@ -1029,13 +1021,36 @@ impl Compiler {
         then: &Sexpr,
         r#else: &Sexpr,
     ) -> Result<Ast, Error> {
+        let (pattern, binding) = match pattern {
+            Sexpr::List { list, .. } => match list.as_slice() {
+                [Sexpr::Symbol {
+                    symbol: pattern, ..
+                }, Sexpr::Symbol {
+                    symbol: binding, ..
+                }] => (pattern.clone(), Some(binding.clone())),
+                [Sexpr::Symbol {
+                    symbol: pattern, ..
+                }] => (pattern.clone(), None),
+                _ => {
+                    return Err(Error {
+                        span: sexpr.span(),
+                        message: "invalid deconstruction expression".to_string(),
+                    })
+                }
+            },
+            _ => {
+                return Err(Error {
+                    span: sexpr.span(),
+                    message: "invalid if-let syntax".to_string(),
+                })
+            }
+        };
+
         Ok(Ast::IfLet(IfLet {
             span: sexpr.span(),
             body: std::boxed::Box::new(self.compile(body)?),
-            pattern: parse_pattern(pattern).map_err(|_| Error {
-                span: sexpr.span(),
-                message: "failed to parse pattern".to_string(),
-            })?,
+            pattern,
+            binding,
             then: std::boxed::Box::new(self.compile(then)?),
             r#else: std::boxed::Box::new(self.compile(r#else)?),
         }))
@@ -1274,23 +1289,6 @@ fn parse_variant(sexpr: &Sexpr) -> Result<Variant, ()> {
         }),
         _ => Err(()),
     }
-}
-
-fn parse_pattern(sexpr: &Sexpr) -> Result<Pattern, ()> {
-    Ok(match sexpr {
-        Sexpr::List { list, .. } => match list.as_slice() {
-            [Sexpr::Symbol {
-                symbol: variant, ..
-            }, Sexpr::Symbol {
-                symbol: binding, ..
-            }] => Pattern {
-                variant: variant.clone(),
-                binding: binding.to_string(),
-            },
-            _ => return Err(()),
-        },
-        _ => return Err(()),
-    })
 }
 
 #[cfg(test)]
