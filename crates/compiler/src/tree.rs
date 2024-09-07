@@ -300,7 +300,7 @@ pub struct IfLet {
 }
 
 #[derive(Clone, Debug)]
-enum DefTypePattern {
+pub enum DefTypePattern {
     Struct(Type),
     Empty,
 }
