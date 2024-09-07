@@ -296,6 +296,7 @@ pub struct IfLet {
     pub binding: Option<String>,
     pub then: std::boxed::Box<Il>,
     pub r#else: std::boxed::Box<Il>,
+    pub upvalues: Vec<UpValue>,
 }
 
 #[derive(Clone, Debug)]
@@ -1289,12 +1290,14 @@ impl Compiler {
                 ast.span()
             ));
 
+            let upvalues = self.environment.upvalues().collect();
+
+            self.environment.pop_scope();
+
             let r#else = std::boxed::Box::new(expect_expression!(
                 self.compile(&if_let.r#else, vm, ast_compiler),
                 ast.span()
             ));
-
-            self.environment.pop_scope();
 
             Ok(Some(Il::IfLet(IfLet {
                 span: ast.span(),
@@ -1303,6 +1306,7 @@ impl Compiler {
                 binding: Some(binding.clone()),
                 then,
                 r#else,
+                upvalues,
             })))
         } else {
             let body = std::boxed::Box::new(expect_expression!(
@@ -1327,6 +1331,7 @@ impl Compiler {
                 binding: None,
                 then,
                 r#else,
+                upvalues: Vec::new(),
             })))
         }
     }
