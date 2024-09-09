@@ -20,6 +20,7 @@ pub fn compile_file(
     files: &mut HashMap<u64, PathBuf>,
     ast_compiler: &mut compiler::ast::Compiler,
     tree_compiler: &mut compiler::tree::Compiler,
+    type_checker: &mut compiler::types::Checker,
     vm: &mut Vm<FileSpan>,
     opcode_table: &mut OpCodeTable<FileSpan>,
 ) -> Result<(), Error> {
@@ -39,6 +40,7 @@ pub fn compile_file(
         files,
         ast_compiler,
         tree_compiler,
+        type_checker,
         vm,
         opcode_table,
     )
@@ -50,6 +52,7 @@ pub fn compile_source(
     files: &mut HashMap<u64, PathBuf>,
     ast_compiler: &mut compiler::ast::Compiler,
     tree_compiler: &mut compiler::tree::Compiler,
+    type_checker: &mut compiler::types::Checker,
     vm: &mut Vm<FileSpan>,
     opcode_table: &mut OpCodeTable<FileSpan>,
 ) -> Result<(), Error> {
@@ -67,6 +70,12 @@ pub fn compile_source(
 
             for expr in &eval_when_compile.exprs {
                 let tree = tree_compiler.compile(expr, vm, ast_compiler)?;
+
+                if let Some(compiler::tree::Il::Def(def)) = &tree {
+                    type_checker
+                        .check_def(def)
+                        .map_err(|e| Error::Spanned(Box::new(e)))?
+                }
 
                 if let Some(t) = &tree {
                     compiler::bytecode::compile(t, &mut opcode_table)
@@ -95,6 +104,7 @@ pub fn compile_source(
                 files,
                 ast_compiler,
                 tree_compiler,
+                type_checker,
                 vm,
                 opcode_table,
             )?;
@@ -103,6 +113,16 @@ pub fn compile_source(
         }
 
         let tree = tree_compiler.compile(&ast, vm, ast_compiler)?;
+
+        if let Some(compiler::tree::Il::Def(def)) = &tree {
+            type_checker
+                .check_def(def)
+                .map_err(|e| Error::Spanned(Box::new(e)))?
+        } else if let Some(compiler::tree::Il::DefType(deftype)) = &tree {
+            type_checker
+                .deftype(deftype)
+                .map_err(|e| Error::Spanned(Box::new(e)))?;
+        }
 
         if let Some(t) = &tree {
             compiler::bytecode::compile(t, opcode_table)

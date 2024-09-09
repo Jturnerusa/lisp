@@ -5,48 +5,54 @@
   ;; that just call the builtin internally.
 
   ;; These functions also should be available at compile time so they can
-  ;; be used in macros;
+  ;; be used in macros.
 
 (eval-when-compile
 
-  (def car (lambda (cons)
+  (def car (lambda ((cons (list `t))) -> `t
              (car cons)))
 
-  (def + (lambda (a b)
+  (def + (lambda ((a int) (b int)) -> int
            (+ a b)))
 
-  (def not (lambda (t)
+  (def not (lambda ((t bool)) -> bool
              (= t false)))
 
-  (def cadr (lambda (cons)
+  (def cadr (lambda ((cons (list `t))) -> `t
               (car (cdr cons))))
 
-  (def caar (lambda (cons)
+  (def caar (lambda ((cons (list (list `t)))) -> `t
               (car (car cons))))
 
-  (def cddr (lambda (cons)
+  (def cddr (lambda ((cons (list `t))) -> (list `t)
               (cdr (cdr cons))))
 
-  (def cdar (lambda (cons)
+  (def cdar (lambda ((cons (list (list `t)))) -> (list `t)
               (cdr (car cons))))
 
-  (def cadar (lambda (cons)
+  (def cadar (lambda ((cons (list (list `t)))) -> `t
                (car (cdr (car cons)))))
 
-  (def do (lambda (fn list)
+  (def do (lambda ((fn (fn `t -> `u))
+                   (list (list `t)))
+                  -> nil
             (if (nil? list)
                 nil
-                ((lambda ()
-                   (fn (car list))
-                   (do fn (cdr list)))))))
-
-  (def map (lambda (fn list)
+                ((lambda () -> nil
+                         (fn (car list))
+                         (do fn (cdr list)))))))
+  
+  (def map (lambda ((fn (fn `t -> `u))
+                    (list (list `t)))
+                   -> (list `u)
              (if (nil? list)
                  nil
                  (cons (fn (car list))
                        (map fn (cdr list))))))
 
-  (def filter (lambda (pred list)
+  (def filter (lambda ((pred (fn `t -> bool))
+                       (list (list `t)))
+                      -> (list `t)
                 (if (nil? list)
                     nil
                     (if (pred (car list))
@@ -71,14 +77,6 @@
                  (if (= n 0)
                      list
                      (nth-cdr (cdr list) (- n 1)))))
-
-  (def length (lambda (list)
-                ((lambda (loop)
-                   (loop list 0 loop))
-                 (lambda (list counter loop)
-                   (if (nil? list)
-                       counter
-                       (loop (cdr list) (+ counter 1) loop))))))
 
   (def append (lambda (&rest lists)
                 (if (= (length lists) 0)
