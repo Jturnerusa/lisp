@@ -358,6 +358,7 @@ impl Types {
 
     pub(crate) fn unify(&mut self, a: TypeId, b: TypeId) -> Result<(), ()> {
         match (self.vars[a].clone(), self.vars[b].clone()) {
+            _ if a == b => Ok(()),
             (
                 TypeInfo::DefType {
                     name: name_a,
