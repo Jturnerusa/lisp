@@ -687,7 +687,12 @@ impl Checker {
                     todo!()
                 };
 
-                let id = self.check_lambda(lambda, Some(parameters.clone()))?;
+                let parameters = parameters
+                    .iter()
+                    .map(|parameter| self.types.insert_concrete_type(parameter.clone()))
+                    .collect();
+
+                let id = self.check_lambda(lambda, Some(parameters))?;
 
                 match self.types.construct(id) {
                     Some(Type::Function { r#return: r, .. }) if *r == **r#return => Ok(()),
@@ -720,13 +725,10 @@ impl Checker {
     fn check_lambda(
         &mut self,
         lambda: &tree::Lambda,
-        parameters: Option<Vec<Type>>,
+        parameters: Option<Vec<TypeId>>,
     ) -> Result<TypeId, Error> {
         let parameters: Vec<TypeId> = if let Some(parameters) = parameters {
             parameters
-                .iter()
-                .map(|parameter| self.types.insert_concrete_type(parameter.clone()))
-                .collect()
         } else {
             (0..lambda.parameters.len())
                 .map(|_| self.types.insert(TypeInfo::Unknown))
@@ -769,16 +771,21 @@ impl Checker {
     }
 
     fn check_fncall(&mut self, fncall: &tree::FnCall) -> Result<TypeId, Error> {
-        let fncall_function = self.check_tree(&fncall.function)?;
-
-        let parameters = fncall
+        let fncall_parameters = fncall
             .args
             .iter()
             .map(|arg| self.check_tree(arg))
             .collect::<Result<Vec<_>, _>>()?;
+
+        let fncall_function = match &*fncall.function {
+            Il::Lambda(lambda) => self.check_lambda(lambda, Some(fncall_parameters.clone()))?,
+            Il::VarRef(varref) => self.check_varref(varref),
+            _ => unreachable!(),
+        };
+
         let r#return = self.types.insert(TypeInfo::Unknown);
         let function = self.types.insert(TypeInfo::Function {
-            parameters: Parameters::Known(parameters),
+            parameters: Parameters::Known(fncall_parameters),
             rest: Rest::None,
             r#return,
         });
