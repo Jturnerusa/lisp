@@ -29,6 +29,11 @@ pub enum Error {
     DefType(FileSpan),
     Failed(FileSpan),
     Annotation(FileSpan),
+    Expected {
+        span: FileSpan,
+        expected: Type,
+        received: Type,
+    },
 }
 
 #[derive(Clone, Debug, EnumAs, EnumIs)]
@@ -46,7 +51,7 @@ pub enum Type {
     Function {
         parameters: Vec<Type>,
         rest: Option<Box<Type>>,
-        r#return: Option<Box<Type>>,
+        r#return: Box<Type>,
     },
     List(Box<Type>),
     Cons(Box<Type>, Box<Type>),
@@ -139,7 +144,8 @@ impl error::Error for Error {
             | Self::Unification { span, .. }
             | Self::DefType(span)
             | Self::Failed(span)
-            | Self::Annotation(span) => Some(*span),
+            | Self::Annotation(span)
+            | Self::Expected { span, .. } => Some(*span),
         }
     }
 
@@ -158,6 +164,13 @@ impl error::Error for Error {
             Self::Annotation(_) => {
                 write!(writer, "top level functions must be fully annotated").unwrap()
             }
+            Self::Expected {
+                expected, received, ..
+            } => write!(
+                writer,
+                "body resolved to unexpected type: expected: {expected:?}: received: {received:?}"
+            )
+            .unwrap(),
         }
     }
 }
@@ -177,7 +190,7 @@ impl Type {
                                     .map(Type::from_ast)
                                     .collect::<Result<_, _>>()?,
                                 rest: Some(Box::new(Type::from_ast(variadic)?)),
-                                r#return: Some(Box::new(Type::from_ast(r#return)?)),
+                                r#return: Box::new(Type::from_ast(r#return)?),
                             }
                         }
                         _ => Type::Function {
@@ -186,23 +199,21 @@ impl Type {
                                 .map(Type::from_ast)
                                 .collect::<Result<_, _>>()?,
                             rest: None,
-                            r#return: Some(Box::new(Type::from_ast(r#return)?)),
+                            r#return: Box::new(Type::from_ast(r#return)?),
                         },
                     }
                 }
                 [ast::Type::Scalar(list), inner] if list == "list" => {
                     Type::List(Box::new(Type::from_ast(inner)?))
                 }
-                [ast::Type::Scalar(quasiquote), ast::Type::Scalar(generic)]
-                    if quasiquote == "quasiquote" =>
-                {
+                [ast::Type::Scalar(quote), ast::Type::Scalar(generic)] if quote == "quote" => {
                     Type::Generic(generic.clone())
                 }
                 [ast::Type::Scalar(deftype), parameters @ ..] => Type::DefType {
                     name: deftype.clone(),
                     parameters: parameters
                         .iter()
-                        .map(|parameter| Type::from_ast(parameter))
+                        .map(Type::from_ast)
                         .collect::<Result<Vec<_>, _>>()?,
                 },
                 _ => return Err(()),
@@ -219,6 +230,70 @@ impl Type {
             },
             _ => return Err(()),
         })
+    }
+
+    pub(crate) fn has_generics(&self) -> bool {
+        match self {
+            Self::DefType { parameters, .. } => parameters.iter().any(Type::has_generics),
+            Self::GenericFunction { .. } => true,
+            Self::Function {
+                parameters,
+                rest,
+                r#return,
+            } => {
+                parameters.iter().any(Type::has_generics)
+                    || match rest {
+                        Some(t) => t.has_generics(),
+                        _ => false,
+                    }
+                    || r#return.has_generics()
+            }
+            Self::List(inner) => inner.has_generics(),
+            Self::Cons(car, cdr) => car.has_generics() || cdr.has_generics(),
+            Self::Generic(_) => true,
+            _ => false,
+        }
+    }
+}
+
+impl PartialEq for Type {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (
+                Type::DefType {
+                    name: name_a,
+                    parameters: parameters_a,
+                },
+                Type::DefType {
+                    name: name_b,
+                    parameters: parameters_b,
+                },
+            ) => name_a == name_b && parameters_a == parameters_b,
+            (
+                Type::Function {
+                    parameters: parameters_a,
+                    rest: rest_a,
+                    r#return: return_a,
+                },
+                Type::Function {
+                    parameters: parameters_b,
+                    rest: rest_b,
+                    r#return: return_b,
+                },
+            ) => parameters_a == parameters_b && rest_a == rest_b && return_a == return_b,
+            (Type::List(a), Type::List(b)) => a == b,
+            (Type::Cons(a, b), Type::Cons(c, d)) => a == c && b == d,
+            (Type::Generic(a), Type::Generic(b)) => a == b,
+            (Type::Symbol, Type::Symbol) => true,
+            (Type::String, Type::String) => true,
+            (Type::Char, Type::Char) => true,
+            (Type::Int, Type::Int) => true,
+            (Type::Bool, Type::Bool) => true,
+            (Type::Nil, Type::Nil) => true,
+            (Type::List(_), Type::Nil) => true,
+            (Type::Nil, Type::List(_)) => true,
+            _ => false,
+        }
     }
 }
 
@@ -262,7 +337,7 @@ impl Types {
                     Rest::Known(id) => Some(Box::new(self.construct(id)?)),
                     Rest::None => None,
                 },
-                r#return: Some(Box::new(self.construct(r#return)?)),
+                r#return: Box::new(self.construct(r#return)?),
             },
             TypeInfo::List(inner) => Type::List(Box::new(self.construct(inner)?)),
             TypeInfo::Cons(car, cdr) => Type::Cons(
@@ -487,10 +562,7 @@ impl Types {
                     Some(r#rest) => Rest::Known(r#rest),
                     None => Rest::None,
                 };
-                let r#return = match r#return {
-                    Some(r#return) => self.insert_concrete_type(*r#return),
-                    None => self.insert(TypeInfo::Unknown),
-                };
+                let r#return = self.insert_concrete_type(*r#return);
                 self.insert(TypeInfo::Function {
                     parameters: Parameters::Known(parameters),
                     rest,
@@ -578,85 +650,87 @@ impl Checker {
     }
 
     pub fn check_def(&mut self, def: &tree::Def) -> Result<(), Error> {
-        match &*def.body {
-            Il::Lambda(lambda) => {
-                let parameters = lambda
-                    .parameters
-                    .iter()
-                    .map(
-                        |parameter| match parameter.r#type.as_ref().map(Type::from_ast) {
-                            Some(Ok(t)) => Ok(t),
-                            Some(Err(())) => Err(Error::InvalidType(def.span)),
-                            None => Err(Error::Annotation(def.span)),
+        match &def.parameter.r#type.as_ref().map(Type::from_ast) {
+            Some(Ok(r#type)) if r#type.is_function() => {
+                self.globals.insert(
+                    def.parameter.name.clone(),
+                    match r#type {
+                        Type::Function {
+                            parameters,
+                            rest,
+                            r#return,
+                        } if r#type.has_generics() => Type::GenericFunction {
+                            parameters: parameters.clone(),
+                            rest: rest.clone(),
+                            r#return: r#return.clone(),
                         },
-                    )
-                    .collect::<Result<Vec<_>, _>>()?;
+                        _ => r#type.clone(),
+                    },
+                );
 
-                let r#return = match lambda.r#type.as_ref().map(Type::from_ast) {
-                    Some(Ok(t)) => t,
-                    Some(Err(())) => return Err(Error::InvalidType(def.span)),
-                    None => return Err(Error::Annotation(def.span)),
-                };
-
-                let function = if parameters.iter().any(|parameter| parameter.is_generic()) {
+                let (parameters, r#return) = match r#type {
                     Type::GenericFunction {
                         parameters,
-                        rest: None,
-                        r#return: Box::new(r#return),
-                    }
-                } else {
+                        r#return,
+                        ..
+                    } => (parameters, r#return),
                     Type::Function {
                         parameters,
-                        rest: None,
-                        r#return: Some(Box::new(r#return)),
-                    }
+                        r#return,
+                        ..
+                    } => (parameters, r#return),
+                    _ => unreachable!(),
                 };
 
-                self.globals.insert(def.parameter.name.clone(), function);
-
-                self.check_tree(&def.body)?;
-
-                Ok(())
-            }
-            _ => {
-                let def_id = match def.parameter.r#type.as_ref().map(Type::from_ast) {
-                    Some(Ok(t)) => self.types.insert_concrete_type(t),
-                    Some(Err(())) => todo!(),
-                    None => self.types.insert(TypeInfo::Unknown),
-                };
-
-                let body = self.check_tree(&def.body)?;
-
-                let Ok(()) = self.types.unify(def_id, body) else {
+                let Il::Lambda(lambda) = &*def.body else {
                     todo!()
                 };
 
-                let concrete_type = match self.types.construct(def_id) {
-                    Some(t) => t,
-                    None => return Err(Error::Failed(def.span)),
-                };
+                let id = self.check_lambda(lambda, Some(parameters.clone()))?;
 
-                self.globals
-                    .insert(def.parameter.name.clone(), concrete_type);
-
-                Ok(())
+                match self.types.construct(id) {
+                    Some(Type::Function { r#return: r, .. }) if *r == **r#return => Ok(()),
+                    Some(Type::Function { r#return: r, .. }) => Err(Error::Expected {
+                        span: def.span,
+                        expected: *r#return.clone(),
+                        received: *r,
+                    }),
+                    None => Err(Error::Failed(def.span)),
+                    _ => unreachable!(),
+                }
             }
+            Some(Ok(r#type)) => {
+                self.globals
+                    .insert(def.parameter.name.clone(), r#type.clone());
+
+                let id = self.check_tree(&def.body)?;
+
+                match self.types.construct(id) {
+                    Some(t) if &t == r#type => Ok(()),
+                    Some(_) => todo!(),
+                    None => todo!(),
+                }
+            }
+            Some(Err(())) => todo!(),
+            None => todo!(),
         }
     }
 
-    fn check_lambda(&mut self, lambda: &tree::Lambda) -> Result<TypeId, Error> {
-        let parameters = lambda
-            .parameters
-            .iter()
-            .map(|parameter| {
-                Ok(match parameter.r#type.as_ref().map(Type::from_ast) {
-                    Some(Ok(t)) => self.types.insert_concrete_type(t),
-                    Some(Err(())) => return Err(()),
-                    None => self.types.insert(TypeInfo::Unknown),
-                })
-            })
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|_| Error::InvalidType(lambda.span))?;
+    fn check_lambda(
+        &mut self,
+        lambda: &tree::Lambda,
+        parameters: Option<Vec<Type>>,
+    ) -> Result<TypeId, Error> {
+        let parameters: Vec<TypeId> = if let Some(parameters) = parameters {
+            parameters
+                .iter()
+                .map(|parameter| self.types.insert_concrete_type(parameter.clone()))
+                .collect()
+        } else {
+            (0..lambda.parameters.len())
+                .map(|_| self.types.insert(TypeInfo::Unknown))
+                .collect()
+        };
 
         self.scopes.push(Scope {
             locals: parameters.clone(),
@@ -709,7 +783,12 @@ impl Checker {
         });
 
         let Ok(()) = self.types.unify(function, fncall_function) else {
-            todo!()
+            return Err(Error::Unification {
+                message: "failed to unify fncall".to_string(),
+                span: fncall.span,
+                a: MaybeUnknownType::from(self.types.construct(function)),
+                b: MaybeUnknownType::from(self.types.construct(fncall_function)),
+            });
         };
 
         Ok(r#return)
@@ -717,7 +796,7 @@ impl Checker {
 
     fn check_tree(&mut self, tree: &Il) -> Result<TypeId, Error> {
         match tree {
-            Il::Lambda(lambda) => self.check_lambda(lambda),
+            Il::Lambda(lambda) => self.check_lambda(lambda, None),
             Il::Set(set) => self.check_set(set),
             Il::FnCall(fncall) => self.check_fncall(fncall),
             Il::If(r#if) => self.check_if(r#if),

@@ -97,7 +97,7 @@ pub enum VarRef {
 }
 
 #[derive(Clone, Debug)]
-pub struct Parameter {
+pub struct DefParameter {
     pub span: FileSpan,
     pub name: String,
     pub r#type: Option<Type>,
@@ -105,8 +105,8 @@ pub struct Parameter {
 
 #[derive(Clone, Debug)]
 pub enum Parameters {
-    Nary(Vec<Parameter>),
-    Variadic(Vec<Parameter>),
+    Nary(Vec<String>),
+    Variadic(Vec<String>),
 }
 
 #[derive(Clone, Debug)]
@@ -200,7 +200,7 @@ pub struct ComparisonOperation {
 #[derive(Clone, Debug)]
 pub struct Def {
     pub span: FileSpan,
-    pub parameter: Parameter,
+    pub parameter: DefParameter,
     pub body: std::boxed::Box<Il>,
 }
 
@@ -373,9 +373,9 @@ impl Il {
     }
 }
 
-impl Parameter {
+impl DefParameter {
     #[allow(clippy::result_unit_err)]
-    pub fn from_ast(ast: &Ast, parameter: &ast::Parameter) -> Result<Self, ()> {
+    pub fn from_ast(ast: &Ast, parameter: &ast::DefParameter) -> Result<Self, ()> {
         Ok(Self {
             span: ast.span(),
             name: parameter.name.clone(),
@@ -386,25 +386,30 @@ impl Parameter {
 
 impl Parameters {
     #[allow(clippy::result_unit_err)]
-    pub fn from_ast(ast: &Ast, parameters: &ast::Parameters) -> Result<Self, ()> {
+    pub fn from_ast(parameters: &ast::Parameters) -> Result<Self, ()> {
         Ok(match parameters {
-            ast::Parameters::Normal(params) => Parameters::Nary(
-                params
-                    .iter()
-                    .map(|param| Parameter::from_ast(ast, param))
-                    .collect::<Result<Vec<Parameter>, ()>>()?,
-            ),
-            ast::Parameters::Rest(params, rest) => Parameters::Variadic(
-                params
+            ast::Parameters::Normal(parameters) => Parameters::Nary(parameters.clone()),
+            ast::Parameters::Rest(parameters, rest) => Parameters::Variadic(
+                parameters
                     .iter()
                     .chain(std::iter::once(rest))
-                    .map(|param| Parameter::from_ast(ast, param))
-                    .collect::<Result<Vec<Parameter>, _>>()?,
+                    .cloned()
+                    .collect(),
             ),
         })
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = Parameter> + '_ {
+    pub fn len(&self) -> usize {
+        match self {
+            Self::Nary(parameters) | Self::Variadic(parameters) => parameters.len(),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = String> + '_ {
         self.into_iter()
     }
 }
@@ -538,13 +543,12 @@ impl Compiler {
             ast::Parameters::Rest(..) => Arity::Variadic(defmacro.parameters.len() - 1),
         };
 
-        let parameters = Parameters::from_ast(ast, &defmacro.parameters).map_err(|_| Error {
+        let parameters = Parameters::from_ast(&defmacro.parameters).map_err(|_| Error {
             span: ast.span(),
             message: "failed to compile parameters".to_string(),
         })?;
 
-        self.environment
-            .push_scope(parameters.iter().map(|param| param.name));
+        self.environment.push_scope(parameters.iter());
 
         let body = defmacro
             .body
@@ -633,13 +637,12 @@ impl Compiler {
             ast::Parameters::Rest(..) => Arity::Variadic(lambda.parameters.len() - 1),
         };
 
-        let parameters = Parameters::from_ast(ast, &lambda.parameters).map_err(|_| Error {
+        let parameters = Parameters::from_ast(&lambda.parameters).map_err(|_| Error {
             span: ast.span(),
             message: "failed to compile parameters".to_string(),
         })?;
 
-        self.environment
-            .push_scope(parameters.iter().map(|param| param.name));
+        self.environment.push_scope(parameters.iter());
 
         let body = lambda
             .body
@@ -700,7 +703,7 @@ impl Compiler {
     ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
         self.environment.insert_global(def.parameter.name.as_str());
 
-        let parameter = Parameter::from_ast(ast, &def.parameter).map_err(|_| Error {
+        let parameter = DefParameter::from_ast(ast, &def.parameter).map_err(|_| Error {
             span: ast.span(),
             message: "failed to parse parameter".to_string(),
         })?;
@@ -1338,7 +1341,7 @@ impl Compiler {
 }
 
 impl<'parameters> IntoIterator for &'parameters Parameters {
-    type Item = Parameter;
+    type Item = String;
     type IntoIter = impl Iterator<Item = Self::Item>;
 
     fn into_iter(self) -> Self::IntoIter {

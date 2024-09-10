@@ -9,85 +9,40 @@
 
 (eval-when-compile
 
-  (def car (lambda ((cons (list `t))) -> `t
-             (car cons)))
+  (def (car (fn (list 't) -> 't))
+      (lambda (list)
+        (car list)))
 
-  (def + (lambda ((a int) (b int)) -> int
-           (+ a b)))
+  (def (+ (fn int int -> int))
+      (lambda (a b)
+        (+ a b)))
 
-  (def not (lambda ((t bool)) -> bool
-             (= t false)))
+  (def (not (fn bool -> bool))
+      (lambda (t)
+        (= t false)))
 
-  (def cadr (lambda ((cons (list `t))) -> `t
-              (car (cdr cons))))
-
-  (def caar (lambda ((cons (list (list `t)))) -> `t
-              (car (car cons))))
-
-  (def cddr (lambda ((cons (list `t))) -> (list `t)
-              (cdr (cdr cons))))
-
-  (def cdar (lambda ((cons (list (list `t)))) -> (list `t)
-              (cdr (car cons))))
-
-  (def cadar (lambda ((cons (list (list `t)))) -> `t
-               (car (cdr (car cons)))))
-
-  (def do (lambda ((fn (fn `t -> `u))
-                   (list (list `t)))
-                  -> nil
-            (if (nil? list)
-                nil
-                ((lambda () -> nil
-                         (fn (car list))
-                         (do fn (cdr list)))))))
+  (def (cadr (fn (list 't) -> 't))
+      (lambda (list)
+        (car (cdr list))))
   
-  (def map (lambda ((fn (fn `t -> `u))
-                    (list (list `t)))
-                   -> (list `u)
-             (if (nil? list)
-                 nil
-                 (cons (fn (car list))
-                       (map fn (cdr list))))))
+    (def (caar (fn (list (list 't)) -> 't))
+        (lambda (list)
+          (car (car list))))
 
-  (def filter (lambda ((pred (fn `t -> bool))
-                       (list (list `t)))
-                      -> (list `t)
-                (if (nil? list)
-                    nil
-                    (if (pred (car list))
-                        (cons (car list) (filter pred (cdr list)))
-                        (filter pred (cdr list))))))
+    (def (do (fn (fn 't -> nil) (list 't) -> nil))
+        (lambda (fn list)
+          (if (nil? list)
+              nil
+              ((lambda ()
+                 (fn (car list))
+                 (do fn (cdr list)))))))
 
-  (def nth (lambda (list n)
-             (if (nil? list)
-                 nil
-                 (if (= n 0)
-                     (car list)
-                     (nth (cdr list) (- n 1))))))
-
-  (def last (lambda (list)
-              (if (nil? list)
-                  nil
-                  (if (nil? (cdr list))
-                      (car list)
-                      (last (cdr list))))))
-
-  (def nth-cdr (lambda (list n)
-                 (if (= n 0)
-                     list
-                     (nth-cdr (cdr list) (- n 1)))))
-
-  (def append (lambda (&rest lists)
-                (if (= (length lists) 0)
-                    nil
-                    (if (= (length lists) 1)
-                        (car lists)
-                        (if (nil? (cdr (car lists)))
-                            (cons (car (car lists))
-                                  (apply append (cdr lists)))
-                            (cons (car (car lists))
-                                  (apply append (cons (cdr (car lists)) (cdr lists))))))))))
+    (def (map (fn (fn 't -> 'u) (list 't) -> (list 'u)))
+        (lambda (fn list)
+          (if (nil? list)
+              nil
+              (cons (fn (car list))
+                    (map fn (cdr list)))))))
 
 (defmacro progn (&rest body)
   (list (cons 'lambda (cons '() body))))

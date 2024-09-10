@@ -128,15 +128,15 @@ pub enum Type {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Parameter {
+pub struct DefParameter {
     pub name: String,
     pub r#type: Option<Type>,
 }
 
 #[derive(Clone, Debug)]
 pub enum Parameters {
-    Normal(Vec<Parameter>),
-    Rest(Vec<Parameter>, Parameter),
+    Normal(Vec<String>),
+    Rest(Vec<String>, String),
 }
 
 #[derive(Clone, Debug)]
@@ -164,14 +164,14 @@ pub struct Lambda {
 #[derive(Clone, Debug)]
 pub struct Def {
     pub span: FileSpan,
-    pub parameter: Parameter,
+    pub parameter: DefParameter,
     pub body: std::boxed::Box<Ast>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Decl {
     pub span: FileSpan,
-    pub parameter: Parameter,
+    pub parameter: DefParameter,
 }
 
 #[derive(Clone, Debug)]
@@ -698,7 +698,7 @@ impl Compiler {
     ) -> Result<Ast, Error> {
         Ok(Ast::Def(Def {
             span: sexpr.span(),
-            parameter: Parameter::from_sexpr(parameter).map_err(|_| Error {
+            parameter: DefParameter::from_sexpr(parameter).map_err(|_| Error {
                 span: sexpr.span(),
                 message: "failed to parse parameter".to_string(),
             })?,
@@ -709,7 +709,7 @@ impl Compiler {
     fn compile_decl(&mut self, sexpr: &Sexpr, parameter: &Sexpr) -> Result<Ast, Error> {
         Ok(Ast::Decl(Decl {
             span: sexpr.span(),
-            parameter: Parameter::from_sexpr(parameter).map_err(|_| Error {
+            parameter: DefParameter::from_sexpr(parameter).map_err(|_| Error {
                 span: sexpr.span(),
                 message: "failed to parse parameter".to_string(),
             })?,
@@ -1125,7 +1125,7 @@ impl Type {
     }
 }
 
-impl Parameter {
+impl DefParameter {
     #[allow(clippy::result_unit_err)]
     pub fn from_sexpr(sexpr: &Sexpr) -> Result<Self, ()> {
         Ok(match sexpr {
@@ -1135,12 +1135,12 @@ impl Parameter {
                 }
                 let name = list[0].as_symbol().ok_or(())?.to_string();
                 let r#type = Type::from_sexpr(&list[1])?;
-                Parameter {
+                DefParameter {
                     name,
                     r#type: Some(r#type),
                 }
             }
-            Sexpr::Symbol { symbol, .. } => Parameter {
+            Sexpr::Symbol { symbol, .. } => DefParameter {
                 name: symbol.clone(),
                 r#type: None,
             },
@@ -1175,20 +1175,18 @@ impl error::Error for Error {
 fn parse_parameters(sexpr: &Sexpr, list: &[Sexpr]) -> Result<Parameters, Error> {
     let parameters = list
         .iter()
-        .map(Parameter::from_sexpr)
-        .collect::<Result<Vec<_>, ()>>()
-        .map_err(|_| Error {
+        .map(|sexpr| sexpr.as_symbol().map(|s| s.to_string()))
+        .collect::<Option<Vec<_>>>()
+        .ok_or(Error {
             span: sexpr.span(),
             message: "failed to parse parameter".to_string(),
         })?;
 
     let with_rest = micro_nom::map(
         micro_nom::separated(
-            micro_nom::take_while::<&[Parameter], _>(|parameter: &Parameter| {
-                parameter.name != "&rest"
-            }),
-            micro_nom::take_one_if::<&[Parameter], _>(|parameter: &&Parameter| {
-                parameter.name == "&rest"
+            micro_nom::take_while::<&[String], _>(|parameter: &String| parameter != "&rest"),
+            micro_nom::take_one_if::<&[String], _>(|parameter: &&String| {
+                parameter.as_str() == "&rest"
             }),
             micro_nom::take_one,
         ),
@@ -1196,7 +1194,7 @@ fn parse_parameters(sexpr: &Sexpr, list: &[Sexpr]) -> Result<Parameters, Error> 
     );
 
     let without_rest = micro_nom::map(
-        micro_nom::take_while::<&[Parameter], _>(|_| true),
+        micro_nom::take_while::<&[String], _>(|_| true),
         |parameters| Parameters::Normal(parameters.to_vec()),
     );
 
