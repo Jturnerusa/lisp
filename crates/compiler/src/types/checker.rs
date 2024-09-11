@@ -2,6 +2,7 @@ use super::{Error, MaybeUnknownType, Parameters, Rest, Type, TypeId, TypeInfo, T
 use crate::ast;
 use crate::tree::{self, Il};
 use std::collections::HashMap;
+use std::iter;
 use unwrap_enum::{EnumAs, EnumIs};
 use vm::UpValue;
 
@@ -60,40 +61,36 @@ impl Checker {
                     },
                 );
 
-                let (parameters, r#return) = match r#type {
+                let (parameters, rest, r#return) = match r#type {
                     Type::GenericFunction {
                         parameters,
+                        rest,
                         r#return,
                         ..
-                    } => (parameters, r#return),
+                    } => (parameters, rest, r#return),
                     Type::Function {
                         parameters,
+                        rest,
                         r#return,
                         ..
-                    } => (parameters, r#return),
+                    } => (parameters, rest, r#return),
                     _ => unreachable!(),
                 };
 
                 let Il::Lambda(lambda) = &*def.body else {
-                    todo!()
+                    unreachable!();
                 };
 
-                let parameters = parameters
-                    .iter()
-                    .map(|parameter| self.types.insert_concrete_type(parameter.clone()))
-                    .collect();
-
-                let id = self.check_lambda(lambda, Some(parameters))?;
+                let id = self.check_top_level_lambda(
+                    lambda,
+                    parameters.clone(),
+                    rest.as_ref().map(|rest| *rest.clone()),
+                )?;
 
                 match self.types.construct(id) {
-                    Some(Type::Function { r#return: r, .. }) if *r == **r#return => Ok(()),
-                    Some(Type::Function { r#return: r, .. }) => Err(Error::Expected {
-                        span: def.span,
-                        expected: *r#return.clone(),
-                        received: *r,
-                    }),
-                    None => Err(Error::Failed(def.span)),
-                    _ => unreachable!(),
+                    Some(t) if t == **r#return => Ok(()),
+                    Some(_) => todo!(),
+                    None => todo!(),
                 }
             }
             Some(Ok(r#type)) => {
@@ -113,17 +110,84 @@ impl Checker {
         }
     }
 
+    fn check_top_level_lambda(
+        &mut self,
+        lambda: &tree::Lambda,
+        parameters: Vec<Type>,
+        rest: Option<Type>,
+    ) -> Result<TypeId, Error> {
+        let parameters = if let Some(rest) = rest {
+            let inner = self.types.insert_concrete_type(rest);
+            let rest = self.types.insert(TypeInfo::List(inner));
+            parameters[0..parameters.len()]
+                .iter()
+                .map(|parameter| self.types.insert_concrete_type(parameter.clone()))
+                .chain(iter::once(rest))
+                .collect::<Vec<_>>()
+        } else {
+            parameters
+                .iter()
+                .map(|parameter| self.types.insert_concrete_type(parameter.clone()))
+                .collect()
+        };
+
+        self.scopes.push(Scope {
+            locals: parameters.clone(),
+            upvalues: Vec::new(),
+        });
+
+        for expr in lambda.body.iter().take(lambda.body.len() - 1) {
+            self.check_tree(expr)?;
+        }
+
+        let last = self.check_tree(lambda.body.last().unwrap())?;
+
+        self.scopes.pop().unwrap();
+
+        Ok(last)
+    }
+
     fn check_lambda(
         &mut self,
         lambda: &tree::Lambda,
-        parameters: Option<Vec<TypeId>>,
+        parameters: Vec<TypeId>,
     ) -> Result<TypeId, Error> {
-        let parameters: Vec<TypeId> = if let Some(parameters) = parameters {
-            parameters
+        let (parameters, rest): (Vec<TypeId>, Rest) = if !parameters.is_empty() {
+            match &lambda.parameters {
+                tree::Parameters::Nary(_) => (parameters, Rest::None),
+                tree::Parameters::Variadic(_) => {
+                    let inner = parameters.last().unwrap();
+                    let list = self.types.insert(TypeInfo::List(*inner));
+                    (
+                        parameters[..parameters.len() - 1]
+                            .iter()
+                            .copied()
+                            .chain(iter::once(list))
+                            .collect(),
+                        Rest::Known(list),
+                    )
+                }
+            }
         } else {
-            (0..lambda.parameters.len())
-                .map(|_| self.types.insert(TypeInfo::Unknown))
-                .collect()
+            match &lambda.parameters {
+                tree::Parameters::Nary(parameters) => (
+                    (0..parameters.len())
+                        .map(|_| self.types.insert(TypeInfo::Unknown))
+                        .collect(),
+                    Rest::None,
+                ),
+                tree::Parameters::Variadic(parameters) => {
+                    let inner = self.types.insert(TypeInfo::Unknown);
+                    let list = self.types.insert(TypeInfo::List(inner));
+                    (
+                        (0..parameters.len() - 1)
+                            .map(|_| self.types.insert(TypeInfo::Unknown))
+                            .chain(iter::once(list))
+                            .collect(),
+                        Rest::Known(list),
+                    )
+                }
+            }
         };
 
         self.scopes.push(Scope {
@@ -156,7 +220,7 @@ impl Checker {
 
         Ok(self.types.insert(TypeInfo::Function {
             parameters: Parameters::Known(parameters),
-            rest: Rest::None,
+            rest,
             r#return,
         }))
     }
@@ -169,7 +233,7 @@ impl Checker {
             .collect::<Result<Vec<_>, _>>()?;
 
         let fncall_function = match &*fncall.function {
-            Il::Lambda(lambda) => self.check_lambda(lambda, Some(fncall_parameters.clone()))?,
+            Il::Lambda(lambda) => self.check_lambda(lambda, fncall_parameters.clone())?,
             Il::VarRef(varref) => self.check_varref(varref),
             _ => unreachable!(),
         };
@@ -195,10 +259,11 @@ impl Checker {
 
     fn check_tree(&mut self, tree: &Il) -> Result<TypeId, Error> {
         match tree {
-            Il::Lambda(lambda) => self.check_lambda(lambda, None),
+            Il::Lambda(lambda) => self.check_lambda(lambda, Vec::new()),
             Il::Set(set) => self.check_set(set),
             Il::FnCall(fncall) => self.check_fncall(fncall),
             Il::If(r#if) => self.check_if(r#if),
+            Il::Apply(apply) => self.check_apply(apply),
             Il::ArithmeticOperation(op) => self.check_aritmetic_op(op),
             Il::ComparisonOperation(op) => self.check_comparison_op(op),
             Il::List(list) => self.check_list(list),
@@ -301,14 +366,19 @@ impl Checker {
             rest: Rest::Known(rest),
             r#return,
         });
-        let list = self.types.insert(TypeInfo::List(r#return));
+        let list = self.types.insert(TypeInfo::List(rest));
 
         let Ok(()) = self.types.unify(apply_function, function) else {
             todo!()
         };
 
-        let Ok(()) = self.types.unify(apply_list, list) else {
-            todo!()
+        let Ok(()) = self.types.unify(apply_list, rest) else {
+            return Err(Error::Unification {
+                message: "failed to unify apply's list".to_string(),
+                span: apply.span,
+                a: MaybeUnknownType::from(self.types.construct(apply_list)),
+                b: MaybeUnknownType::from(self.types.construct(list)),
+            });
         };
 
         Ok(r#return)
