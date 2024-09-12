@@ -1,7 +1,8 @@
 mod checker;
 use crate::ast;
 pub use checker::Checker;
-use std::collections::HashMap;
+use core::fmt;
+use std::collections::{HashMap, HashSet};
 
 use error::FileSpan;
 use unwrap_enum::{EnumAs, EnumIs};
@@ -603,5 +604,47 @@ impl Types {
             TypeInfo::Ref(id) => self.instantiate(id, subs),
             _ => id,
         }
+    }
+
+    pub(crate) fn debug_typeid(&self, id: TypeId, seen: &mut HashSet<TypeId>) -> String {
+        if seen.contains(&id) {
+            return String::new();
+        }
+
+        seen.insert(id);
+
+        let result = match self.vars[id].clone() {
+            TypeInfo::Function {
+                parameters,
+                r#return,
+                ..
+            } => {
+                let mut buff = String::new();
+                buff += "fn -> ";
+                match parameters {
+                    Parameters::Known(parameters) => {
+                        for parameter in parameters {
+                            buff += self.debug_typeid(parameter, seen).as_str();
+                            buff += " ";
+                        }
+                    }
+                    Parameters::Unknown => buff += "unknown ",
+                }
+                buff += self.debug_typeid(r#return, seen).as_str();
+                buff
+            }
+            TypeInfo::List(inner) => format!("List({})", self.debug_typeid(inner, seen)),
+            TypeInfo::Generic(generic) => format!("Generic({generic})"),
+            TypeInfo::Symbol => "Symbol".to_string(),
+            TypeInfo::String => "String".to_string(),
+            TypeInfo::Char => "Char".to_string(),
+            TypeInfo::Int => "Int".to_string(),
+            TypeInfo::Bool => "Bool".to_string(),
+            TypeInfo::Nil => "Nil".to_string(),
+            TypeInfo::Unknown => "Unknown".to_string(),
+            _ => todo!(),
+        };
+
+        result
     }
 }
