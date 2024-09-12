@@ -1,7 +1,7 @@
 use super::{Error, MaybeUnknownType, Parameters, Rest, Type, TypeId, TypeInfo, Types};
 use crate::ast;
 use crate::tree::{self, Il};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::iter;
 use unwrap_enum::{EnumAs, EnumIs};
 use vm::UpValue;
@@ -195,11 +195,7 @@ impl Checker {
             upvalues: lambda.upvalues.clone(),
         });
 
-        let r#return = match lambda.r#type.as_ref().map(Type::from_ast) {
-            Some(Ok(t)) => self.types.insert_concrete_type(t),
-            Some(Err(())) => return Err(Error::InvalidType(lambda.span)),
-            None => self.types.insert(TypeInfo::Unknown),
-        };
+        let r#return = self.types.insert(TypeInfo::Unknown);
 
         for expr in lambda.body.iter().take(lambda.body.len() - 1) {
             self.check_tree(expr)?;
@@ -366,18 +362,19 @@ impl Checker {
             rest: Rest::Known(rest),
             r#return,
         });
-        let list = self.types.insert(TypeInfo::List(rest));
 
         let Ok(()) = self.types.unify(apply_function, function) else {
             todo!()
         };
+
+        let rest = self.types.insert(TypeInfo::List(rest));
 
         let Ok(()) = self.types.unify(apply_list, rest) else {
             return Err(Error::Unification {
                 message: "failed to unify apply's list".to_string(),
                 span: apply.span,
                 a: MaybeUnknownType::from(self.types.construct(apply_list)),
-                b: MaybeUnknownType::from(self.types.construct(list)),
+                b: MaybeUnknownType::from(self.types.construct(rest)),
             });
         };
 
