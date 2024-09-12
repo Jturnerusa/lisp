@@ -387,32 +387,30 @@ impl Types {
             ) => {
                 match (parameters_a.clone(), parameters_b.clone()) {
                     (Parameters::Unknown, Parameters::Known(parameters)) => {
-                        let refs = parameters
-                            .iter()
-                            .map(|p| self.insert(TypeInfo::Ref(*p)))
+                        let new_parameters: Vec<TypeId> = (0..parameters.len())
+                            .map(|_| self.insert(TypeInfo::Unknown))
                             .collect();
-                        self.vars.insert(
-                            a,
-                            TypeInfo::Function {
-                                parameters: Parameters::Known(refs),
-                                rest: rest_a,
-                                r#return: return_a,
-                            },
-                        );
+                        for (a, b) in new_parameters.iter().zip(parameters.iter()) {
+                            self.unify(*a, *b)?;
+                        }
+                        self.vars[a] = TypeInfo::Function {
+                            parameters: Parameters::Known(new_parameters),
+                            rest: rest_a,
+                            r#return: return_a,
+                        };
                     }
                     (Parameters::Known(parameters), Parameters::Unknown) => {
-                        let refs = parameters
-                            .iter()
-                            .map(|p| self.insert(TypeInfo::Ref(*p)))
+                        let new_parameters: Vec<TypeId> = (0..parameters.len())
+                            .map(|_| self.insert(TypeInfo::Unknown))
                             .collect();
-                        self.vars.insert(
-                            b,
-                            TypeInfo::Function {
-                                parameters: Parameters::Known(refs),
-                                rest: rest_a,
-                                r#return: return_a,
-                            },
-                        );
+                        for (a, b) in new_parameters.iter().zip(parameters.iter()) {
+                            self.unify(*a, *b)?;
+                        }
+                        self.vars[b] = TypeInfo::Function {
+                            parameters: Parameters::Known(new_parameters),
+                            rest: rest_a,
+                            r#return: return_a,
+                        };
                     }
                     (Parameters::Known(parameters_a), Parameters::Known(parameters_b))
                         if parameters_a.len() == parameters_b.len() =>
@@ -431,31 +429,28 @@ impl Types {
 
                 match (rest_a, rest_b) {
                     (Rest::Unknown, Rest::Known(id)) => {
-                        let r#ref = self.insert(TypeInfo::Ref(id));
-                        self.vars.insert(
-                            a,
-                            TypeInfo::Function {
-                                parameters: parameters_a,
-                                rest: Rest::Known(r#ref),
-                                r#return: return_a,
-                            },
-                        );
+                        let new_rest = self.insert(TypeInfo::Unknown);
+                        self.unify(new_rest, id)?;
+                        self.vars[a] = TypeInfo::Function {
+                            parameters: parameters_a,
+                            rest: Rest::Known(new_rest),
+                            r#return: return_a,
+                        };
                     }
                     (Rest::Known(id), Rest::Unknown) => {
-                        let r#ref = self.insert(TypeInfo::Ref(id));
-                        self.vars.insert(
-                            b,
-                            TypeInfo::Function {
-                                parameters: parameters_b,
-                                rest: Rest::Known(r#ref),
-                                r#return: return_b,
-                            },
-                        );
+                        let new_rest = self.insert(TypeInfo::Unknown);
+                        self.unify(new_rest, id)?;
+                        self.vars[b] = TypeInfo::Function {
+                            parameters: parameters_b,
+                            rest: Rest::Known(new_rest),
+                            r#return: return_b,
+                        };
                     }
                     (Rest::Known(a), Rest::Known(b)) => {
                         self.unify(a, b)?;
                     }
-                    _ => (),
+                    (Rest::None, Rest::None) => (),
+                    _ => return Err(()),
                 }
 
                 self.unify(return_a, return_b)?;
