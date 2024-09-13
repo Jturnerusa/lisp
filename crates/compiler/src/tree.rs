@@ -60,6 +60,7 @@ pub enum Il {
     DefType(DefType),
     MakeType(MakeType),
     IfLet(IfLet),
+    LetRec(LetRec),
 }
 
 #[derive(Clone, Debug)]
@@ -300,6 +301,14 @@ pub struct IfLet {
 }
 
 #[derive(Clone, Debug)]
+pub struct LetRec {
+    pub span: FileSpan,
+    pub bindings: Vec<(String, Il)>,
+    pub upvalues: Vec<UpValue>,
+    pub body: std::boxed::Box<Il>,
+}
+
+#[derive(Clone, Debug)]
 pub enum DefTypePattern {
     Struct(Type),
     Empty,
@@ -360,6 +369,7 @@ impl Il {
             | Self::DefType(DefType { span, .. })
             | Self::MakeType(MakeType { span, .. })
             | Self::IfLet(IfLet { span, .. })
+            | Self::LetRec(LetRec { span, .. })
             | Self::VarRef(VarRef::Local { span, .. })
             | Self::VarRef(VarRef::UpValue { span, .. })
             | Self::VarRef(VarRef::Global { span, .. })
@@ -469,6 +479,7 @@ impl Compiler {
             Ast::DefType(deftype) => self.compile_deftype(deftype),
             Ast::MakeType(make_type) => self.compile_make_type(ast, make_type, vm, ast_compiler),
             Ast::IfLet(if_let) => self.compile_if_let(ast, if_let, vm, ast_compiler),
+            Ast::LetRec(letrec) => self.compile_letrec(ast, letrec, vm, ast_compiler),
             _ => unreachable!("{ast:?}"),
         }
     }
@@ -1337,6 +1348,48 @@ impl Compiler {
                 upvalues: Vec::new(),
             })))
         }
+    }
+
+    fn compile_letrec(
+        &mut self,
+        ast: &Ast,
+        letrec: &ast::LetRec,
+        vm: &mut Vm<FileSpan>,
+        ast_compiler: &mut ast::Compiler,
+    ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
+        self.environment
+            .push_scope(letrec.bindings.iter().map(|(binding, _)| binding.clone()));
+
+        let exprs = letrec
+            .bindings
+            .iter()
+            .map(|(_, expr)| match self.compile(expr, vm, ast_compiler) {
+                Ok(Some(il)) => Ok(il),
+                Ok(None) => Err(std::boxed::Box::new(Error {
+                    span: ast.span(),
+                    message: "expected expression".to_string(),
+                }) as _),
+                Err(e) => Err(e),
+            })
+            .collect::<Result<Vec<Il>, _>>()?;
+
+        let body = expect_expression!(self.compile(&letrec.body, vm, ast_compiler), ast.span());
+
+        let upvalues = self.environment.upvalues().collect();
+
+        self.environment.pop_scope();
+
+        Ok(Some(Il::LetRec(LetRec {
+            span: ast.span(),
+            bindings: letrec
+                .bindings
+                .iter()
+                .map(|(binding, _)| binding.clone())
+                .zip(exprs)
+                .collect::<Vec<_>>(),
+            upvalues,
+            body: std::boxed::Box::new(body),
+        })))
     }
 }
 

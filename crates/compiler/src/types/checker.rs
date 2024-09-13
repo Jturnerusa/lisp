@@ -269,6 +269,7 @@ impl Checker {
             Il::IsType(is_type) => self.check_is_type(is_type),
             Il::MakeType(make_type) => self.check_make_type(make_type),
             Il::IfLet(if_let) => self.check_if_let(if_let),
+            Il::LetRec(letrec) => self.check_letrec(letrec),
             Il::VarRef(varref) => Ok(self.check_varref(varref)),
             Il::Constant(constant) => self.check_constant(constant),
             _ => panic!("unexpected tree il node: {tree:?}"),
@@ -527,6 +528,27 @@ impl Checker {
         };
 
         Ok(r#return)
+    }
+
+    fn check_letrec(&mut self, letrec: &tree::LetRec) -> Result<TypeId, Error> {
+        let scope = Scope {
+            locals: (0..letrec.bindings.len())
+                .map(|_| self.types.insert(TypeInfo::Unknown))
+                .collect(),
+            upvalues: letrec.upvalues.clone(),
+        };
+
+        self.scopes.push(scope);
+
+        for (_, expr) in &letrec.bindings {
+            self.check_tree(expr)?;
+        }
+
+        let body = self.check_tree(&letrec.body)?;
+
+        self.scopes.pop().unwrap();
+
+        Ok(body)
     }
 
     fn check_varref(&mut self, varref: &tree::VarRef) -> TypeId {

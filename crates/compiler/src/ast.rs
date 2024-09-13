@@ -47,6 +47,7 @@ static BUILT_INS: &[&str] = &[
     "let-type",
     "deftype",
     "if-let",
+    "letrec",
 ];
 
 #[derive(Clone, Debug)]
@@ -97,6 +98,7 @@ pub enum Ast {
     DefType(DefType),
     MakeType(MakeType),
     IfLet(IfLet),
+    LetRec(LetRec),
 }
 
 #[derive(Clone, Debug)]
@@ -395,6 +397,13 @@ pub struct IfLet {
     pub r#else: std::boxed::Box<Ast>,
 }
 
+#[derive(Clone, Debug)]
+pub struct LetRec {
+    pub span: FileSpan,
+    pub bindings: Vec<(String, Ast)>,
+    pub body: std::boxed::Box<Ast>,
+}
+
 #[allow(clippy::new_without_default)]
 impl Compiler {
     pub fn new() -> Self {
@@ -549,6 +558,11 @@ impl Compiler {
                         if if_let == "if-let" =>
                     {
                         self.compile_if_let(sexpr, body, pattern, then, r#else)?
+                    }
+                    [Sexpr::Symbol { symbol: letrec, .. }, Sexpr::List { list: bindings, .. }, body]
+                        if letrec == "letrec" =>
+                    {
+                        self.compile_letrec(sexpr, bindings.as_slice(), body)?
                     }
                     _ => {
                         return Err(Error {
@@ -1055,6 +1069,39 @@ impl Compiler {
             r#else: std::boxed::Box::new(self.compile(r#else)?),
         }))
     }
+
+    fn compile_letrec(
+        &mut self,
+        sexpr: &Sexpr,
+        bindings: &[Sexpr],
+        body: &Sexpr,
+    ) -> Result<Ast, Error> {
+        Ok(Ast::LetRec(LetRec {
+            span: sexpr.span(),
+            bindings: bindings
+                .iter()
+                .map(|binding| {
+                    Ok(
+                        match binding.as_list().ok_or(Error {
+                            span: sexpr.span(),
+                            message: "expected list of bindings".to_string(),
+                        })? {
+                            [Sexpr::Symbol { symbol: name, .. }, expr] => {
+                                (name.to_string(), self.compile(expr)?)
+                            }
+                            _ => {
+                                return Err(Error {
+                                    span: sexpr.span(),
+                                    message: "failed to parse binding".to_string(),
+                                })
+                            }
+                        },
+                    )
+                })
+                .collect::<Result<Vec<_>, _>>()?,
+            body: std::boxed::Box::new(self.compile(body)?),
+        }))
+    }
 }
 
 impl fmt::Display for Error {
@@ -1098,6 +1145,7 @@ impl Ast {
             | Self::DefType(DefType { span, .. })
             | Self::MakeType(MakeType { span, .. })
             | Self::IfLet(IfLet { span, .. })
+            | Self::LetRec(LetRec { span, .. })
             | Self::Variable(Variable { span, .. })
             | Self::Constant(Constant::String { span, .. })
             | Self::Constant(Constant::Char { span, .. })
@@ -1287,6 +1335,29 @@ fn parse_variant(sexpr: &Sexpr) -> Result<Variant, ()> {
         }),
         _ => Err(()),
     }
+}
+
+fn parse_let(sexpr: &Sexpr) -> Result<Vec<(String, Sexpr)>, ()> {
+    let bindings = match sexpr {
+        Sexpr::List { list, .. } => match list.as_slice() {
+            [_, Sexpr::List { list: bindings, .. }, _] => bindings,
+            _ => return Err(()),
+        },
+        _ => return Err(()),
+    };
+
+    bindings
+        .iter()
+        .map(|binding| {
+            Ok(match binding {
+                Sexpr::List { list, .. } => match list.as_slice() {
+                    [Sexpr::Symbol { symbol: name, .. }, expr] => (name.to_string(), expr.clone()),
+                    _ => return Err(()),
+                },
+                _ => return Err(()),
+            })
+        })
+        .collect()
 }
 
 #[cfg(test)]

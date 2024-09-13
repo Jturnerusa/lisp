@@ -47,6 +47,7 @@ pub fn compile(il: &Il, opcodes: &mut OpCodeTable<FileSpan>) -> Result<(), Error
         Il::MapItems(map_items) => compile_map_items(map_items, opcodes),
         Il::MakeType(make_type) => compile_make_type(make_type, opcodes),
         Il::IfLet(if_let) => compile_if_let(if_let, opcodes),
+        Il::LetRec(letrec) => compile_letrec(letrec, opcodes),
         _ => Ok(()),
     }
 }
@@ -418,6 +419,30 @@ fn compile_if_let(if_let: &tree::IfLet, opcodes: &mut OpCodeTable<FileSpan>) -> 
     opcodes.push(OpCode::Jmp(else_length as isize), if_let.span);
 
     opcodes.append(r#else);
+
+    Ok(())
+}
+
+fn compile_letrec(letrec: &tree::LetRec, opcodes: &mut OpCodeTable<FileSpan>) -> Result<(), Error> {
+    let mut lambda_opcodes = OpCodeTable::new();
+
+    for (_, expr) in &letrec.bindings {
+        compile(expr, &mut lambda_opcodes)?;
+    }
+
+    compile(&letrec.body, &mut lambda_opcodes)?;
+
+    lambda_opcodes.push(OpCode::Return, letrec.span);
+
+    opcodes.push(
+        OpCode::Lambda {
+            arity: vm::Arity::Nary(0),
+            body: Gc::new(lambda_opcodes),
+        },
+        letrec.span,
+    );
+
+    opcodes.push(OpCode::Call(0), letrec.span);
 
     Ok(())
 }
