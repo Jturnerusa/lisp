@@ -1,5 +1,6 @@
-(def not_eq (lambda (a b)
-              (not (= a b))))
+(def (not_eq (fn 'a 'a -> bool))
+    (lambda (a b)
+      (not (= a b))))
 
 (assert (not false))
 (assert (not (not true)))
