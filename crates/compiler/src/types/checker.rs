@@ -38,11 +38,25 @@ impl Checker {
         }
     }
 
-    pub fn deftype(&mut self, deftype: &ast::DefType) -> Result<(), Error> {
-        Ok(())
+    pub fn check(&mut self, tree: &tree::Il) -> Result<(), Error> {
+        match tree {
+            tree::Il::Def(def) => self.check_def(def),
+            tree::Il::Lambda(lambda) => self.check_lambda(lambda, Vec::new()).map(|_| ()),
+            tree::Il::If(r#if) => self.check_if(r#if).map(|_| ()),
+            tree::Il::Apply(apply) => self.check_apply(apply).map(|_| ()),
+            tree::Il::Set(set) => self.check_set(set).map(|_| ()),
+            tree::Il::FnCall(fncall) => self.check_fncall(fncall).map(|_| ()),
+            tree::Il::ArithmeticOperation(op) => self.check_aritmetic_op(op).map(|_| ()),
+            tree::Il::ComparisonOperation(op) => self.check_comparison_op(op).map(|_| ()),
+            tree::Il::List(list) => self.check_list(list).map(|_| ()),
+            tree::Il::Cons(cons) => self.check_cons(cons).map(|_| ()),
+            tree::Il::Car(car) => self.check_car(car).map(|_| ()),
+            tree::Il::Cdr(cdr) => self.check_cdr(cdr).map(|_| ()),
+            _ => Ok(()),
+        }
     }
 
-    pub fn check_def(&mut self, def: &tree::Def) -> Result<(), Error> {
+    fn check_def(&mut self, def: &tree::Def) -> Result<(), Error> {
         match &def.parameter.r#type.as_ref().map(Type::from_ast) {
             Some(Ok(r#type)) if r#type.is_function() => {
                 self.globals.insert(

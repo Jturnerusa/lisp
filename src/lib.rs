@@ -71,13 +71,11 @@ pub fn compile_source(
             for expr in &eval_when_compile.exprs {
                 let tree = tree_compiler.compile(expr, vm, ast_compiler)?;
 
-                if let Some(compiler::tree::Il::Def(def)) = &tree {
-                    type_checker
-                        .check_def(def)
-                        .map_err(|e| Error::Spanned(Box::new(e)))?
-                }
-
                 if let Some(t) = &tree {
+                    type_checker
+                        .check(t)
+                        .map_err(|e| Error::Spanned(Box::new(e)))?;
+
                     compiler::bytecode::compile(t, &mut opcode_table)
                         .map_err(|e| Error::Spanned(Box::new(e)))?;
                 }
@@ -114,17 +112,11 @@ pub fn compile_source(
 
         let tree = tree_compiler.compile(&ast, vm, ast_compiler)?;
 
-        if let Some(compiler::tree::Il::Def(def)) = &tree {
-            type_checker
-                .check_def(def)
-                .map_err(|e| Error::Spanned(Box::new(e)))?
-        } else if let Some(compiler::tree::Il::DefType(deftype)) = &tree {
-            type_checker
-                .deftype(deftype)
-                .map_err(|e| Error::Spanned(Box::new(e)))?;
-        }
-
         if let Some(t) = &tree {
+            type_checker
+                .check(t)
+                .map_err(|e| Error::Spanned(Box::new(e)))?;
+
             compiler::bytecode::compile(t, opcode_table)
                 .map_err(|e| Error::Spanned(Box::new(e)))?;
         }
