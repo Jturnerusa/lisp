@@ -53,8 +53,21 @@ impl Checker {
             tree::Il::Car(car) => self.check_car(car).map(|_| ()),
             tree::Il::Cdr(cdr) => self.check_cdr(cdr).map(|_| ()),
             tree::Il::Assert(assert) => self.check_assert(assert).map(|_| ()),
+            tree::Il::Decl(decl) => self.check_decl(decl),
             _ => Ok(()),
         }
+    }
+
+    fn check_decl(&mut self, decl: &ast::Decl) -> Result<(), Error> {
+        let r#type = match decl.parameter.r#type.as_ref().map(Type::from_ast) {
+            Some(Ok(t)) => t,
+            Some(Err(())) => return Err(Error::InvalidType(decl.span)),
+            None => return Err(Error::Annotation(decl.span)),
+        };
+
+        self.globals.insert(decl.parameter.name.clone(), r#type);
+
+        Ok(())
     }
 
     fn check_def(&mut self, def: &tree::Def) -> Result<(), Error> {
