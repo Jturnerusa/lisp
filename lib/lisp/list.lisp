@@ -3,9 +3,9 @@
       (if (nil? list)
           nil
           (letrec ((loop (lambda (list counter)
-                           (if (= counter n)
+                           (if (> counter (- n 1))
                                nil
-                               (cons (car list) (take (cdr list) (+ counter 1)))))))
+                               (cons (car list) (loop (cdr list) (+ counter 1)))))))
             (loop list 0)))))
 
 (def (drop (fn (list 'a) int -> (list 'a)))
