@@ -120,8 +120,8 @@ impl Checker {
                     None => todo!(),
                 }
             }
-            Some(Err(())) => todo!(),
-            None => todo!(),
+            Some(Err(())) => Err(Error::InvalidType(def.span)),
+            None => Err(Error::Annotation(def.span)),
         }
     }
 
