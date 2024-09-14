@@ -142,7 +142,7 @@
 (defmacro named-let (name bindings &rest body)
   `(letrec ((,name (lambda ,(map car bindings)
                     ,@body)))
-     (,name ,(map car bindings))))
+     (,name ,@(map cadr bindings))))
 
 (def (fold (fn (fn 'a 'a -> 'a) (list 'a) -> 'a))
     (lambda (fn list)
