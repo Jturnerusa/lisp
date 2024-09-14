@@ -482,6 +482,7 @@ impl Types {
                 self.vars[b] = a;
                 Ok(())
             }
+            (TypeInfo::Unknown, TypeInfo::Unknown) => Ok(()),
             _ => Err(()),
         }
     }
