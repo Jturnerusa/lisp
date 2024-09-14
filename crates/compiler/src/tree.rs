@@ -1,7 +1,7 @@
 use std::{collections::HashMap, iter};
 
 use crate::{
-    ast::{self, Ast, DefType, Quoted, Type},
+    ast::{self, Ast, Decl, DefType, Quoted, Type},
     bytecode,
     environment::{self, Environment, Variable},
 };
@@ -61,6 +61,7 @@ pub enum Il {
     MakeType(MakeType),
     IfLet(IfLet),
     LetRec(LetRec),
+    Decl(ast::Decl),
 }
 
 #[derive(Clone, Debug)]
@@ -370,6 +371,7 @@ impl Il {
             | Self::MakeType(MakeType { span, .. })
             | Self::IfLet(IfLet { span, .. })
             | Self::LetRec(LetRec { span, .. })
+            | Self::Decl(Decl { span, .. })
             | Self::VarRef(VarRef::Local { span, .. })
             | Self::VarRef(VarRef::UpValue { span, .. })
             | Self::VarRef(VarRef::Global { span, .. })
