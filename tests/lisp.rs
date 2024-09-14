@@ -1,8 +1,8 @@
 use std::{collections::HashMap, path::PathBuf};
 
-use compiler::{ast, tree};
+use compiler::{ast, tree, types};
 use error::FileSpan;
-use lisp::{compile_source, display_error};
+use lisp::compile_source;
 use vm::{OpCodeTable, Vm};
 
 macro_rules! deftest {
@@ -20,8 +20,9 @@ static BOOTSTRAP_PATH: &str = "../lib/bootstrap/bootstrap.lisp";
 static BOOTSTRAP_SOURCE: &str = include_str!("../lib/bootstrap/bootstrap.lisp");
 
 fn eval_with_bootstrap(input: &str) -> Result<Option<vm::Object<FileSpan>>, lisp::Error> {
-    let mut tree_compiler = tree::Compiler::new();
     let mut ast_compiler = ast::Compiler::new();
+    let mut tree_compiler = tree::Compiler::new();
+    let mut type_checker = types::Checker::new();
     let mut opcode_table = OpCodeTable::new();
     let mut vm = Vm::new();
     let mut files = HashMap::new();
@@ -35,6 +36,7 @@ fn eval_with_bootstrap(input: &str) -> Result<Option<vm::Object<FileSpan>>, lisp
         &mut files,
         &mut ast_compiler,
         &mut tree_compiler,
+        &mut type_checker,
         &mut vm,
         &mut opcode_table,
     )?;
@@ -45,6 +47,7 @@ fn eval_with_bootstrap(input: &str) -> Result<Option<vm::Object<FileSpan>>, lisp
         &mut files,
         &mut ast_compiler,
         &mut tree_compiler,
+        &mut type_checker,
         &mut vm,
         &mut opcode_table,
     )?;
@@ -59,8 +62,9 @@ fn eval_with_bootstrap(input: &str) -> Result<Option<vm::Object<FileSpan>>, lisp
 }
 
 fn eval(input: &'static str) -> Result<Option<vm::Object<FileSpan>>, lisp::Error> {
-    let mut tree_compiler = tree::Compiler::new();
     let mut ast_compiler = ast::Compiler::new();
+    let mut tree_compiler = tree::Compiler::new();
+    let mut type_checker = types::Checker::new();
     let mut opcode_table = OpCodeTable::new();
     let mut vm = Vm::new();
     let mut files = HashMap::new();
@@ -71,6 +75,7 @@ fn eval(input: &'static str) -> Result<Option<vm::Object<FileSpan>>, lisp::Error
         &mut files,
         &mut ast_compiler,
         &mut tree_compiler,
+        &mut type_checker,
         &mut vm,
         &mut opcode_table,
     )?;
@@ -97,14 +102,14 @@ fn test_nested_add() {
 
 #[test]
 fn test_def_global() {
-    let input = "(def x 1) x";
+    let input = "(def (x int) 1) x";
     assert!(matches!(eval(input).unwrap().unwrap(), vm::Object::Int(1)));
     gc::collect();
 }
 
 #[test]
 fn test_set_global() {
-    let input = "(def x 1) (set! x 2) x";
+    let input = "(def (x int) 1) (set! x 2) x";
     assert!(matches!(eval(input).unwrap().unwrap(), vm::Object::Int(2)));
     gc::collect();
 }
@@ -157,8 +162,9 @@ fn test_cdr() {
 #[test]
 fn test_get_upvalue() {
     let input = "
-(def x (lambda (a)
-        ((lambda () a))))
+(def (x (fn 'a -> 'a))
+  (lambda (a)
+    ((lambda () a))))
 (x 1)
 ";
     assert!(matches!(eval(input).unwrap().unwrap(), vm::Object::Int(1)));
