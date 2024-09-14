@@ -144,8 +144,8 @@ pub fn display_error(
 
         let line_number = buff
             .bytes()
-            .filter(|byte| *byte == b'\n')
             .take(span.start)
+            .filter(|byte| *byte == b'\n')
             .count();
         let slice = &buff[span.start..span.stop];
 
