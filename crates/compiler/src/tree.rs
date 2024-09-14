@@ -733,12 +733,12 @@ impl Compiler {
 
     fn compile_decl(
         &mut self,
-        ast: &Ast,
+        _: &Ast,
         decl: &ast::Decl,
     ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
         self.environment.insert_global(decl.parameter.name.as_str());
 
-        Ok(Some(Il::Constant(Constant::Nil { span: ast.span() })))
+        Ok(Some(Il::Decl(decl.clone())))
     }
 
     fn compile_set(
