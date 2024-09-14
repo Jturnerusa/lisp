@@ -13,7 +13,7 @@
       (if (nil? list)
           nil
           (letrec ((loop (lambda (list counter)
-                           (if (= counter n)
+                           (if (> counter (- n 2))
                                (cdr list)
                                (loop (cdr list) (+ counter 1))))))
             (loop list 0)))))
