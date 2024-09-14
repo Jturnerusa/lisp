@@ -52,7 +52,7 @@ impl Checker {
             tree::Il::Cons(cons) => self.check_cons(cons).map(|_| ()),
             tree::Il::Car(car) => self.check_car(car).map(|_| ()),
             tree::Il::Cdr(cdr) => self.check_cdr(cdr).map(|_| ()),
-            Il::Assert(assert) => self.check_assert(assert).map(|_| ()),
+            tree::Il::Assert(assert) => self.check_assert(assert).map(|_| ()),
             _ => Ok(()),
         }
     }
