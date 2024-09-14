@@ -426,8 +426,9 @@ fn compile_if_let(if_let: &tree::IfLet, opcodes: &mut OpCodeTable<FileSpan>) -> 
 fn compile_letrec(letrec: &tree::LetRec, opcodes: &mut OpCodeTable<FileSpan>) -> Result<(), Error> {
     let mut lambda_opcodes = OpCodeTable::new();
 
-    for (_, expr) in &letrec.bindings {
+    for (i, (_, expr)) in letrec.bindings.iter().enumerate() {
         compile(expr, &mut lambda_opcodes)?;
+        lambda_opcodes.push(OpCode::SetLocal(i), letrec.span);
     }
 
     compile(&letrec.body, &mut lambda_opcodes)?;
@@ -436,13 +437,21 @@ fn compile_letrec(letrec: &tree::LetRec, opcodes: &mut OpCodeTable<FileSpan>) ->
 
     opcodes.push(
         OpCode::Lambda {
-            arity: vm::Arity::Nary(0),
+            arity: vm::Arity::Nary(letrec.bindings.len()),
             body: Gc::new(lambda_opcodes),
         },
         letrec.span,
     );
 
-    opcodes.push(OpCode::Call(0), letrec.span);
+    for upvalue in &letrec.upvalues {
+        opcodes.push(OpCode::CreateUpValue(*upvalue), letrec.span);
+    }
+
+    for _ in 0..letrec.bindings.len() {
+        opcodes.push(OpCode::PushNil, letrec.span);
+    }
+
+    opcodes.push(OpCode::Call(letrec.bindings.len()), letrec.span);
 
     Ok(())
 }
