@@ -1,3 +1,5 @@
+#![feature(let_chains)]
+
 use compiler::ast::Ast;
 use error::FileSpan;
 use reader::Reader;
@@ -132,9 +134,10 @@ pub fn display_error(
 ) -> Result<(), Box<dyn std::error::Error>> {
     error.message(&mut writer);
 
-    if let Some(span) = error.span() {
+    if let Some(span) = error.span()
+        && let Some(path) = files.get(&span.id)
+    {
         let mut buff = String::new();
-        let path = files[&span.id].as_path();
         let mut file = File::open(path)?;
 
         file.read_to_string(&mut buff)?;
