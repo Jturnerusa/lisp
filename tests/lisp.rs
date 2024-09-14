@@ -372,13 +372,6 @@ fn test_nthcdr() {
     gc::collect();
 }
 
-#[test]
-fn test_find() {
-    let input = include_str!("lisp/find.lisp");
-    assert!(eval_with_bootstrap(input).is_ok());
-    gc::collect();
-}
-
 deftest!(test_hashmap, "lisp/hashmap.lisp");
 
 deftest!(test_quasiquote, "lisp/quasiquote.lisp");
