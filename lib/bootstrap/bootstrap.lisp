@@ -37,12 +37,52 @@
                  (fn (car list))
                  (do fn (cdr list)))))))
 
+    (def (cdar (fn (list (list 't)) -> (list 't)))
+        (lambda (list)
+          (cdr (car list))))
+
+    (def (cadar (fn (list (list 't)) -> 't))
+        (lambda (list)
+          (car (cdr (car list)))))
+
     (def (map (fn (fn 't -> 'u) (list 't) -> (list 'u)))
         (lambda (fn list)
           (if (nil? list)
               nil
               (cons (fn (car list))
-                    (map fn (cdr list)))))))
+                    (map fn (cdr list))))))
+
+    (def (filter (fn (fn 't -> bool)
+                     (list 't)
+                     -> (list 't)))
+        (lambda (pred list)
+          (if (nil? list)
+              nil
+              (if (pred (car list))
+                  (cons (car list) (filter pred (cdr list)))
+                  (filter pred (cdr list))))))
+
+    (def (length (fn (list 't) -> int))
+        (lambda (list)
+          (letrec ((loop (lambda (list counter)
+                           (if (nil? list)
+                               counter
+                               (loop (cdr list) (+ counter 1))))))
+            (loop list 0))))
+          
+
+    (def (append (fn &rest (list 't) -> (list 't)))
+        (lambda (&rest lists)
+          (if (= (length lists) 0)
+              nil
+              (if (= (length lists) 1)
+                  (car lists)
+                  (if (nil? (cdr (car lists)))
+                      (cons (car (car lists))
+                            (apply append (cdr lists)))
+                      (cons (car (car lists))
+                            (apply append (cons (cdr (car lists)) (cdr lists))))))))))
+
 
 (defmacro progn (&rest body)
   (list (cons 'lambda (cons '() body))))
@@ -93,56 +133,21 @@
                               (list 'list (list 'quote expr)))))
                      exprs)))
 
-;; This impl is a temporary solution.
-;; This can be more cleanly implemented using the Z combinator, but
-;; this lisps type system is not yet capable of expressing Z.
-(defmacro named-let (name bindings &rest body)
-  (let ((tmp (gensym)))
-    `(let* ((,name nil)
-            (,tmp (lambda ,(map car bindings)
-                     ,@body)))
-       (set! ,name ,tmp)
-       (assert (function? ,name))
-       (,name ,@(map cadr bindings)))))
-
-(defmacro if-let* (bindings then else)
-  `(let ((,(caar bindings) ,(car (cdr (car bindings)))))
-     ,(named-let loop ((bindings bindings))
-        (if (= (length bindings) 1)
-            `(if (nil? ,(caar bindings)) then else)
-            `(let ((,(car (car (cdr bindings))) (if (nil? ,(caar bindings))
-                                                    nil
-                                                    ,(car (cdar (cdr bindings))))))
-               ,(loop (cdr bindings)))))))
-
-(defmacro when-let* (bindings &rest body)
-  `(let ((,(caar bindings) ,(car (cdr (car bindings)))))
-     ,(named-let loop ((bindings bindings))
-        (if (= (length bindings) 1)
-            `(if (nil? ,(caar bindings)) nil (progn ,@body))
-            `(let ((,(car (car (cdr bindings))) (if (nil? ,(caar bindings))
-                                                    nil
-                                                    ,(car (cdar (cdr bindings))))))
-               ,(loop (cdr bindings)))))))
-
 (defmacro when (pred body)
   `(if ,pred ,body nil))
 
 (defmacro unless (pred body)
   `(if ,pred nil ,body))
 
-(def fold (lambda (fn list)
-            (let ((acc (car list)))
-              (do (lambda (e)
-                    (set! acc (fn acc e)))
-                  (cdr list))
-              acc)))
+(defmacro named-let (name bindings &rest body)
+  `(letrec ((,name (lambda ,(map car bindings)
+                    ,@body)))
+     (,name ,(map car bindings))))
 
-(def find (lambda (list pred)
-            (let ((loop (lambda (list pred counter loop)
-                          (if (nil? list)
-                              nil
-                              (if (pred (car list))
-                                  counter
-                                  (loop (cdr list) pred (+ counter 1) loop))))))
-              (loop list pred 0 loop))))
+(def (fold (fn (fn 'a 'a -> 'a) (list 'a) -> 'a))
+    (lambda (fn list)
+      (letrec ((loop (lambda (acc list)
+                       (if (nil? list)
+                           acc
+                           (loop (fn acc (car list)) (cdr list))))))
+               (loop (car list) (cdr list)))))
