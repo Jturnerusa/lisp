@@ -52,6 +52,7 @@ impl Checker {
             tree::Il::Cons(cons) => self.check_cons(cons).map(|_| ()),
             tree::Il::Car(car) => self.check_car(car).map(|_| ()),
             tree::Il::Cdr(cdr) => self.check_cdr(cdr).map(|_| ()),
+            Il::Assert(assert) => self.check_assert(assert).map(|_| ()),
             _ => Ok(()),
         }
     }
@@ -284,6 +285,7 @@ impl Checker {
             Il::MakeType(make_type) => self.check_make_type(make_type),
             Il::IfLet(if_let) => self.check_if_let(if_let),
             Il::LetRec(letrec) => self.check_letrec(letrec),
+            Il::Assert(assert) => self.check_assert(assert),
             Il::VarRef(varref) => Ok(self.check_varref(varref)),
             Il::Constant(constant) => self.check_constant(constant),
             _ => panic!("unexpected tree il node: {tree:?}"),
@@ -563,6 +565,10 @@ impl Checker {
         self.scopes.pop().unwrap();
 
         Ok(body)
+    }
+
+    fn check_assert(&mut self, _: &tree::Assert) -> Result<TypeId, Error> {
+        Ok(self.types.insert(TypeInfo::Bool))
     }
 
     fn check_varref(&mut self, varref: &tree::VarRef) -> TypeId {
