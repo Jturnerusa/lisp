@@ -29,6 +29,18 @@ fn main() {
 
     files.insert(bootstrap_file_id, bootstrap_path);
 
+    compile_source(
+        NATIVE_DECL_SOURCE,
+        0,
+        &mut files,
+        &mut ast_compiler,
+        &mut tree_compiler,
+        &mut type_checker,
+        &mut vm,
+        &mut opcode_table,
+    )
+    .unwrap();
+
     match compile_source(
         BOOTSTRAP_SOURCE,
         bootstrap_file_id,
@@ -49,18 +61,6 @@ fn main() {
             std::process::exit(1);
         }
     }
-
-    compile_source(
-        NATIVE_DECL_SOURCE,
-        0,
-        &mut files,
-        &mut ast_compiler,
-        &mut tree_compiler,
-        &mut type_checker,
-        &mut vm,
-        &mut opcode_table,
-    )
-    .unwrap();
 
     for arg in env::args().skip(1).take_while(|arg| !arg.starts_with("--")) {
         let path = PathBuf::from(arg);
