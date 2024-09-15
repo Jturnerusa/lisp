@@ -160,6 +160,6 @@
                        (list list))
           (if (nil? list)
               (option-none)
-              (if (= counter n)
+              (if (> counter (- n 1))
                   (option-some (car list))
                   (loop (+ counter 1) (cdr list)))))))
