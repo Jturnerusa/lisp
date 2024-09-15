@@ -9,6 +9,8 @@
 
 (eval-when-compile
 
+  (deftype option (some 't) (none))
+
   (def (car (fn (list 't) -> 't))
       (lambda (list)
         (car list)))
@@ -151,3 +153,13 @@
                            acc
                            (loop (fn acc (car list)) (cdr list))))))
                (loop (car list) (cdr list)))))
+
+(def (nth (fn (list 'a) int -> (option 'a)))
+    (lambda (list n)
+      (named-let loop ((counter 0)
+                       (list list))
+          (if (nil? list)
+              (option-none)
+              (if (= counter n)
+                  (option-some (car list))
+                  (loop (+ counter 1) (cdr list)))))))
