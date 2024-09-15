@@ -62,7 +62,7 @@ pub enum Type {
 pub enum TypeInfo {
     DefType {
         name: String,
-        parameters: Parameters,
+        parameters: Vec<TypeId>,
     },
     Function {
         parameters: Parameters,
@@ -281,14 +281,12 @@ impl Types {
     pub(crate) fn construct(&self, id: TypeId) -> Option<Type> {
         Some(match self.vars[id].clone() {
             TypeInfo::DefType { name, parameters } => {
-                let parameters = match parameters {
-                    Parameters::Known(parameters) => parameters
-                        .iter()
-                        .cloned()
-                        .map(|parameter| self.construct(parameter))
-                        .collect::<Option<_>>()?,
-                    Parameters::Unknown => return None,
-                };
+                let parameters = parameters
+                    .iter()
+                    .cloned()
+                    .map(|parameter| self.construct(parameter))
+                    .collect::<Option<_>>()?;
+
                 Type::DefType { name, parameters }
             }
             TypeInfo::Function {
@@ -340,31 +338,8 @@ impl Types {
                     parameters: parameters_b,
                 },
             ) if name_a == name_b => {
-                match (parameters_a.clone(), parameters_b.clone()) {
-                    (Parameters::Unknown, Parameters::Known(parameters)) => {
-                        self.vars.insert(
-                            a,
-                            TypeInfo::DefType {
-                                name: name_a.clone(),
-                                parameters: Parameters::Known(parameters),
-                            },
-                        );
-                    }
-                    (Parameters::Known(parameters), Parameters::Unknown) => {
-                        self.vars.insert(
-                            b,
-                            TypeInfo::DefType {
-                                name: name_a.clone(),
-                                parameters: Parameters::Known(parameters),
-                            },
-                        );
-                    }
-                    (Parameters::Known(parameters_a), Parameters::Known(parameters_b)) => {
-                        for (a, b) in parameters_a.iter().zip(parameters_b.iter()) {
-                            self.unify(*a, *b)?;
-                        }
-                    }
-                    _ => (),
+                for (a, b) in parameters_a.iter().zip(parameters_b.iter()) {
+                    self.unify(*a, *b)?;
                 }
                 Ok(())
             }
@@ -489,10 +464,7 @@ impl Types {
                     .cloned()
                     .map(|parameter| self.insert_concrete_type(parameter))
                     .collect::<Vec<_>>();
-                self.insert(TypeInfo::DefType {
-                    name,
-                    parameters: Parameters::Known(parameters),
-                })
+                self.insert(TypeInfo::DefType { name, parameters })
             }
 
             Type::Function {
@@ -537,6 +509,13 @@ impl Types {
 
     pub fn instantiate(&mut self, id: TypeId, subs: &mut HashMap<String, TypeId>) -> TypeId {
         match self.vars[id].clone() {
+            TypeInfo::DefType { name, parameters } => {
+                let parameters = parameters
+                    .iter()
+                    .map(|parameter| self.instantiate(*parameter, subs))
+                    .collect();
+                self.insert(TypeInfo::DefType { name, parameters })
+            }
             TypeInfo::Function {
                 parameters,
                 rest,
