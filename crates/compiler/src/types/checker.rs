@@ -6,6 +6,12 @@ use std::iter;
 use unwrap_enum::{EnumAs, EnumIs};
 use vm::UpValue;
 
+#[derive(Clone, Debug, EnumAs, EnumIs)]
+enum PolyType {
+    Poly(TypeId),
+    Mono(TypeId),
+}
+
 #[derive(Clone, Debug)]
 struct Scope {
     locals: Vec<TypeId>,
@@ -22,7 +28,7 @@ enum Variant {
 pub struct Checker {
     types: Types,
     scopes: Vec<Scope>,
-    globals: HashMap<String, Type>,
+    globals: HashMap<String, PolyType>,
     deftypes: HashMap<String, String>,
     deftype_variants: HashMap<String, (usize, Variant)>,
 }
@@ -65,114 +71,62 @@ impl Checker {
             None => return Err(Error::Annotation(decl.span)),
         };
 
-        self.globals.insert(decl.parameter.name.clone(), r#type);
+        let id = self.types.insert_concrete_type(r#type);
+
+        self.globals
+            .insert(decl.parameter.name.clone(), PolyType::Mono(id));
 
         Ok(())
     }
 
     fn check_def(&mut self, def: &tree::Def) -> Result<(), Error> {
-        match &def.parameter.r#type.as_ref().map(Type::from_ast) {
-            Some(Ok(r#type)) if r#type.is_function() => {
+        match def.parameter.r#type.as_ref().map(Type::from_ast) {
+            Some(Ok(t)) if t.is_function() && def.body.is_lambda() => {
+                let id = self.types.insert_concrete_type(t.clone());
+
                 self.globals.insert(
                     def.parameter.name.clone(),
-                    match r#type {
-                        Type::Function {
-                            parameters,
-                            rest,
-                            r#return,
-                        } if r#type.has_generics() => Type::GenericFunction {
-                            parameters: parameters.clone(),
-                            rest: rest.clone(),
-                            r#return: r#return.clone(),
-                        },
-                        _ => r#type.clone(),
+                    if t.has_generics() {
+                        PolyType::Poly(id)
+                    } else {
+                        PolyType::Mono(id)
                     },
                 );
 
-                let (parameters, rest, r#return) = match r#type {
-                    Type::GenericFunction {
-                        parameters,
-                        rest,
-                        r#return,
-                        ..
-                    } => (parameters, rest, r#return),
-                    Type::Function {
-                        parameters,
-                        rest,
-                        r#return,
-                        ..
-                    } => (parameters, rest, r#return),
+                let (parameters, _, _) = t.as_function().unwrap();
+
+                let parameter_ids = parameters
+                    .iter()
+                    .map(|parameter| self.types.insert_concrete_type(parameter.clone()))
+                    .collect::<Vec<_>>();
+
+                let lambda = match &*def.body {
+                    tree::Il::Lambda(lambda) => lambda,
                     _ => unreachable!(),
                 };
 
-                let Il::Lambda(lambda) = &*def.body else {
-                    unreachable!();
+                let ret = self.check_lambda(lambda, parameter_ids)?;
+
+                let Ok(()) = self.types.unify(id, ret) else {
+                    todo!()
                 };
 
-                let id = self.check_top_level_lambda(
-                    lambda,
-                    parameters.clone(),
-                    rest.as_ref().map(|rest| *rest.clone()),
-                )?;
-
-                match self.types.construct(id) {
-                    Some(t) if t == **r#return => Ok(()),
-                    Some(_) => todo!(),
-                    None => todo!(),
-                }
+                Ok(())
             }
-            Some(Ok(r#type)) => {
-                self.globals
-                    .insert(def.parameter.name.clone(), r#type.clone());
+            Some(Ok(t)) => {
+                let id = self.types.insert_concrete_type(t.clone());
 
-                let id = self.check_tree(&def.body)?;
+                let ret = self.check_tree(&def.body)?;
 
-                match self.types.construct(id) {
-                    Some(t) if &t == r#type => Ok(()),
-                    Some(_) => todo!(),
-                    None => todo!(),
-                }
+                let Ok(()) = self.types.unify(id, ret) else {
+                    todo!()
+                };
+
+                Ok(())
             }
             Some(Err(())) => Err(Error::InvalidType(def.span)),
             None => Err(Error::Annotation(def.span)),
         }
-    }
-
-    fn check_top_level_lambda(
-        &mut self,
-        lambda: &tree::Lambda,
-        parameters: Vec<Type>,
-        rest: Option<Type>,
-    ) -> Result<TypeId, Error> {
-        let parameters = if let Some(rest) = rest {
-            let inner = self.types.insert_concrete_type(rest);
-            let rest = self.types.insert(TypeInfo::List(inner));
-            parameters[0..parameters.len()]
-                .iter()
-                .map(|parameter| self.types.insert_concrete_type(parameter.clone()))
-                .chain(iter::once(rest))
-                .collect::<Vec<_>>()
-        } else {
-            parameters
-                .iter()
-                .map(|parameter| self.types.insert_concrete_type(parameter.clone()))
-                .collect()
-        };
-
-        self.scopes.push(Scope {
-            locals: parameters.clone(),
-            upvalues: Vec::new(),
-        });
-
-        for expr in lambda.body.iter().take(lambda.body.len() - 1) {
-            self.check_tree(expr)?;
-        }
-
-        let last = self.check_tree(lambda.body.last().unwrap())?;
-
-        self.scopes.pop().unwrap();
-
-        Ok(last)
     }
 
     fn check_lambda(
@@ -187,11 +141,7 @@ impl Checker {
                     let inner = parameters.last().unwrap();
                     let list = self.types.insert(TypeInfo::List(*inner));
                     (
-                        parameters[..parameters.len() - 1]
-                            .iter()
-                            .copied()
-                            .chain(iter::once(list))
-                            .collect(),
+                        parameters[..parameters.len() - 1].to_vec(),
                         Rest::Known(list),
                     )
                 }
@@ -210,7 +160,6 @@ impl Checker {
                     (
                         (0..parameters.len() - 1)
                             .map(|_| self.types.insert(TypeInfo::Unknown))
-                            .chain(iter::once(list))
                             .collect(),
                         Rest::Known(list),
                     )
@@ -219,7 +168,10 @@ impl Checker {
         };
 
         self.scopes.push(Scope {
-            locals: parameters.clone(),
+            locals: match rest {
+                Rest::Known(id) => parameters.iter().copied().chain(iter::once(id)).collect(),
+                _ => parameters.clone(),
+            },
             upvalues: lambda.upvalues.clone(),
         });
 
@@ -591,9 +543,10 @@ impl Checker {
                 let upvalue = self.scopes.last().unwrap().upvalues[*index];
                 get_upvalue_type(upvalue, self.scopes.iter().rev().skip(1))
             }
-            tree::VarRef::Global { name, .. } => self
-                .types
-                .insert_concrete_type(self.globals[name.as_str()].clone()),
+            tree::VarRef::Global { name, .. } => match self.globals[name.as_str()].clone() {
+                PolyType::Poly(id) => self.types.instantiate(id, &mut HashMap::new()),
+                PolyType::Mono(id) => id,
+            },
         }
     }
 

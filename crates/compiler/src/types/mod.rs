@@ -41,11 +41,6 @@ pub enum Type {
         name: String,
         parameters: Vec<Type>,
     },
-    GenericFunction {
-        parameters: Vec<Type>,
-        rest: Option<Box<Type>>,
-        r#return: Box<Type>,
-    },
     Function {
         parameters: Vec<Type>,
         rest: Option<Box<Type>>,
@@ -212,7 +207,6 @@ impl Type {
     pub(crate) fn has_generics(&self) -> bool {
         match self {
             Self::DefType { parameters, .. } => parameters.iter().any(Type::has_generics),
-            Self::GenericFunction { .. } => true,
             Self::Function {
                 parameters,
                 rest,
@@ -500,28 +494,7 @@ impl Types {
                     parameters: Parameters::Known(parameters),
                 })
             }
-            Type::GenericFunction {
-                parameters,
-                rest,
-                r#return,
-            } => {
-                let parameters = parameters
-                    .iter()
-                    .cloned()
-                    .map(|parameter| self.insert_concrete_type(parameter))
-                    .collect();
-                let rest = match rest.map(|rest| self.insert_concrete_type(*rest)) {
-                    Some(r#rest) => Rest::Known(r#rest),
-                    None => Rest::None,
-                };
-                let r#return = self.insert_concrete_type(*r#return);
-                let function = self.insert(TypeInfo::Function {
-                    parameters: Parameters::Known(parameters),
-                    rest,
-                    r#return,
-                });
-                self.instantiate(function, &mut HashMap::new())
-            }
+
             Type::Function {
                 parameters,
                 rest,
