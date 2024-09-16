@@ -146,6 +146,15 @@
                     ,@body)))
      (,name ,@(map cadr bindings))))
 
+(defmacro typecase (x &rest arms)
+  (if (= 0 (length arms))
+      nil
+      (if (= 'else (caar arms))
+          (cadar arms)
+          `(if-let ,x ,(caar arms)
+             ,(cadar arms)
+             (typecase ,x ,@(cdr arms))))))
+
 (def (fold (fn (fn 'a 'a -> 'a) (list 'a) -> 'a))
     (lambda (fn list)
       (letrec ((loop (lambda (acc list)
