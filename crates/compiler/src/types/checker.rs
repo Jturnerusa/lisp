@@ -90,10 +90,16 @@ impl Checker {
             None => return Err(Error::Annotation(decl.span)),
         };
 
-        let id = self.types.insert_concrete_type(r#type);
+        let id = self.types.insert_concrete_type(r#type.clone());
 
-        self.globals
-            .insert(decl.parameter.name.clone(), PolyType::Mono(id));
+        self.globals.insert(
+            decl.parameter.name.clone(),
+            if r#type.has_generics() {
+                PolyType::Poly(id)
+            } else {
+                PolyType::Mono(id)
+            },
+        );
 
         Ok(())
     }
