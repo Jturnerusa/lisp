@@ -1,4 +1,4 @@
-(decl (print (fn string -> nil)))
+(decl (print (fn 'a -> nil)))
 
 (decl (argv (fn -> nil)))
 
