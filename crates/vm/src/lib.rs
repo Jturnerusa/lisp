@@ -6,7 +6,7 @@ use crate::object::{Cons, Lambda, NativeFunction, Type};
 use core::fmt;
 use error::FileSpan;
 use gc::{Gc, GcCell, Trace};
-use object::HashMapKey;
+use object::{HashMapKey, Struct};
 use std::cmp::{Ordering, PartialOrd};
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -104,6 +104,9 @@ pub enum OpCode<D> {
     MapInsert,
     MapRetrieve,
     MapItems,
+    MakeStruct(usize),
+    GetField(usize),
+    SetField(usize),
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -248,6 +251,9 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
             OpCode::MapInsert => self.map_insert()?,
             OpCode::MapRetrieve => self.map_retrieve()?,
             OpCode::MapItems => self.map_items()?,
+            OpCode::MakeStruct(args) => self.make_struct(args)?,
+            OpCode::SetField(field) => self.set_field(field)?,
+            OpCode::GetField(field) => self.get_field(field)?,
         }
 
         Ok(())
@@ -886,6 +892,58 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
         }));
 
         self.stack.push(Local::Value(list));
+
+        Ok(())
+    }
+
+    fn make_struct(&mut self, args: usize) -> Result<(), Error> {
+        let fields = self
+            .stack
+            .drain(self.stack.len() - args..self.stack.len())
+            .map(Local::into_object)
+            .collect::<Vec<_>>();
+
+        let r#struct = Struct { fields };
+
+        self.stack
+            .push(Local::Value(Object::Struct(Gc::new(GcCell::new(r#struct)))));
+
+        Ok(())
+    }
+
+    fn set_field(&mut self, field: usize) -> Result<(), Error> {
+        let val = self.stack.pop().unwrap().into_object();
+        let object = self.stack.pop().unwrap().into_object();
+
+        match object {
+            Object::Struct(r#struct) => {
+                r#struct.borrow_mut().fields[field] = val.clone();
+            }
+            object => {
+                return Err(Error::Type {
+                    expected: Type::Struct,
+                    recieved: Type::from(&object),
+                })
+            }
+        }
+
+        Ok(())
+    }
+
+    fn get_field(&mut self, field: usize) -> Result<(), Error> {
+        let object = self.stack.pop().unwrap().into_object();
+
+        let val = match object {
+            Object::Struct(r#struct) => r#struct.borrow().fields[field].clone(),
+            object => {
+                return Err(Error::Type {
+                    expected: Type::Struct,
+                    recieved: Type::from(&object),
+                })
+            }
+        };
+
+        self.stack.push(Local::Value(val));
 
         Ok(())
     }

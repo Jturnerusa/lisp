@@ -11,6 +11,7 @@ use unwrap_enum::{EnumAs, EnumIs};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Type {
+    Struct,
     Function,
     Cons,
     Map,
@@ -35,6 +36,7 @@ pub enum HashMapKey {
 #[derive(Clone, Debug, EnumAs, EnumIs)]
 pub enum Object<D: 'static> {
     Box(Gc<GcCell<Object<D>>>),
+    Struct(Gc<GcCell<Struct<D>>>),
     NativeFunction(NativeFunction<D>),
     Function(Gc<GcCell<Lambda<D>>>),
     Cons(Gc<GcCell<Cons<D>>>),
@@ -45,6 +47,11 @@ pub enum Object<D: 'static> {
     Char(char),
     Bool(bool),
     Nil,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Struct<D: 'static> {
+    pub(crate) fields: Vec<Object<D>>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -138,6 +145,7 @@ impl<D> From<&Object<D>> for Type {
     fn from(value: &Object<D>) -> Self {
         match value {
             Object::Box(object) => Type::from(&*object.borrow()),
+            Object::Struct(_) => Type::Struct,
             Object::Function(_) | Object::NativeFunction(_) => Type::Function,
             Object::Cons(_) => Type::Cons,
             Object::HashMap(_) => Type::Map,
@@ -155,6 +163,7 @@ impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::Function => write!(f, "function"),
+            Self::Struct => write!(f, "struct"),
             Self::Cons => write!(f, "cons"),
             Self::Map => write!(f, "map"),
             Self::Symbol => write!(f, "symbol"),
@@ -170,6 +179,7 @@ impl fmt::Display for Type {
 impl<D: PartialEq> PartialEq for Object<D> {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
+            (Object::Struct(a), Object::Struct(b)) => a == b,
             (Object::Cons(a), Object::Cons(b)) => *a.borrow() == *b.borrow(),
             (Object::String(a), Object::String(b)) => a == b,
             (Object::Symbol(a), Object::Symbol(b)) => a == b,
@@ -221,6 +231,17 @@ impl<D: Clone> Display for Object<D> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Box(object) => write!(f, "box({object})"),
+            Self::Struct(r#struct) => {
+                write!(f, "struct(")?;
+                for (i, field) in r#struct.borrow().fields.iter().enumerate() {
+                    write!(f, "{field}")?;
+                    if i < r#struct.borrow().fields.len() - 1 {
+                        write!(f, " ")?;
+                    }
+                }
+                write!(f, ")")?;
+                Ok(())
+            }
             Self::NativeFunction(native_function) => write!(f, "{native_function}",),
             Self::Function(function) => write!(f, "{}", *function.deref().borrow()),
             Self::Cons(cons) => write!(f, "{}", cons.borrow().deref()),
@@ -350,6 +371,7 @@ unsafe impl<D: 'static> Trace for Lambda<D> {
 unsafe impl<D: 'static> Trace for Object<D> {
     unsafe fn root(&self) {
         match self {
+            Self::Struct(r#struct) => r#struct.root(),
             Self::Function(function) => function.root(),
             Self::Cons(cons) => cons.root(),
             Self::HashMap(hm) => hm.root(),
@@ -361,6 +383,7 @@ unsafe impl<D: 'static> Trace for Object<D> {
 
     unsafe fn unroot(&self) {
         match self {
+            Self::Struct(r#struct) => r#struct.unroot(),
             Self::Function(function) => function.unroot(),
             Self::Cons(cons) => cons.unroot(),
             Self::HashMap(hm) => hm.unroot(),
@@ -372,6 +395,7 @@ unsafe impl<D: 'static> Trace for Object<D> {
 
     unsafe fn trace(&self, tracer: &mut dyn FnMut(NonNull<gc::Inner<dyn Trace>>) -> bool) {
         match self {
+            Self::Struct(r#struct) => r#struct.trace(tracer),
             Self::Function(function) => function.trace(tracer),
             Self::Cons(cons) => cons.trace(tracer),
             Self::HashMap(hm) => hm.trace(tracer),
@@ -379,6 +403,20 @@ unsafe impl<D: 'static> Trace for Object<D> {
             Self::String(string) => string.trace(tracer),
             _ => (),
         }
+    }
+}
+
+unsafe impl<D> Trace for Struct<D> {
+    unsafe fn root(&self) {
+        self.fields.root();
+    }
+
+    unsafe fn unroot(&self) {
+        self.fields.root()
+    }
+
+    unsafe fn trace(&self, tracer: &mut dyn FnMut(NonNull<gc::Inner<dyn Trace>>) -> bool) {
+        self.fields.trace(tracer);
     }
 }
 
