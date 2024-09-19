@@ -455,3 +455,30 @@ fn compile_letrec(letrec: &tree::LetRec, opcodes: &mut OpCodeTable<FileSpan>) ->
 
     Ok(())
 }
+
+fn compile_make_struct(
+    make_struct: &tree::MakeStruct,
+    opcodes: &mut OpCodeTable<FileSpan>,
+) -> Result<(), Error> {
+    for expr in &make_struct.exprs {
+        compile(expr, opcodes)?;
+    }
+
+    opcodes.push(
+        OpCode::MakeStruct(make_struct.exprs.len()),
+        make_struct.span,
+    );
+
+    Ok(())
+}
+
+fn compile_get_field(
+    get_field: &tree::GetField,
+    opcodes: &mut OpCodeTable<FileSpan>,
+) -> Result<(), Error> {
+    compile(&get_field.body, opcodes)?;
+
+    opcodes.push(OpCode::GetField(get_field.index), get_field.span);
+
+    Ok(())
+}

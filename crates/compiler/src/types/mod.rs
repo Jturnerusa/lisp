@@ -34,6 +34,12 @@ pub enum Error {
     },
 }
 
+#[derive(Clone, Debug)]
+pub struct Struct {
+    name: String,
+    fields: Vec<Type>,
+}
+
 #[derive(Clone, Debug, EnumAs, EnumIs)]
 #[allow(clippy::enum_variant_names)]
 pub enum Type {
@@ -41,6 +47,7 @@ pub enum Type {
         name: String,
         parameters: Vec<Type>,
     },
+    Struct(Struct),
     Function {
         parameters: Vec<Type>,
         rest: Option<Box<Type>>,
@@ -63,6 +70,10 @@ pub enum TypeInfo {
     DefType {
         name: String,
         parameters: Vec<TypeId>,
+    },
+    Struct {
+        name: String,
+        fields: Vec<TypeId>,
     },
     Function {
         parameters: Parameters,
@@ -241,6 +252,16 @@ impl PartialEq for Type {
                 },
             ) => name_a == name_b && parameters_a == parameters_b,
             (
+                Type::Struct(Struct {
+                    name: name_a,
+                    fields: fields_a,
+                }),
+                Type::Struct(Struct {
+                    name: name_b,
+                    fields: fields_b,
+                }),
+            ) => name_a == name_b && fields_a == fields_b,
+            (
                 Type::Function {
                     parameters: parameters_a,
                     rest: rest_a,
@@ -288,6 +309,13 @@ impl Types {
                     .collect::<Option<_>>()?;
 
                 Type::DefType { name, parameters }
+            }
+            TypeInfo::Struct { name, fields } => {
+                let fields = fields
+                    .iter()
+                    .map(|field| self.construct(*field))
+                    .collect::<Option<_>>()?;
+                Type::Struct(Struct { name, fields })
             }
             TypeInfo::Function {
                 parameters,
@@ -339,6 +367,21 @@ impl Types {
                 },
             ) if name_a == name_b => {
                 for (a, b) in parameters_a.iter().zip(parameters_b.iter()) {
+                    self.unify(*a, *b)?;
+                }
+                Ok(())
+            }
+            (
+                TypeInfo::Struct {
+                    name: name_a,
+                    fields: fields_a,
+                },
+                TypeInfo::Struct {
+                    name: name_b,
+                    fields: fields_b,
+                },
+            ) if name_a == name_b => {
+                for (a, b) in fields_a.iter().zip(fields_b.iter()) {
                     self.unify(*a, *b)?;
                 }
                 Ok(())
@@ -466,7 +509,13 @@ impl Types {
                     .collect::<Vec<_>>();
                 self.insert(TypeInfo::DefType { name, parameters })
             }
-
+            Type::Struct(Struct { name, fields }) => {
+                let fields = fields
+                    .iter()
+                    .map(|field| self.insert_concrete_type(field.clone()))
+                    .collect();
+                self.insert(TypeInfo::Struct { name, fields })
+            }
             Type::Function {
                 parameters,
                 rest,
@@ -515,6 +564,13 @@ impl Types {
                     .map(|parameter| self.instantiate(*parameter, subs))
                     .collect();
                 self.insert(TypeInfo::DefType { name, parameters })
+            }
+            TypeInfo::Struct { name, fields } => {
+                let fields = fields
+                    .iter()
+                    .map(|field| self.instantiate(*field, subs))
+                    .collect();
+                self.insert(TypeInfo::Struct { name, fields })
             }
             TypeInfo::Function {
                 parameters,

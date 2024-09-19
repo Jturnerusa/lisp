@@ -48,6 +48,7 @@ static BUILT_INS: &[&str] = &[
     "deftype",
     "if-let",
     "letrec",
+    "defstruct",
 ];
 
 #[derive(Clone, Debug)]
@@ -56,10 +57,22 @@ pub struct Error {
     pub message: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct StructConstructor(pub String);
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct StructAccessor(pub String);
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct StructFieldName(pub String);
+
 #[derive(Clone, Debug)]
 pub struct Compiler {
     macros: HashSet<String>,
     deftypes: HashMap<String, Variant>,
+    structs: HashMap<StructAccessor, Struct>,
+    fields: HashMap<StructAccessor, StructFieldName>,
+    constructors: HashMap<StructConstructor, Struct>,
 }
 
 #[derive(Clone, Debug, EnumAs, EnumIs)]
@@ -99,6 +112,9 @@ pub enum Ast {
     MakeType(MakeType),
     IfLet(IfLet),
     LetRec(LetRec),
+    DefStruct(DefStruct),
+    MakeStruct(MakeStruct),
+    GetField(GetField),
 }
 
 #[derive(Clone, Debug)]
@@ -404,12 +420,45 @@ pub struct LetRec {
     pub body: std::boxed::Box<Ast>,
 }
 
+#[derive(Clone, Debug)]
+pub struct Struct {
+    pub name: String,
+    pub fields: Vec<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct DefStruct {
+    pub span: FileSpan,
+    pub name: String,
+    pub fields: Vec<(String, Type)>,
+}
+
+#[derive(Clone, Debug)]
+pub struct MakeStruct {
+    pub span: FileSpan,
+    pub name: String,
+    pub constructor: StructConstructor,
+    pub exprs: Vec<Ast>,
+}
+
+#[derive(Clone, Debug)]
+pub struct GetField {
+    pub span: FileSpan,
+    pub struct_name: String,
+    pub field_name: String,
+    pub accessor: StructAccessor,
+    pub body: std::boxed::Box<Ast>,
+}
+
 #[allow(clippy::new_without_default)]
 impl Compiler {
     pub fn new() -> Self {
         Self {
             macros: HashSet::new(),
             deftypes: HashMap::new(),
+            structs: HashMap::new(),
+            fields: HashMap::new(),
+            constructors: HashMap::new(),
         }
     }
 
@@ -420,9 +469,25 @@ impl Compiler {
                 if list
                     .first()
                     .and_then(|first| first.as_symbol())
-                    .is_some_and(|symbol| {
-                        BUILT_INS.iter().any(|b| symbol == *b) || self.deftypes.contains_key(symbol)
-                    }) =>
+                    .is_some_and(|symbol| BUILT_INS.iter().any(|b| symbol == *b))
+                    || list
+                        .first()
+                        .and_then(|first| first.as_symbol())
+                        .is_some_and(|symbol| self.deftypes.contains_key(symbol))
+                    || list
+                        .first()
+                        .and_then(|first| first.as_symbol())
+                        .is_some_and(|symbol| {
+                            self.structs
+                                .contains_key(&StructAccessor(symbol.to_string()))
+                        })
+                    || list
+                        .first()
+                        .and_then(|first| first.as_symbol())
+                        .is_some_and(|symbol| {
+                            self.constructors
+                                .contains_key(&StructConstructor(symbol.to_string()))
+                        }) =>
             {
                 match list.as_slice() {
                     [Symbol { symbol, .. }, Symbol { symbol: module, .. }]
@@ -564,6 +629,35 @@ impl Compiler {
                     {
                         self.compile_letrec(sexpr, bindings.as_slice(), body)?
                     }
+                    [Sexpr::Symbol {
+                        symbol: defstruct, ..
+                    }, Sexpr::Symbol {
+                        symbol: struct_name,
+                        ..
+                    }, fields @ ..]
+                        if defstruct == "defstruct" =>
+                    {
+                        self.compile_defstruct(sexpr, struct_name.as_str(), fields)?
+                    }
+                    [Sexpr::Symbol {
+                        symbol: constructor,
+                        ..
+                    }, exprs @ ..]
+                        if self
+                            .constructors
+                            .contains_key(&StructConstructor(constructor.to_string())) =>
+                    {
+                        self.compile_make_struct(sexpr, constructor, exprs)?
+                    }
+                    [Sexpr::Symbol {
+                        symbol: accessor, ..
+                    }, body]
+                        if self
+                            .structs
+                            .contains_key(&StructAccessor(accessor.to_string())) =>
+                    {
+                        self.compile_get_field(sexpr, accessor, body)?
+                    }
                     _ => {
                         return Err(Error {
                             span: sexpr.span(),
@@ -584,6 +678,7 @@ impl Compiler {
                     &list.as_slice()[1..],
                 )?
             }
+
             List { list, .. } if !list.is_empty() => {
                 self.compile_fncall(sexpr, list.first().unwrap(), &list.as_slice()[1..])?
             }
@@ -1102,6 +1197,97 @@ impl Compiler {
             body: std::boxed::Box::new(self.compile(body)?),
         }))
     }
+
+    fn compile_defstruct(
+        &mut self,
+        sexpr: &Sexpr,
+        struct_name: &str,
+        fields: &[Sexpr],
+    ) -> Result<Ast, Error> {
+        let fields = fields
+            .iter()
+            .map(|sexpr| match sexpr {
+                Sexpr::List { list, .. } => match list.as_slice() {
+                    [Sexpr::Symbol { symbol: name, .. }, r#type] => Ok((
+                        name.clone(),
+                        Type::from_sexpr(r#type).map_err(|_| Error {
+                            span: sexpr.span(),
+                            message: "failed to parse type".to_string(),
+                        })?,
+                    )),
+                    _ => Err(Error {
+                        span: sexpr.span(),
+                        message: "failed to parse struct field".to_string(),
+                    }),
+                },
+                _ => Err(Error {
+                    span: sexpr.span(),
+                    message: "failed to parse struct".to_string(),
+                }),
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let r#struct = Struct {
+            name: struct_name.to_string(),
+            fields: fields.iter().map(|(name, _)| name).cloned().collect(),
+        };
+
+        let constructor = format!("make-{}", struct_name);
+
+        self.constructors
+            .insert(StructConstructor(constructor), r#struct.clone());
+
+        for (field_name, _) in &fields {
+            let accessor = format!("{struct_name}-{field_name}");
+            self.structs
+                .insert(StructAccessor(accessor.clone()), r#struct.clone());
+            self.fields.insert(
+                StructAccessor(accessor.clone()),
+                StructFieldName(field_name.clone()),
+            );
+        }
+
+        Ok(Ast::DefStruct(DefStruct {
+            span: sexpr.span(),
+            name: struct_name.to_string(),
+            fields,
+        }))
+    }
+
+    fn compile_make_struct(
+        &mut self,
+        sexpr: &Sexpr,
+        constructor: &str,
+        exprs: &[Sexpr],
+    ) -> Result<Ast, Error> {
+        Ok(Ast::MakeStruct(MakeStruct {
+            span: sexpr.span(),
+            name: self.constructors[&StructConstructor(constructor.to_string())]
+                .name
+                .clone(),
+            constructor: StructConstructor(constructor.to_string()),
+            exprs: exprs
+                .iter()
+                .map(|expr| self.compile(expr))
+                .collect::<Result<Vec<_>, _>>()?,
+        }))
+    }
+
+    fn compile_get_field(
+        &mut self,
+        sexpr: &Sexpr,
+        accessor: &str,
+        body: &Sexpr,
+    ) -> Result<Ast, Error> {
+        let r#struct = self.structs[&StructAccessor(accessor.to_string())].clone();
+        Ok(Ast::GetField(GetField {
+            span: sexpr.span(),
+            struct_name: r#struct.name.clone(),
+            field_name: self.fields[&StructAccessor(accessor.to_string())].0.clone(),
+            accessor: StructAccessor(accessor.to_string()),
+            body: std::boxed::Box::new(self.compile(body)?),
+        }))
+    }
 }
 
 impl fmt::Display for Error {
@@ -1146,6 +1332,9 @@ impl Ast {
             | Self::MakeType(MakeType { span, .. })
             | Self::IfLet(IfLet { span, .. })
             | Self::LetRec(LetRec { span, .. })
+            | Self::DefStruct(DefStruct { span, .. })
+            | Self::MakeStruct(MakeStruct { span, .. })
+            | Self::GetField(GetField { span, .. })
             | Self::Variable(Variable { span, .. })
             | Self::Constant(Constant::String { span, .. })
             | Self::Constant(Constant::Char { span, .. })

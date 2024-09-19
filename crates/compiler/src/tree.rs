@@ -1,7 +1,10 @@
 use std::{collections::HashMap, iter};
 
 use crate::{
-    ast::{self, Ast, Decl, DefType, Quoted, Type},
+    ast::{
+        self, Ast, Decl, DefStruct, DefType, Quoted, StructAccessor, StructConstructor,
+        StructFieldName, Type,
+    },
     bytecode,
     environment::{self, Environment, Variable},
 };
@@ -62,6 +65,9 @@ pub enum Il {
     IfLet(IfLet),
     LetRec(LetRec),
     Decl(ast::Decl),
+    DefStruct(ast::DefStruct),
+    MakeStruct(MakeStruct),
+    GetField(GetField),
 }
 
 #[derive(Clone, Debug)]
@@ -315,9 +321,35 @@ pub enum DefTypePattern {
     Empty,
 }
 
+#[derive(Clone, Debug)]
+pub struct MakeStruct {
+    pub span: FileSpan,
+    pub struct_name: String,
+    pub constructor: StructConstructor,
+    pub exprs: Vec<Il>,
+}
+
+#[derive(Clone, Debug)]
+pub struct GetField {
+    pub span: FileSpan,
+    pub struct_name: String,
+    pub field_name: String,
+    pub accessor: StructAccessor,
+    pub index: usize,
+    pub body: std::boxed::Box<Il>,
+}
+
+#[derive(Clone, Debug)]
+struct Struct {
+    name: String,
+    fields: Vec<String>,
+}
+
 pub struct Compiler {
     environment: Environment,
     deftype_patterns: HashMap<String, DefTypePattern>,
+    structs: HashMap<StructAccessor, Struct>,
+    constructors: HashMap<StructConstructor, Struct>,
 }
 
 impl VarRef {
@@ -372,6 +404,9 @@ impl Il {
             | Self::IfLet(IfLet { span, .. })
             | Self::LetRec(LetRec { span, .. })
             | Self::Decl(Decl { span, .. })
+            | Self::DefStruct(DefStruct { span, .. })
+            | Self::MakeStruct(MakeStruct { span, .. })
+            | Self::GetField(GetField { span, .. })
             | Self::VarRef(VarRef::Local { span, .. })
             | Self::VarRef(VarRef::UpValue { span, .. })
             | Self::VarRef(VarRef::Global { span, .. })
@@ -432,6 +467,8 @@ impl Compiler {
         Self {
             environment: Environment::new(),
             deftype_patterns: HashMap::new(),
+            structs: HashMap::new(),
+            constructors: HashMap::new(),
         }
     }
 
@@ -482,6 +519,9 @@ impl Compiler {
             Ast::MakeType(make_type) => self.compile_make_type(ast, make_type, vm, ast_compiler),
             Ast::IfLet(if_let) => self.compile_if_let(ast, if_let, vm, ast_compiler),
             Ast::LetRec(letrec) => self.compile_letrec(ast, letrec, vm, ast_compiler),
+            Ast::DefStruct(defstruct) => self.compile_defstruct(defstruct),
+            Ast::MakeStruct(make_struct) => self.compile_make_struct(make_struct, vm, ast_compiler),
+            Ast::GetField(get_field) => self.compile_get_field(get_field, vm, ast_compiler),
             _ => unreachable!("{ast:?}"),
         }
     }
@@ -1391,6 +1431,102 @@ impl Compiler {
                 .collect::<Vec<_>>(),
             upvalues,
             body: std::boxed::Box::new(body),
+        })))
+    }
+
+    fn compile_defstruct(
+        &mut self,
+        defstruct: &ast::DefStruct,
+    ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
+        let r#struct = Struct {
+            name: defstruct.name.clone(),
+            fields: defstruct
+                .fields
+                .iter()
+                .map(|(field_name, _)| field_name)
+                .cloned()
+                .collect(),
+        };
+
+        let constructor = StructConstructor(format!("make-{}", r#struct.name));
+        self.constructors.insert(constructor, r#struct.clone());
+
+        for field in &r#struct.fields {
+            let accessor = format!("{}-{}", r#struct.name, field);
+            self.structs
+                .insert(StructAccessor(accessor), r#struct.clone());
+        }
+
+        Ok(Some(Il::DefStruct(defstruct.clone())))
+    }
+
+    fn compile_make_struct(
+        &mut self,
+        make_struct: &ast::MakeStruct,
+        vm: &mut Vm<FileSpan>,
+        ast_compiler: &mut ast::Compiler,
+    ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
+        if make_struct.exprs.len() != self.constructors[&make_struct.constructor].fields.len() {
+            return Err(std::boxed::Box::new(Error {
+                span: make_struct.span,
+                message: "wrong number of fields for struct constructor".to_string(),
+            }) as _);
+        }
+
+        Ok(Some(Il::MakeStruct(MakeStruct {
+            span: make_struct.span,
+            struct_name: make_struct.name.clone(),
+            constructor: make_struct.constructor.clone(),
+            exprs: make_struct
+                .exprs
+                .iter()
+                .map(|expr| match self.compile(expr, vm, ast_compiler) {
+                    Ok(Some(il)) => Ok(il),
+                    Ok(None) => Err(std::boxed::Box::new(Error {
+                        span: make_struct.span,
+                        message: "unexpected expression".to_string(),
+                    }) as _),
+                    Err(e) => Err(e),
+                })
+                .collect::<Result<Vec<_>, _>>()?,
+        })))
+    }
+
+    fn compile_get_field(
+        &mut self,
+        get_field: &ast::GetField,
+        vm: &mut Vm<FileSpan>,
+        ast_compiler: &mut ast::Compiler,
+    ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
+        Ok(Some(Il::GetField(GetField {
+            span: get_field.span,
+            struct_name: get_field.struct_name.clone(),
+            field_name: get_field.field_name.clone(),
+            accessor: get_field.accessor.clone(),
+            index: {
+                self.structs[&get_field.accessor]
+                    .fields
+                    .iter()
+                    .enumerate()
+                    .find_map(|(i, field)| {
+                        if field.as_str() == get_field.field_name.as_str() {
+                            Some(i)
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap()
+            },
+            body: std::boxed::Box::new(match self.compile(&get_field.body, vm, ast_compiler) {
+                Ok(Some(body)) => body,
+                Ok(None) => {
+                    return Err(std::boxed::Box::new(Error {
+                        span: get_field.span,
+                        message: "unexpected expression".to_string(),
+                    }) as _)
+                }
+                Err(e) => return Err(e),
+            }),
         })))
     }
 }

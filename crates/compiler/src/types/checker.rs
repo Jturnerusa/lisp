@@ -1,4 +1,4 @@
-use super::{Error, MaybeUnknownType, Parameters, Rest, Type, TypeId, TypeInfo, Types};
+use super::{Error, MaybeUnknownType, Parameters, Rest, Struct, Type, TypeId, TypeInfo, Types};
 use crate::ast;
 use crate::tree::{self, Il};
 use std::collections::{HashMap, HashSet};
@@ -31,6 +31,9 @@ pub struct Checker {
     globals: HashMap<String, PolyType>,
     deftypes: HashMap<String, ast::DefType>,
     deftype_variants: HashMap<String, (usize, Variant)>,
+    structs: HashMap<String, Struct>,
+    constructors: HashMap<ast::StructConstructor, Struct>,
+    accessors: HashMap<ast::StructAccessor, Struct>,
 }
 
 impl Checker {
@@ -41,6 +44,9 @@ impl Checker {
             globals: HashMap::new(),
             deftypes: HashMap::new(),
             deftype_variants: HashMap::new(),
+            structs: HashMap::new(),
+            constructors: HashMap::new(),
+            accessors: HashMap::new(),
         }
     }
 
@@ -63,6 +69,9 @@ impl Checker {
             tree::Il::DefType(deftype) => self.deftype(deftype),
             tree::Il::MakeType(maketype) => self.check_make_type(maketype).map(|_| ()),
             tree::Il::IfLet(if_let) => self.check_if_let(if_let).map(|_| ()),
+            tree::Il::DefStruct(defstruct) => self.check_defstruct(defstruct),
+            tree::Il::MakeStruct(make_struct) => self.check_make_struct(make_struct).map(|_| ()),
+            tree::Il::GetField(get_field) => self.check_get_field(get_field).map(|_| ()),
             _ => Ok(()),
         }
     }
@@ -275,6 +284,8 @@ impl Checker {
             Il::MakeType(make_type) => self.check_make_type(make_type),
             Il::IfLet(if_let) => self.check_if_let(if_let),
             Il::LetRec(letrec) => self.check_letrec(letrec),
+            Il::MakeStruct(make_struct) => self.check_make_struct(make_struct),
+            Il::GetField(get_field) => self.check_get_field(get_field),
             Il::Assert(assert) => self.check_assert(assert),
             Il::VarRef(varref) => Ok(self.check_varref(varref)),
             Il::Constant(constant) => self.check_constant(constant),
@@ -578,6 +589,80 @@ impl Checker {
 
     fn check_assert(&mut self, _: &tree::Assert) -> Result<TypeId, Error> {
         Ok(self.types.insert(TypeInfo::Bool))
+    }
+
+    fn check_defstruct(&mut self, defstruct: &ast::DefStruct) -> Result<(), Error> {
+        let r#struct = Struct {
+            name: defstruct.name.clone(),
+            fields: defstruct
+                .fields
+                .iter()
+                .map(|(_, r#type)| {
+                    Type::from_ast(r#type).map_err(|_| Error::InvalidType(defstruct.span))
+                })
+                .collect::<Result<Vec<_>, _>>()?,
+        };
+
+        self.structs
+            .insert(defstruct.name.clone(), r#struct.clone());
+
+        let constructor = format!("make-{}", defstruct.name);
+        self.constructors
+            .insert(ast::StructConstructor(constructor), r#struct.clone());
+
+        for (field_name, _) in &defstruct.fields {
+            let accessor = format!("{}-{}", defstruct.name, field_name);
+            self.accessors
+                .insert(ast::StructAccessor(accessor), r#struct.clone());
+        }
+
+        Ok(())
+    }
+
+    fn check_make_struct(&mut self, make_struct: &tree::MakeStruct) -> Result<TypeId, Error> {
+        let r#struct = self.constructors[&make_struct.constructor].clone();
+
+        let expected = self
+            .types
+            .insert_concrete_type(Type::Struct(r#struct.clone()));
+        let expected = self.types.instantiate(expected, &mut HashMap::new());
+
+        let parameters = make_struct
+            .exprs
+            .iter()
+            .map(|expr| self.check_tree(expr))
+            .collect::<Result<Vec<_>, _>>()?;
+        let typeinfo = TypeInfo::Struct {
+            name: make_struct.struct_name.clone(),
+            fields: parameters,
+        };
+        let received = self.types.insert(typeinfo);
+
+        let Ok(()) = self.types.unify(expected, received) else {
+            todo!();
+        };
+
+        Ok(expected)
+    }
+
+    fn check_get_field(&mut self, get_field: &tree::GetField) -> Result<TypeId, Error> {
+        let body = self.check_tree(&get_field.body)?;
+
+        let r#struct = self.accessors[&get_field.accessor].clone();
+        let parameters = (0..r#struct.fields.len())
+            .map(|_| self.types.insert(TypeInfo::Unknown))
+            .collect::<Vec<_>>();
+        let typeinfo = TypeInfo::Struct {
+            name: get_field.struct_name.clone(),
+            fields: parameters.clone(),
+        };
+        let id = self.types.insert(typeinfo);
+
+        let Ok(()) = self.types.unify(id, body) else {
+            todo!()
+        };
+
+        Ok(parameters[get_field.index])
     }
 
     fn check_varref(&mut self, varref: &tree::VarRef) -> TypeId {
