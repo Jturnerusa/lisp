@@ -359,7 +359,7 @@ fn compile_make_type(
     opcodes: &mut OpCodeTable<FileSpan>,
 ) -> Result<(), Error> {
     opcodes.push(
-        OpCode::PushSymbol(Gc::new(make_type.pattern.clone())),
+        OpCode::PushSymbol(Gc::new(make_type.pattern.0.clone())),
         make_type.span,
     );
 
@@ -396,7 +396,7 @@ fn compile_if_let(if_let: &tree::IfLet, opcodes: &mut OpCodeTable<FileSpan>) -> 
     opcodes.push(OpCode::Car, if_let.span);
 
     opcodes.push(
-        OpCode::PushSymbol(Gc::new(if_let.pattern.clone())),
+        OpCode::PushSymbol(Gc::new(if_let.pattern.0.clone())),
         if_let.span,
     );
 

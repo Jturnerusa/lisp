@@ -2,8 +2,8 @@ use std::{collections::HashMap, iter};
 
 use crate::{
     ast::{
-        self, Ast, Decl, DefStruct, DefType, Quoted, StructAccessor, StructConstructor,
-        StructFieldName, Type,
+        self, Ast, Decl, DefStruct, DefType, Quoted, StructAccessor, StructConstructor, Type,
+        VariantPattern,
     },
     bytecode,
     environment::{self, Environment, Variable},
@@ -292,7 +292,7 @@ pub struct Assert {
 #[derive(Clone, Debug)]
 pub struct MakeType {
     pub span: FileSpan,
-    pub pattern: String,
+    pub pattern: VariantPattern,
     pub body: Option<std::boxed::Box<Il>>,
 }
 
@@ -300,7 +300,7 @@ pub struct MakeType {
 pub struct IfLet {
     pub span: FileSpan,
     pub body: std::boxed::Box<Il>,
-    pub pattern: String,
+    pub pattern: VariantPattern,
     pub binding: Option<String>,
     pub then: std::boxed::Box<Il>,
     pub r#else: std::boxed::Box<Il>,
@@ -347,7 +347,7 @@ struct Struct {
 
 pub struct Compiler {
     environment: Environment,
-    deftype_patterns: HashMap<String, DefTypePattern>,
+    deftype_patterns: HashMap<VariantPattern, DefTypePattern>,
     structs: HashMap<StructAccessor, Struct>,
     constructors: HashMap<StructConstructor, Struct>,
 }
@@ -1254,7 +1254,8 @@ impl Compiler {
                 None => DefTypePattern::Empty,
             };
 
-            self.deftype_patterns.insert(pattern, parameter);
+            self.deftype_patterns
+                .insert(VariantPattern(pattern), parameter);
         }
 
         Ok(Some(Il::DefType(deftype.clone())))
@@ -1268,7 +1269,7 @@ impl Compiler {
         ast_compiler: &mut ast::Compiler,
     ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
         let body = match (
-            &self.deftype_patterns[make_type.pattern.as_str()],
+            &self.deftype_patterns[&make_type.pattern],
             make_type.body.as_ref(),
         ) {
             (DefTypePattern::Struct(_), Some(body)) => Some(body),
@@ -1314,10 +1315,7 @@ impl Compiler {
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
     ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
-        match (
-            &self.deftype_patterns[if_let.pattern.as_str()],
-            &if_let.binding,
-        ) {
+        match (&self.deftype_patterns[&if_let.pattern], &if_let.binding) {
             (DefTypePattern::Struct(_), None) => {
                 return Err(std::boxed::Box::new(Error {
                     span: ast.span(),

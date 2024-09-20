@@ -66,10 +66,13 @@ pub struct StructAccessor(pub String);
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct StructFieldName(pub String);
 
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct VariantPattern(pub String);
+
 #[derive(Clone, Debug)]
 pub struct Compiler {
     macros: HashSet<String>,
-    deftypes: HashMap<String, Variant>,
+    deftypes: HashMap<VariantPattern, Variant>,
     structs: HashMap<StructAccessor, Struct>,
     fields: HashMap<StructAccessor, StructFieldName>,
     constructors: HashMap<StructConstructor, Struct>,
@@ -393,7 +396,7 @@ pub struct DefType {
 #[derive(Clone, Debug)]
 pub struct MakeType {
     pub span: FileSpan,
-    pub pattern: String,
+    pub pattern: VariantPattern,
     pub body: Option<std::boxed::Box<Ast>>,
 }
 
@@ -407,7 +410,7 @@ pub struct Variant {
 pub struct IfLet {
     pub span: FileSpan,
     pub body: std::boxed::Box<Ast>,
-    pub pattern: String,
+    pub pattern: VariantPattern,
     pub binding: Option<String>,
     pub then: std::boxed::Box<Ast>,
     pub r#else: std::boxed::Box<Ast>,
@@ -473,7 +476,10 @@ impl Compiler {
                     || list
                         .first()
                         .and_then(|first| first.as_symbol())
-                        .is_some_and(|symbol| self.deftypes.contains_key(symbol))
+                        .is_some_and(|symbol| {
+                            self.deftypes
+                                .contains_key(&VariantPattern(symbol.to_string()))
+                        })
                     || list
                         .first()
                         .and_then(|first| first.as_symbol())
@@ -610,13 +616,18 @@ impl Compiler {
                     [Sexpr::Symbol {
                         symbol: function, ..
                     }, body]
-                        if self.deftypes.contains_key(function) =>
+                        if self
+                            .deftypes
+                            .contains_key(&VariantPattern(function.to_string())) =>
                     {
                         self.compile_make_type(sexpr, function, Some(body))?
                     }
                     [Sexpr::Symbol {
                         symbol: function, ..
-                    }] if self.deftypes.contains_key(function) => {
+                    }] if self
+                        .deftypes
+                        .contains_key(&VariantPattern(function.to_string())) =>
+                    {
                         self.compile_make_type(sexpr, function, None)?
                     }
                     [Sexpr::Symbol { symbol: if_let, .. }, body, pattern, then, r#else]
@@ -1095,7 +1106,8 @@ impl Compiler {
 
         for variant in &variants {
             let pattern = format!("{}-{}", name, variant.name);
-            self.deftypes.insert(pattern.clone(), variant.clone());
+            self.deftypes
+                .insert(VariantPattern(pattern.clone()), variant.clone());
         }
 
         Ok(Ast::DefType(DefType {
@@ -1113,7 +1125,7 @@ impl Compiler {
     ) -> Result<Ast, Error> {
         Ok(Ast::MakeType(MakeType {
             span: sexpr.span(),
-            pattern: pattern.to_string(),
+            pattern: VariantPattern(pattern.to_string()),
             body: match body.as_ref().map(|body| self.compile(body)) {
                 Some(Ok(body)) => Some(std::boxed::Box::new(body)),
                 Some(Err(e)) => return Err(e),
@@ -1158,7 +1170,7 @@ impl Compiler {
         Ok(Ast::IfLet(IfLet {
             span: sexpr.span(),
             body: std::boxed::Box::new(self.compile(body)?),
-            pattern,
+            pattern: VariantPattern(pattern),
             binding,
             then: std::boxed::Box::new(self.compile(then)?),
             r#else: std::boxed::Box::new(self.compile(r#else)?),

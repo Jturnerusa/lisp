@@ -1,9 +1,9 @@
 use super::{
     Error, MaybeUnknownType, Parameters, Rest, Type, TypeId, TypeInfo, Types, VariantOrStruct,
 };
-use crate::ast;
+use crate::ast::{self, VariantPattern};
 use crate::tree::{self, Il};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::iter;
 use unwrap_enum::{EnumAs, EnumIs};
 use vm::UpValue;
@@ -37,8 +37,8 @@ pub struct Checker {
     types: Types,
     scopes: Vec<Scope>,
     globals: HashMap<String, PolyType>,
-    deftypes: HashMap<String, ast::DefType>,
-    deftype_variants: HashMap<String, (usize, Variant)>,
+    deftypes: HashMap<VariantPattern, ast::DefType>,
+    deftype_variants: HashMap<VariantPattern, (usize, Variant)>,
     structs: HashMap<String, Struct>,
     constructors: HashMap<ast::StructConstructor, Struct>,
     accessors: HashMap<ast::StructAccessor, Struct>,
@@ -99,8 +99,10 @@ impl Checker {
                 None => Variant::Enum(variant.name.clone()),
             };
 
-            self.deftypes.insert(constructor.clone(), deftype.clone());
-            self.deftype_variants.insert(constructor, (i, v));
+            self.deftypes
+                .insert(VariantPattern(constructor.clone()), deftype.clone());
+            self.deftype_variants
+                .insert(VariantPattern(constructor), (i, v));
         }
 
         self.user_types
@@ -523,78 +525,11 @@ impl Checker {
     }
 
     fn check_make_type(&mut self, make_type: &tree::MakeType) -> Result<TypeId, Error> {
-        let deftype = self.deftypes[make_type.pattern.as_str()].clone();
-        let parameters = deftype
-            .variants
-            .iter()
-            .filter_map(|variant| {
-                match variant
-                    .r#type
-                    .as_ref()
-                    .map(|r#type| Type::from_ast(r#type, &self.user_types))
-                {
-                    Some(Ok(t)) => Some(Ok(self.types.insert_concrete_type(t))),
-                    Some(Err(())) => Some(Err(Error::InvalidType(make_type.span))),
-                    None => None,
-                }
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        let id = self.types.insert(TypeInfo::DefType {
-            name: deftype.name.clone(),
-            parameters,
-        });
-
-        Ok(self.types.instantiate(id, &mut HashMap::new()))
+        todo!()
     }
 
     fn check_if_let(&mut self, if_let: &tree::IfLet) -> Result<TypeId, Error> {
-        let body = self.check_tree(&if_let.body)?;
-        let r#return = self.types.insert(TypeInfo::Unknown);
-
-        let (then, r#else) = if if_let.binding.is_some() {
-            let variant_index = self.deftype_variants[if_let.pattern.as_str()].0;
-            let variant_type = match self.types.vars[body].clone() {
-                TypeInfo::DefType { name, parameters }
-                    if self.deftypes[if_let.pattern.as_str()].name == name.as_str() =>
-                {
-                    parameters[variant_index]
-                }
-                _ => todo!(),
-            };
-
-            let scope = Scope {
-                locals: vec![variant_type],
-                upvalues: if_let.upvalues.clone(),
-            };
-
-            self.scopes.push(scope);
-            let then = self.check_tree(&if_let.then)?;
-            self.scopes.pop().unwrap();
-
-            let r#else = self.check_tree(&if_let.r#else)?;
-
-            (then, r#else)
-        } else {
-            let then = self.check_tree(&if_let.then)?;
-            let r#else = self.check_tree(&if_let.r#else)?;
-
-            (then, r#else)
-        };
-
-        let Ok(()) = self.types.unify(r#return, then) else {
-            todo!()
-        };
-
-        let Ok(()) = self.types.unify(r#return, r#else) else {
-            return Err(Error::Unification {
-                message: "failed unifying if-let branches".to_string(),
-                span: if_let.span,
-                a: MaybeUnknownType::from(self.types.construct(r#return)),
-                b: MaybeUnknownType::from(self.types.construct(r#else)),
-            });
-        };
-
-        Ok(r#return)
+        todo!()
     }
 
     fn check_letrec(&mut self, letrec: &tree::LetRec) -> Result<TypeId, Error> {
