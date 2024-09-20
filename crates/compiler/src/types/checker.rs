@@ -1,4 +1,6 @@
-use super::{Error, MaybeUnknownType, Parameters, Rest, Struct, Type, TypeId, TypeInfo, Types};
+use super::{
+    Error, MaybeUnknownType, Parameters, Rest, Type, TypeId, TypeInfo, Types, VariantOrStruct,
+};
 use crate::ast;
 use crate::tree::{self, Il};
 use std::collections::{HashMap, HashSet};
@@ -25,6 +27,12 @@ enum Variant {
 }
 
 #[derive(Clone, Debug)]
+struct Struct {
+    name: String,
+    fields: Vec<Type>,
+}
+
+#[derive(Clone, Debug)]
 pub struct Checker {
     types: Types,
     scopes: Vec<Scope>,
@@ -34,6 +42,7 @@ pub struct Checker {
     structs: HashMap<String, Struct>,
     constructors: HashMap<ast::StructConstructor, Struct>,
     accessors: HashMap<ast::StructAccessor, Struct>,
+    user_types: HashMap<String, VariantOrStruct>,
 }
 
 impl Checker {
@@ -47,6 +56,7 @@ impl Checker {
             structs: HashMap::new(),
             constructors: HashMap::new(),
             accessors: HashMap::new(),
+            user_types: HashMap::new(),
         }
     }
 
@@ -79,7 +89,11 @@ impl Checker {
     fn deftype(&mut self, deftype: &ast::DefType) -> Result<(), Error> {
         for (i, variant) in deftype.variants.iter().enumerate() {
             let constructor = format!("{}-{}", deftype.name, variant.name);
-            let v = match variant.r#type.as_ref().map(Type::from_ast) {
+            let v = match variant
+                .r#type
+                .as_ref()
+                .map(|r#type| Type::from_ast(r#type, &self.user_types))
+            {
                 Some(Ok(t)) => Variant::Struct(variant.name.clone(), t),
                 Some(Err(())) => return Err(Error::InvalidType(deftype.span)),
                 None => Variant::Enum(variant.name.clone()),
@@ -89,11 +103,19 @@ impl Checker {
             self.deftype_variants.insert(constructor, (i, v));
         }
 
+        self.user_types
+            .insert(deftype.name.clone(), VariantOrStruct::Variant);
+
         Ok(())
     }
 
     fn check_decl(&mut self, decl: &ast::Decl) -> Result<(), Error> {
-        let r#type = match decl.parameter.r#type.as_ref().map(Type::from_ast) {
+        let r#type = match decl
+            .parameter
+            .r#type
+            .as_ref()
+            .map(|r#type| Type::from_ast(r#type, &self.user_types))
+        {
             Some(Ok(t)) => t,
             Some(Err(())) => return Err(Error::InvalidType(decl.span)),
             None => return Err(Error::Annotation(decl.span)),
@@ -114,7 +136,12 @@ impl Checker {
     }
 
     fn check_def(&mut self, def: &tree::Def) -> Result<(), Error> {
-        match def.parameter.r#type.as_ref().map(Type::from_ast) {
+        match def
+            .parameter
+            .r#type
+            .as_ref()
+            .map(|r#type| Type::from_ast(r#type, &self.user_types))
+        {
             Some(Ok(t)) if t.is_function() && def.body.is_lambda() => {
                 let id = self.types.insert_concrete_type(t.clone());
 
@@ -500,13 +527,17 @@ impl Checker {
         let parameters = deftype
             .variants
             .iter()
-            .filter_map(
-                |variant| match variant.r#type.as_ref().map(Type::from_ast) {
+            .filter_map(|variant| {
+                match variant
+                    .r#type
+                    .as_ref()
+                    .map(|r#type| Type::from_ast(r#type, &self.user_types))
+                {
                     Some(Ok(t)) => Some(Ok(self.types.insert_concrete_type(t))),
                     Some(Err(())) => Some(Err(Error::InvalidType(make_type.span))),
                     None => None,
-                },
-            )
+                }
+            })
             .collect::<Result<Vec<_>, _>>()?;
         let id = self.types.insert(TypeInfo::DefType {
             name: deftype.name.clone(),
@@ -598,10 +629,14 @@ impl Checker {
                 .fields
                 .iter()
                 .map(|(_, r#type)| {
-                    Type::from_ast(r#type).map_err(|_| Error::InvalidType(defstruct.span))
+                    Type::from_ast(r#type, &self.user_types)
+                        .map_err(|_| Error::InvalidType(defstruct.span))
                 })
                 .collect::<Result<Vec<_>, _>>()?,
         };
+
+        self.user_types
+            .insert(defstruct.name.clone(), VariantOrStruct::Struct);
 
         self.structs
             .insert(defstruct.name.clone(), r#struct.clone());
@@ -622,47 +657,51 @@ impl Checker {
     fn check_make_struct(&mut self, make_struct: &tree::MakeStruct) -> Result<TypeId, Error> {
         let r#struct = self.constructors[&make_struct.constructor].clone();
 
-        let expected = self
-            .types
-            .insert_concrete_type(Type::Struct(r#struct.clone()));
-        let expected = self.types.instantiate(expected, &mut HashMap::new());
-
-        let parameters = make_struct
-            .exprs
+        let parameters = r#struct
+            .fields
             .iter()
-            .map(|expr| self.check_tree(expr))
+            .zip(make_struct.exprs.iter())
+            .filter(|(field, _)| field.is_generic())
+            .map(|(_, expr)| self.check_tree(expr))
             .collect::<Result<Vec<_>, _>>()?;
-        let typeinfo = TypeInfo::Struct {
+
+        let id = self.types.insert(TypeInfo::Struct {
             name: make_struct.struct_name.clone(),
-            fields: parameters,
-        };
-        let received = self.types.insert(typeinfo);
+            parameters,
+        });
 
-        let Ok(()) = self.types.unify(expected, received) else {
-            todo!();
-        };
-
-        Ok(expected)
+        Ok(id)
     }
 
     fn check_get_field(&mut self, get_field: &tree::GetField) -> Result<TypeId, Error> {
         let body = self.check_tree(&get_field.body)?;
+        let r#struct = self.structs[get_field.struct_name.as_str()].clone();
 
-        let r#struct = self.accessors[&get_field.accessor].clone();
-        let parameters = (0..r#struct.fields.len())
-            .map(|_| self.types.insert(TypeInfo::Unknown))
-            .collect::<Vec<_>>();
-        let typeinfo = TypeInfo::Struct {
-            name: get_field.struct_name.clone(),
-            fields: parameters.clone(),
+        let r#type = if r#struct.fields[get_field.index].is_generic() {
+            let index = r#struct
+                .fields
+                .iter()
+                .filter(|field| field.is_generic())
+                .count();
+            let parameters = (0..r#struct.fields.len())
+                .map(|_| self.types.insert(TypeInfo::Unknown))
+                .collect::<Vec<_>>();
+            let id = self.types.insert(TypeInfo::Struct {
+                name: get_field.struct_name.clone(),
+                parameters: parameters.clone(),
+            });
+
+            let Ok(()) = self.types.unify(id, body) else {
+                todo!()
+            };
+
+            parameters[index]
+        } else {
+            self.types
+                .insert_concrete_type(r#struct.fields[get_field.index].clone())
         };
-        let id = self.types.insert(typeinfo);
 
-        let Ok(()) = self.types.unify(id, body) else {
-            todo!()
-        };
-
-        Ok(parameters[get_field.index])
+        Ok(r#type)
     }
 
     fn check_varref(&mut self, varref: &tree::VarRef) -> TypeId {

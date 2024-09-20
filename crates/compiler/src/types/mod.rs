@@ -1,7 +1,6 @@
 mod checker;
 use crate::ast;
 pub use checker::Checker;
-use core::fmt;
 use std::collections::{HashMap, HashSet};
 
 use error::FileSpan;
@@ -34,10 +33,10 @@ pub enum Error {
     },
 }
 
-#[derive(Clone, Debug)]
-pub struct Struct {
-    name: String,
-    fields: Vec<Type>,
+#[derive(Clone, Copy, Debug, EnumAs, EnumIs)]
+enum VariantOrStruct {
+    Variant,
+    Struct,
 }
 
 #[derive(Clone, Debug, EnumAs, EnumIs)]
@@ -47,7 +46,10 @@ pub enum Type {
         name: String,
         parameters: Vec<Type>,
     },
-    Struct(Struct),
+    Struct {
+        name: String,
+        parameters: Vec<Type>,
+    },
     Function {
         parameters: Vec<Type>,
         rest: Option<Box<Type>>,
@@ -73,7 +75,7 @@ pub enum TypeInfo {
     },
     Struct {
         name: String,
-        fields: Vec<TypeId>,
+        parameters: Vec<TypeId>,
     },
     Function {
         parameters: Parameters,
@@ -159,7 +161,10 @@ impl error::Error for Error {
 }
 
 impl Type {
-    fn from_ast(ast: &ast::Type) -> Result<Self, ()> {
+    fn from_ast(
+        ast: &ast::Type,
+        user_types: &HashMap<String, VariantOrStruct>,
+    ) -> Result<Self, ()> {
         Ok(match ast {
             ast::Type::Composite(composite) => match composite.as_slice() {
                 [ast::Type::Scalar(function), parameters @ .., ast::Type::Scalar(arrow), r#return]
@@ -170,35 +175,54 @@ impl Type {
                             Type::Function {
                                 parameters: parameters
                                     .iter()
-                                    .map(Type::from_ast)
+                                    .map(|parameter| Type::from_ast(parameter, user_types))
                                     .collect::<Result<_, _>>()?,
-                                rest: Some(Box::new(Type::from_ast(variadic)?)),
-                                r#return: Box::new(Type::from_ast(r#return)?),
+                                rest: Some(Box::new(Type::from_ast(variadic, user_types)?)),
+                                r#return: Box::new(Type::from_ast(r#return, user_types)?),
                             }
                         }
                         _ => Type::Function {
                             parameters: parameters
                                 .iter()
-                                .map(Type::from_ast)
+                                .map(|parameter| Type::from_ast(parameter, user_types))
                                 .collect::<Result<_, _>>()?,
                             rest: None,
-                            r#return: Box::new(Type::from_ast(r#return)?),
+                            r#return: Box::new(Type::from_ast(r#return, user_types)?),
                         },
                     }
                 }
                 [ast::Type::Scalar(list), inner] if list == "list" => {
-                    Type::List(Box::new(Type::from_ast(inner)?))
+                    Type::List(Box::new(Type::from_ast(inner, user_types)?))
                 }
                 [ast::Type::Scalar(quote), ast::Type::Scalar(generic)] if quote == "quote" => {
                     Type::Generic(generic.clone())
                 }
-                [ast::Type::Scalar(deftype), parameters @ ..] => Type::DefType {
-                    name: deftype.clone(),
-                    parameters: parameters
-                        .iter()
-                        .map(Type::from_ast)
-                        .collect::<Result<Vec<_>, _>>()?,
-                },
+                [ast::Type::Scalar(deftype), parameters @ ..]
+                    if user_types
+                        .get(deftype.as_str())
+                        .is_some_and(|r#type| r#type.is_variant()) =>
+                {
+                    Type::DefType {
+                        name: deftype.clone(),
+                        parameters: parameters
+                            .iter()
+                            .map(|parameter| Type::from_ast(parameter, user_types))
+                            .collect::<Result<Vec<_>, _>>()?,
+                    }
+                }
+                [ast::Type::Scalar(r#struct), parameters @ ..]
+                    if user_types
+                        .get(r#struct.as_str())
+                        .is_some_and(|r#type| r#type.is_struct()) =>
+                {
+                    Type::Struct {
+                        name: r#struct.clone(),
+                        parameters: parameters
+                            .iter()
+                            .map(|parameter| Type::from_ast(parameter, user_types))
+                            .collect::<Result<Vec<_>, _>>()?,
+                    }
+                }
                 _ => return Err(()),
             },
             ast::Type::Scalar(t) if t == "symbol" => Type::Symbol,
@@ -207,10 +231,26 @@ impl Type {
             ast::Type::Scalar(t) if t == "int" => Type::Int,
             ast::Type::Scalar(t) if t == "bool" => Type::Bool,
             ast::Type::Scalar(t) if t == "nil" => Type::Nil,
-            ast::Type::Scalar(t) => Type::DefType {
-                name: t.clone(),
-                parameters: Vec::new(),
-            },
+            ast::Type::Scalar(t)
+                if user_types
+                    .get(t.as_str())
+                    .is_some_and(|r#type| r#type.is_variant()) =>
+            {
+                Type::DefType {
+                    name: t.clone(),
+                    parameters: Vec::new(),
+                }
+            }
+            ast::Type::Scalar(t)
+                if user_types
+                    .get(t.as_str())
+                    .is_some_and(|r#type| r#type.is_struct()) =>
+            {
+                Type::Struct {
+                    name: t.clone(),
+                    parameters: Vec::new(),
+                }
+            }
             _ => return Err(()),
         })
     }
@@ -252,15 +292,15 @@ impl PartialEq for Type {
                 },
             ) => name_a == name_b && parameters_a == parameters_b,
             (
-                Type::Struct(Struct {
+                Type::Struct {
                     name: name_a,
-                    fields: fields_a,
-                }),
-                Type::Struct(Struct {
+                    parameters: parameters_a,
+                },
+                Type::Struct {
                     name: name_b,
-                    fields: fields_b,
-                }),
-            ) => name_a == name_b && fields_a == fields_b,
+                    parameters: parameters_b,
+                },
+            ) => name_a == name_b && parameters_a == parameters_b,
             (
                 Type::Function {
                     parameters: parameters_a,
@@ -310,12 +350,12 @@ impl Types {
 
                 Type::DefType { name, parameters }
             }
-            TypeInfo::Struct { name, fields } => {
-                let fields = fields
+            TypeInfo::Struct { name, parameters } => {
+                let parameters = parameters
                     .iter()
-                    .map(|field| self.construct(*field))
+                    .map(|parameter| self.construct(*parameter))
                     .collect::<Option<_>>()?;
-                Type::Struct(Struct { name, fields })
+                Type::Struct { name, parameters }
             }
             TypeInfo::Function {
                 parameters,
@@ -374,14 +414,14 @@ impl Types {
             (
                 TypeInfo::Struct {
                     name: name_a,
-                    fields: fields_a,
+                    parameters: parameters_a,
                 },
                 TypeInfo::Struct {
                     name: name_b,
-                    fields: fields_b,
+                    parameters: parameters_b,
                 },
             ) if name_a == name_b => {
-                for (a, b) in fields_a.iter().zip(fields_b.iter()) {
+                for (a, b) in parameters_a.iter().zip(parameters_b.iter()) {
                     self.unify(*a, *b)?;
                 }
                 Ok(())
@@ -509,12 +549,13 @@ impl Types {
                     .collect::<Vec<_>>();
                 self.insert(TypeInfo::DefType { name, parameters })
             }
-            Type::Struct(Struct { name, fields }) => {
-                let fields = fields
+            Type::Struct { name, parameters } => {
+                let parameters = parameters
                     .iter()
-                    .map(|field| self.insert_concrete_type(field.clone()))
+                    .cloned()
+                    .map(|parameter| self.insert_concrete_type(parameter))
                     .collect();
-                self.insert(TypeInfo::Struct { name, fields })
+                self.insert(TypeInfo::Struct { name, parameters })
             }
             Type::Function {
                 parameters,
@@ -565,12 +606,12 @@ impl Types {
                     .collect();
                 self.insert(TypeInfo::DefType { name, parameters })
             }
-            TypeInfo::Struct { name, fields } => {
-                let fields = fields
+            TypeInfo::Struct { name, parameters } => {
+                let parameters = parameters
                     .iter()
-                    .map(|field| self.instantiate(*field, subs))
+                    .map(|parameter| self.instantiate(*parameter, subs))
                     .collect();
-                self.insert(TypeInfo::Struct { name, fields })
+                self.insert(TypeInfo::Struct { name, parameters })
             }
             TypeInfo::Function {
                 parameters,
