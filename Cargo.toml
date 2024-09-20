@@ -6,6 +6,7 @@ micro-nom = { path = "vendor//micro-nom" }
 unwrap-enum = "=0.1.0"
 rand = "0.8.5"
 thiserror = "1.0.61"
+itertools = "0.13.0"
 
 [package]
 name = "lisp"

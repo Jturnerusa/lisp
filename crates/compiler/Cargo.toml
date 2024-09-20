@@ -11,3 +11,4 @@ unwrap-enum = { workspace = true }
 micro-nom = { workspace = true }
 rand = { workspace = true }
 error = { path = "../error" }
+itertools = { workspace = true }
