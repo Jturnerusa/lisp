@@ -7,6 +7,15 @@
   ;; These functions also should be available at compile time so they can
   ;; be used in macros.
 
+(deftype hlist
+    (hlist (list hlist))
+    (symbol symbol)
+    (string string)
+    (char char)
+    (int int)
+    (bool bool)
+    (nil))             
+
 (eval-when-compile
 
   (deftype option (some 't) (none))
