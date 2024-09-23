@@ -276,6 +276,22 @@ impl Type {
             _ => false,
         }
     }
+
+    fn map_generics(&self, generics: &mut HashMap<String, usize>) {
+        match self {
+            Self::DefType { parameters, .. } => {
+                for parameter in parameters {
+                    parameter.map_generics(generics);
+                }
+            }
+            Self::List(inner) => inner.map_generics(generics),
+            Self::Generic(generic) if !generics.contains_key(generic.as_str()) => {
+                let index = generics.len();
+                generics.insert(generic.clone(), index);
+            }
+            _ => (),
+        }
+    }
 }
 
 impl PartialEq for Type {
@@ -656,6 +672,60 @@ impl Types {
         }
     }
 
+    pub fn instantiate_with(&mut self, id: TypeId, subs: &HashMap<String, TypeId>) -> TypeId {
+        match self.vars[id].clone() {
+            TypeInfo::DefType { name, parameters } => {
+                let parameters = parameters
+                    .iter()
+                    .map(|parameter| self.instantiate_with(*parameter, subs))
+                    .collect();
+                self.insert(TypeInfo::DefType { name, parameters })
+            }
+            TypeInfo::Struct { name, parameters } => {
+                let parameters = parameters
+                    .iter()
+                    .map(|parameter| self.instantiate_with(*parameter, subs))
+                    .collect();
+                self.insert(TypeInfo::Struct { name, parameters })
+            }
+            TypeInfo::Function {
+                parameters,
+                rest,
+                r#return,
+            } => {
+                let parameters = match parameters {
+                    Parameters::Known(parameters) => Parameters::Known(
+                        parameters
+                            .iter()
+                            .map(|parameter| self.instantiate_with(*parameter, subs))
+                            .collect(),
+                    ),
+                    parameters => parameters,
+                };
+                let rest = match rest {
+                    Rest::Known(id) => Rest::Known(self.instantiate_with(id, subs)),
+                    rest => rest,
+                };
+                let r#return = self.instantiate_with(r#return, subs);
+                self.insert(TypeInfo::Function {
+                    parameters,
+                    rest,
+                    r#return,
+                })
+            }
+            TypeInfo::List(inner) => {
+                let inner = self.instantiate_with(inner, subs);
+                self.insert(TypeInfo::List(inner))
+            }
+            TypeInfo::Generic(generic) if subs.contains_key(generic.as_str()) => {
+                subs[generic.as_str()]
+            }
+            TypeInfo::Cons(..) => todo!(),
+            TypeInfo::Ref(id) => self.instantiate_with(id, subs),
+            _ => id,
+        }
+    }
+
     pub(crate) fn debug_typeid(&self, id: TypeId, seen: &mut HashSet<TypeId>) -> String {
         if seen.contains(&id) {
             return String::new();
@@ -664,13 +734,25 @@ impl Types {
         seen.insert(id);
 
         let result = match self.vars[id].clone() {
+            TypeInfo::DefType { name, parameters } => {
+                let mut buff = String::new();
+                buff += format!("{name}(").as_str();
+                for (i, parameter) in parameters.iter().enumerate() {
+                    buff += self.debug_typeid(*parameter, seen).as_str();
+                    if i < parameters.len() - 1 {
+                        buff += " ";
+                    }
+                }
+                buff += ")";
+                buff
+            }
             TypeInfo::Function {
                 parameters,
                 r#return,
                 ..
             } => {
                 let mut buff = String::new();
-                buff += "fn -> ";
+                buff += "fn ";
                 match parameters {
                     Parameters::Known(parameters) => {
                         for parameter in parameters {
@@ -680,6 +762,7 @@ impl Types {
                     }
                     Parameters::Unknown => buff += "unknown ",
                 }
+                buff += "-> ";
                 buff += self.debug_typeid(r#return, seen).as_str();
                 buff
             }

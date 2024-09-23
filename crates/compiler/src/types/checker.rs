@@ -3,7 +3,8 @@ use super::{
 };
 use crate::ast::{self, VariantPattern};
 use crate::tree::{self, Il};
-use std::collections::HashMap;
+use itertools::Itertools;
+use std::collections::{HashMap, HashSet};
 use std::iter;
 use unwrap_enum::{EnumAs, EnumIs};
 use vm::UpValue;
@@ -21,15 +22,27 @@ struct Scope {
 }
 
 #[derive(Clone, Debug, EnumAs, EnumIs)]
+enum TypeOrGeneric {
+    Type(Type),
+    Generic(Type, HashMap<String, usize>),
+}
+
+#[derive(Clone, Debug)]
+struct VariantType {
+    name: String,
+    variants: Vec<Variant>,
+}
+
+#[derive(Clone, Debug, EnumAs, EnumIs)]
 enum Variant {
-    Struct(String, Type),
+    Struct(String, TypeOrGeneric),
     Enum(String),
 }
 
 #[derive(Clone, Debug)]
 struct Struct {
     name: String,
-    fields: Vec<Type>,
+    fields: Vec<TypeOrGeneric>,
 }
 
 #[derive(Clone, Debug)]
@@ -37,11 +50,11 @@ pub struct Checker {
     types: Types,
     scopes: Vec<Scope>,
     globals: HashMap<String, PolyType>,
-    deftypes: HashMap<VariantPattern, ast::DefType>,
-    deftype_variants: HashMap<VariantPattern, (usize, Variant)>,
+    variant_types: HashMap<VariantPattern, VariantType>,
+    variants: HashMap<VariantPattern, (usize, Variant)>,
     structs: HashMap<String, Struct>,
     constructors: HashMap<ast::StructConstructor, Struct>,
-    accessors: HashMap<ast::StructAccessor, Struct>,
+    accessors: HashMap<ast::StructAccessor, TypeOrGeneric>,
     user_types: HashMap<String, VariantOrStruct>,
 }
 
@@ -51,8 +64,8 @@ impl Checker {
             types: Types::new(),
             scopes: Vec::new(),
             globals: HashMap::new(),
-            deftypes: HashMap::new(),
-            deftype_variants: HashMap::new(),
+            variant_types: HashMap::new(),
+            variants: HashMap::new(),
             structs: HashMap::new(),
             constructors: HashMap::new(),
             accessors: HashMap::new(),
@@ -87,22 +100,50 @@ impl Checker {
     }
 
     fn deftype(&mut self, deftype: &ast::DefType) -> Result<(), Error> {
-        for (i, variant) in deftype.variants.iter().enumerate() {
-            let constructor = format!("{}-{}", deftype.name, variant.name);
-            let v = match variant
-                .r#type
-                .as_ref()
-                .map(|r#type| Type::from_ast(r#type, &self.user_types))
-            {
-                Some(Ok(t)) => Variant::Struct(variant.name.clone(), t),
-                Some(Err(())) => return Err(Error::InvalidType(deftype.span)),
-                None => Variant::Enum(variant.name.clone()),
-            };
+        let mut generics = HashMap::new();
 
-            self.deftypes
-                .insert(VariantPattern(constructor.clone()), deftype.clone());
-            self.deftype_variants
-                .insert(VariantPattern(constructor), (i, v));
+        let variants = deftype
+            .variants
+            .iter()
+            .map(|variant| {
+                Ok(
+                    match variant
+                        .r#type
+                        .as_ref()
+                        .map(|r#type| Type::from_ast(r#type, &self.user_types))
+                    {
+                        Some(Ok(t)) if t.has_generics() => {
+                            t.map_generics(&mut generics);
+                            Variant::Struct(
+                                variant.name.clone(),
+                                TypeOrGeneric::Generic(t, generics.clone()),
+                            )
+                        }
+                        Some(Ok(t)) => {
+                            Variant::Struct(variant.name.clone(), TypeOrGeneric::Type(t))
+                        }
+                        Some(Err(())) => return Err(Error::InvalidType(deftype.span)),
+                        None => Variant::Enum(variant.name.clone()),
+                    },
+                )
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let variant_type = VariantType {
+            name: deftype.name.clone(),
+            variants: variants.clone(),
+        };
+
+        for (i, variant) in variants.iter().enumerate() {
+            let variant_name = match variant {
+                Variant::Struct(name, _) | Variant::Enum(name) => name.clone(),
+            };
+            let pattern = format!("{}-{}", deftype.name, variant_name);
+
+            self.variant_types
+                .insert(VariantPattern(pattern.clone()), variant_type.clone());
+            self.variants
+                .insert(VariantPattern(pattern), (i, variant.clone()));
         }
 
         self.user_types
@@ -285,6 +326,9 @@ impl Checker {
         });
 
         let Ok(()) = self.types.unify(function, fncall_function) else {
+            dbg!(self
+                .types
+                .debug_typeid(fncall_function, &mut HashSet::new()));
             return Err(Error::Unification {
                 message: "failed to unify fncall".to_string(),
                 span: fncall.span,
@@ -525,11 +569,121 @@ impl Checker {
     }
 
     fn check_make_type(&mut self, make_type: &tree::MakeType) -> Result<TypeId, Error> {
-        todo!()
+        let variant_type = self.variant_types[&make_type.pattern].clone();
+        let (_, variant) = self.variants[&make_type.pattern].clone();
+
+        let parameters = variant_type
+            .variants
+            .iter()
+            .filter_map(|variant| variant.as_struct().and_then(|(_, t)| t.as_generic()))
+            .map(|_| self.types.insert(TypeInfo::Unknown))
+            .collect::<Vec<_>>();
+
+        Ok(match variant {
+            Variant::Struct(_, TypeOrGeneric::Generic(r#type, generics)) => {
+                let id = self.types.insert_concrete_type(r#type);
+
+                let subs = generics
+                    .iter()
+                    .map(|(generic, index)| (generic.clone(), parameters[*index]))
+                    .collect::<HashMap<_, _>>();
+
+                let id = self.types.instantiate_with(id, &subs);
+
+                let body = self.check_tree(make_type.body.as_ref().unwrap())?;
+
+                let Ok(()) = self.types.unify(id, body) else {
+                    return Err(Error::Unification {
+                        message: "failed to unify variant type with expression".to_string(),
+                        span: make_type.span,
+                        a: MaybeUnknownType::from(self.types.construct(id)),
+                        b: MaybeUnknownType::from(self.types.construct(body)),
+                    });
+                };
+
+                self.types.insert(TypeInfo::DefType {
+                    name: variant_type.name.clone(),
+                    parameters,
+                })
+            }
+            _ => self.types.insert(TypeInfo::DefType {
+                name: variant_type.name.clone(),
+                parameters,
+            }),
+        })
     }
 
     fn check_if_let(&mut self, if_let: &tree::IfLet) -> Result<TypeId, Error> {
-        todo!()
+        let body = self.check_tree(&if_let.body)?;
+
+        let (then, r#else) = if if_let.binding.is_some() {
+            let variant_type = self.variant_types[&if_let.pattern].clone();
+            let (_, variant) = self.variants[&if_let.pattern].clone();
+            let parameters = variant_type
+                .variants
+                .iter()
+                .filter_map(|variant| {
+                    variant
+                        .as_struct()
+                        .and_then(|(_, type_or_generic)| type_or_generic.as_generic())
+                })
+                .map(|_| self.types.insert(TypeInfo::Unknown))
+                .collect::<Vec<_>>();
+            let id = self.types.insert(TypeInfo::DefType {
+                name: variant_type.name.clone(),
+                parameters: parameters.clone(),
+            });
+
+            self.types.unify(id, body).unwrap();
+
+            let binding = match variant {
+                Variant::Struct(_, TypeOrGeneric::Generic(r#type, generics)) => {
+                    let r#type = self.types.insert_concrete_type(r#type);
+                    let subs = generics
+                        .iter()
+                        .map(|(generic, index)| (generic.clone(), parameters[*index]))
+                        .collect::<HashMap<_, _>>();
+                    self.types.instantiate_with(r#type, &subs)
+                }
+                Variant::Struct(_, TypeOrGeneric::Type(r#type)) => {
+                    self.types.insert_concrete_type(r#type)
+                }
+                _ => unreachable!(),
+            };
+
+            self.scopes.push(Scope {
+                locals: vec![binding],
+                upvalues: if_let.upvalues.clone(),
+            });
+
+            let then = self.check_tree(&if_let.then)?;
+
+            self.scopes.pop().unwrap();
+
+            let r#else = self.check_tree(&if_let.r#else)?;
+
+            (then, r#else)
+        } else {
+            let then = self.check_tree(&if_let.then)?;
+            let r#else = self.check_tree(&if_let.r#else)?;
+
+            (then, r#else)
+        };
+
+        let r#return = self.types.insert(TypeInfo::Unknown);
+
+        self.types.unify(r#return, then).unwrap();
+
+        let Ok(()) = self.types.unify(r#return, r#else) else {
+            return Err(Error::Unification {
+                message: "failed while unifying if-let then and else".to_string(),
+                span: if_let.span,
+                a: MaybeUnknownType::from(self.types.construct(then)),
+                b: MaybeUnknownType::from(self.types.construct(r#else)),
+            });
+        };
+
+        Ok(r#return)
     }
 
     fn check_letrec(&mut self, letrec: &tree::LetRec) -> Result<TypeId, Error> {
@@ -558,33 +712,39 @@ impl Checker {
     }
 
     fn check_defstruct(&mut self, defstruct: &ast::DefStruct) -> Result<(), Error> {
+        let mut generics = HashMap::new();
+
+        let fields = defstruct
+            .fields
+            .iter()
+            .map(|(_, r#type)| {
+                Ok(match Type::from_ast(r#type, &self.user_types) {
+                    Ok(t) if t.has_generics() => {
+                        t.map_generics(&mut generics);
+                        TypeOrGeneric::Generic(t, generics.clone())
+                    }
+                    Ok(t) => TypeOrGeneric::Type(t),
+                    Err(()) => return Err(Error::InvalidType(defstruct.span)),
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
         let r#struct = Struct {
             name: defstruct.name.clone(),
-            fields: defstruct
-                .fields
-                .iter()
-                .map(|(_, r#type)| {
-                    Type::from_ast(r#type, &self.user_types)
-                        .map_err(|_| Error::InvalidType(defstruct.span))
-                })
-                .collect::<Result<Vec<_>, _>>()?,
+            fields: fields.clone(),
         };
 
-        self.user_types
-            .insert(defstruct.name.clone(), VariantOrStruct::Struct);
-
-        self.structs
-            .insert(defstruct.name.clone(), r#struct.clone());
+        for ((field_name, _), field) in defstruct.fields.iter().zip(fields.iter()) {
+            let accessor = format!("{}-{}", defstruct.name, field_name);
+            self.accessors
+                .insert(ast::StructAccessor(accessor), field.clone());
+        }
 
         let constructor = format!("make-{}", defstruct.name);
         self.constructors
             .insert(ast::StructConstructor(constructor), r#struct.clone());
 
-        for (field_name, _) in &defstruct.fields {
-            let accessor = format!("{}-{}", defstruct.name, field_name);
-            self.accessors
-                .insert(ast::StructAccessor(accessor), r#struct.clone());
-        }
+        self.structs.insert(r#struct.name.clone(), r#struct);
 
         Ok(())
     }
@@ -595,48 +755,79 @@ impl Checker {
         let parameters = r#struct
             .fields
             .iter()
-            .zip(make_struct.exprs.iter())
-            .filter(|(field, _)| field.is_generic())
-            .map(|(_, expr)| self.check_tree(expr))
+            .filter_map(|type_or_generic| type_or_generic.as_generic())
+            .map(|_| self.types.insert(TypeInfo::Unknown))
+            .collect::<Vec<_>>();
+
+        let exprs = make_struct
+            .exprs
+            .iter()
+            .map(|expr| self.check_tree(expr))
             .collect::<Result<Vec<_>, _>>()?;
 
-        let id = self.types.insert(TypeInfo::Struct {
-            name: make_struct.struct_name.clone(),
-            parameters,
-        });
+        for (field, expr) in r#struct.fields.iter().zip(exprs.iter()) {
+            match field {
+                TypeOrGeneric::Generic(r#type, generics) => {
+                    let id = self.types.insert_concrete_type(r#type.clone());
+                    let subs = generics
+                        .iter()
+                        .map(|(generic, index)| (generic.clone(), parameters[*index]))
+                        .collect::<HashMap<_, _>>();
+                    let id = self.types.instantiate_with(id, &subs);
 
-        Ok(id)
+                    let Ok(()) = self.types.unify(id, *expr) else {
+                        return Err(Error::Unification {
+                            message: "failed to unify struct fields with constructor expressions"
+                                .to_string(),
+                            span: make_struct.span,
+                            a: MaybeUnknownType::from(self.types.construct(id)),
+                            b: MaybeUnknownType::from(self.types.construct(*expr)),
+                        });
+                    };
+                }
+                _ => continue,
+            }
+        }
+
+        Ok(self.types.insert(TypeInfo::Struct {
+            name: r#struct.name.clone(),
+            parameters,
+        }))
     }
 
     fn check_get_field(&mut self, get_field: &tree::GetField) -> Result<TypeId, Error> {
+        let r#struct = self.structs[&get_field.struct_name].clone();
         let body = self.check_tree(&get_field.body)?;
-        let r#struct = self.structs[get_field.struct_name.as_str()].clone();
 
-        let r#type = if r#struct.fields[get_field.index].is_generic() {
-            let index = r#struct
-                .fields
-                .iter()
-                .filter(|field| field.is_generic())
-                .count();
-            let parameters = (0..r#struct.fields.len())
-                .map(|_| self.types.insert(TypeInfo::Unknown))
-                .collect::<Vec<_>>();
-            let id = self.types.insert(TypeInfo::Struct {
-                name: get_field.struct_name.clone(),
-                parameters: parameters.clone(),
-            });
+        match self.accessors[&get_field.accessor].clone() {
+            TypeOrGeneric::Generic(r#type, generics) => {
+                let parameters = r#struct
+                    .fields
+                    .iter()
+                    .filter_map(|field| field.as_generic())
+                    .map(|_| self.types.insert(TypeInfo::Unknown))
+                    .collect::<Vec<_>>();
 
-            let Ok(()) = self.types.unify(id, body) else {
-                todo!()
-            };
+                let id = self.types.insert(TypeInfo::Struct {
+                    name: r#struct.name.clone(),
+                    parameters: parameters.clone(),
+                });
 
-            parameters[index]
-        } else {
-            self.types
-                .insert_concrete_type(r#struct.fields[get_field.index].clone())
-        };
+                let Ok(()) = self.types.unify(id, body) else {
+                    todo!()
+                };
 
-        Ok(r#type)
+                let id = self.types.insert_concrete_type(r#type);
+                let subs = generics
+                    .iter()
+                    .map(|(generic, index)| (generic.clone(), parameters[*index]))
+                    .collect::<HashMap<_, _>>();
+                let id = self.types.instantiate_with(id, &subs);
+
+                Ok(id)
+            }
+            TypeOrGeneric::Type(r#type) => Ok(self.types.insert_concrete_type(r#type)),
+        }
     }
 
     fn check_varref(&mut self, varref: &tree::VarRef) -> TypeId {
