@@ -1534,6 +1534,10 @@ fn parse_variant(sexpr: &Sexpr) -> Result<Variant, ()> {
             name: name.clone(),
             r#type: None,
         }),
+        [Sexpr::Nil { .. }] => Ok(Variant {
+            name: "nil".to_string(),
+            r#type: None,
+        }),
         _ => Err(()),
     }
 }
