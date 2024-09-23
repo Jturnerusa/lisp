@@ -100,6 +100,9 @@ impl Checker {
     }
 
     fn deftype(&mut self, deftype: &ast::DefType) -> Result<(), Error> {
+        self.user_types
+            .insert(deftype.name.clone(), VariantOrStruct::Variant);
+
         let mut generics = HashMap::new();
 
         let variants = deftype
@@ -145,9 +148,6 @@ impl Checker {
             self.variants
                 .insert(VariantPattern(pattern), (i, variant.clone()));
         }
-
-        self.user_types
-            .insert(deftype.name.clone(), VariantOrStruct::Variant);
 
         Ok(())
     }
