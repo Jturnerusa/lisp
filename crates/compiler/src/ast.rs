@@ -397,13 +397,13 @@ pub struct DefType {
 pub struct MakeType {
     pub span: FileSpan,
     pub pattern: VariantPattern,
-    pub body: Option<std::boxed::Box<Ast>>,
+    pub body: Vec<Ast>,
 }
 
 #[derive(Clone, Debug)]
 pub struct Variant {
     pub name: String,
-    pub r#type: Option<Type>,
+    pub types: Vec<Type>,
 }
 
 #[derive(Clone, Debug)]
@@ -411,7 +411,7 @@ pub struct IfLet {
     pub span: FileSpan,
     pub body: std::boxed::Box<Ast>,
     pub pattern: VariantPattern,
-    pub binding: Option<String>,
+    pub bindings: Vec<String>,
     pub then: std::boxed::Box<Ast>,
     pub r#else: std::boxed::Box<Ast>,
 }
@@ -615,20 +615,12 @@ impl Compiler {
                     }
                     [Sexpr::Symbol {
                         symbol: function, ..
-                    }, body]
+                    }, exprs @ ..]
                         if self
                             .deftypes
                             .contains_key(&VariantPattern(function.to_string())) =>
                     {
-                        self.compile_make_type(sexpr, function, Some(body))?
-                    }
-                    [Sexpr::Symbol {
-                        symbol: function, ..
-                    }] if self
-                        .deftypes
-                        .contains_key(&VariantPattern(function.to_string())) =>
-                    {
-                        self.compile_make_type(sexpr, function, None)?
+                        self.compile_make_type(sexpr, function, exprs)?
                     }
                     [Sexpr::Symbol { symbol: if_let, .. }, body, pattern, then, r#else]
                         if if_let == "if-let" =>
@@ -1121,16 +1113,15 @@ impl Compiler {
         &mut self,
         sexpr: &Sexpr,
         pattern: &str,
-        body: Option<&Sexpr>,
+        exprs: &[Sexpr],
     ) -> Result<Ast, Error> {
         Ok(Ast::MakeType(MakeType {
             span: sexpr.span(),
             pattern: VariantPattern(pattern.to_string()),
-            body: match body.as_ref().map(|body| self.compile(body)) {
-                Some(Ok(body)) => Some(std::boxed::Box::new(body)),
-                Some(Err(e)) => return Err(e),
-                None => None,
-            },
+            body: exprs
+                .iter()
+                .map(|expr| self.compile(expr))
+                .collect::<Result<Vec<_>, _>>()?,
         }))
     }
 
@@ -1142,16 +1133,22 @@ impl Compiler {
         then: &Sexpr,
         r#else: &Sexpr,
     ) -> Result<Ast, Error> {
-        let (pattern, binding) = match pattern {
+        let (pattern, bindings) = match pattern {
             Sexpr::List { list, .. } => match list.as_slice() {
                 [Sexpr::Symbol {
                     symbol: pattern, ..
-                }, Sexpr::Symbol {
-                    symbol: binding, ..
-                }] => (pattern.clone(), Some(binding.clone())),
-                [Sexpr::Symbol {
-                    symbol: pattern, ..
-                }] => (pattern.clone(), None),
+                }, bindings @ ..] => (
+                    pattern.clone(),
+                    bindings
+                        .iter()
+                        .map(|binding| {
+                            binding.as_symbol().map(|s| s.to_string()).ok_or(Error {
+                                span: sexpr.span(),
+                                message: "expected symbol".to_string(),
+                            })
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                ),
                 _ => {
                     return Err(Error {
                         span: sexpr.span(),
@@ -1171,7 +1168,7 @@ impl Compiler {
             span: sexpr.span(),
             body: std::boxed::Box::new(self.compile(body)?),
             pattern: VariantPattern(pattern),
-            binding,
+            bindings,
             then: std::boxed::Box::new(self.compile(then)?),
             r#else: std::boxed::Box::new(self.compile(r#else)?),
         }))
@@ -1526,17 +1523,16 @@ fn parse_variant(sexpr: &Sexpr) -> Result<Variant, ()> {
     };
 
     match list.as_slice() {
-        [Sexpr::Symbol { symbol: name, .. }, r#type] => Ok(Variant {
+        [Sexpr::Symbol { symbol: name, .. }, types @ ..] => Ok(Variant {
             name: name.clone(),
-            r#type: Some(Type::from_sexpr(r#type)?),
-        }),
-        [Sexpr::Symbol { symbol: name, .. }] => Ok(Variant {
-            name: name.clone(),
-            r#type: None,
+            types: types
+                .iter()
+                .map(Type::from_sexpr)
+                .collect::<Result<Vec<_>, _>>()?,
         }),
         [Sexpr::Nil { .. }] => Ok(Variant {
             name: "nil".to_string(),
-            r#type: None,
+            types: Vec::new(),
         }),
         _ => Err(()),
     }

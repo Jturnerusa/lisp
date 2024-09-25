@@ -1,4 +1,4 @@
-use std::{collections::HashMap, iter};
+use std::{collections::HashMap, env::Vars, iter};
 
 use crate::{
     ast::{
@@ -293,7 +293,7 @@ pub struct Assert {
 pub struct MakeType {
     pub span: FileSpan,
     pub pattern: VariantPattern,
-    pub body: Option<std::boxed::Box<Il>>,
+    pub exprs: Vec<Il>,
 }
 
 #[derive(Clone, Debug)]
@@ -301,7 +301,7 @@ pub struct IfLet {
     pub span: FileSpan,
     pub body: std::boxed::Box<Il>,
     pub pattern: VariantPattern,
-    pub binding: Option<String>,
+    pub bindings: Vec<String>,
     pub then: std::boxed::Box<Il>,
     pub r#else: std::boxed::Box<Il>,
     pub upvalues: Vec<UpValue>,
@@ -317,7 +317,7 @@ pub struct LetRec {
 
 #[derive(Clone, Debug)]
 pub enum DefTypePattern {
-    Struct(Type),
+    Struct(Vec<Type>),
     Empty,
 }
 
@@ -1249,9 +1249,10 @@ impl Compiler {
     ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
         for variant in &deftype.variants {
             let pattern = format!("{}-{}", deftype.name, variant.name);
-            let parameter = match variant.r#type.as_ref() {
-                Some(t) => DefTypePattern::Struct(t.clone()),
-                None => DefTypePattern::Empty,
+            let parameter = if !variant.types.is_empty() {
+                DefTypePattern::Struct(variant.types.clone())
+            } else {
+                DefTypePattern::Empty
             };
 
             self.deftype_patterns
@@ -1268,43 +1269,37 @@ impl Compiler {
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
     ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
-        let body = match (
-            &self.deftype_patterns[&make_type.pattern],
-            make_type.body.as_ref(),
-        ) {
-            (DefTypePattern::Struct(_), Some(body)) => Some(body),
-            (DefTypePattern::Struct(_), None) => {
+        match self.deftype_patterns[&make_type.pattern].clone() {
+            DefTypePattern::Struct(types) if types.len() != make_type.body.len() => {
                 return Err(std::boxed::Box::new(Error {
-                    span: ast.span(),
-                    message: "tried to construct a type without a value".to_string(),
-                }))
-            }
-            (DefTypePattern::Empty, Some(_)) => {
-                return Err(std::boxed::Box::new(Error {
-                    span: ast.span(),
-                    message: "tried to construct an empty type with a value".to_string(),
+                    span: make_type.span,
+                    message: "tried to construct variant with wrong number of fields".to_string(),
                 }) as _)
             }
-            _ => None,
-        };
+            DefTypePattern::Empty if !make_type.body.is_empty() => {
+                return Err(std::boxed::Box::new(Error {
+                    span: make_type.span,
+                    message: "tried to construct empty variant with fields".to_string(),
+                }) as _)
+            }
+            _ => (),
+        }
 
         Ok(Some(Il::MakeType(MakeType {
             span: ast.span(),
             pattern: make_type.pattern.clone(),
-            body: match body
-                .as_ref()
-                .map(|body| self.compile(body, vm, ast_compiler))
-            {
-                Some(Ok(Some(body))) => Some(std::boxed::Box::new(body)),
-                Some(Err(e)) => return Err(e),
-                Some(Ok(None)) => {
-                    return Err(std::boxed::Box::new(Error {
-                        span: ast.span(),
+            exprs: make_type
+                .body
+                .iter()
+                .map(|expr| match self.compile(expr, vm, ast_compiler) {
+                    Ok(Some(il)) => Ok(il),
+                    Ok(None) => Err(std::boxed::Box::new(Error {
+                        span: make_type.span,
                         message: "unexpected expression".to_string(),
-                    }))
-                }
-                _ => None,
-            },
+                    }) as _),
+                    Err(e) => Err(e),
+                })
+                .collect::<Result<Vec<_>, _>>()?,
         })))
     }
 
@@ -1315,29 +1310,29 @@ impl Compiler {
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
     ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
-        match (&self.deftype_patterns[&if_let.pattern], &if_let.binding) {
-            (DefTypePattern::Struct(_), None) => {
+        match self.deftype_patterns[&if_let.pattern].clone() {
+            DefTypePattern::Struct(types) if types.len() != if_let.bindings.len() => {
                 return Err(std::boxed::Box::new(Error {
-                    span: ast.span(),
-                    message: "this pattern requires a binding".to_string(),
-                }))
+                    span: if_let.span,
+                    message: format!("this pattern requires {} bindings", types.len()),
+                }) as _)
             }
-            (DefTypePattern::Empty, Some(_)) => {
+            DefTypePattern::Empty if !if_let.bindings.is_empty() => {
                 return Err(std::boxed::Box::new(Error {
-                    span: ast.span(),
-                    message: "this pattern can not have a binding".to_string(),
-                }))
+                    span: if_let.span,
+                    message: "this pattern shouldn't contain any bindings".to_string(),
+                }) as _)
             }
             _ => (),
         }
 
-        if let Some(binding) = if_let.binding.as_ref() {
+        if !if_let.bindings.is_empty() {
             let body = std::boxed::Box::new(expect_expression!(
                 self.compile(&if_let.body, vm, ast_compiler),
                 ast.span()
             ));
 
-            self.environment.push_scope(iter::once(binding.clone()));
+            self.environment.push_scope(if_let.bindings.iter().cloned());
 
             let then = std::boxed::Box::new(expect_expression!(
                 self.compile(&if_let.then, vm, ast_compiler),
@@ -1357,7 +1352,7 @@ impl Compiler {
                 span: ast.span(),
                 body,
                 pattern: if_let.pattern.clone(),
-                binding: Some(binding.clone()),
+                bindings: if_let.bindings.clone(),
                 then,
                 r#else,
                 upvalues,
@@ -1382,7 +1377,7 @@ impl Compiler {
                 span: ast.span(),
                 body,
                 pattern: if_let.pattern.clone(),
-                binding: None,
+                bindings: if_let.bindings.clone(),
                 then,
                 r#else,
                 upvalues: Vec::new(),

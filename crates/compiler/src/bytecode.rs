@@ -363,10 +363,14 @@ fn compile_make_type(
         make_type.span,
     );
 
-    if let Some(body) = &make_type.body {
-        compile(body, opcodes)?;
+    if !make_type.exprs.is_empty() {
+        for expr in &make_type.exprs {
+            compile(expr, opcodes)?;
+        }
+
+        opcodes.push(OpCode::MakeStruct(make_type.exprs.len()), make_type.span);
     } else {
-        opcodes.push(OpCode::PushNil, make_type.span);
+        opcodes.push(OpCode::PushNil, make_type.span)
     }
 
     opcodes.push(OpCode::Cons, make_type.span);
