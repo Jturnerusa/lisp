@@ -601,7 +601,12 @@ impl Checker {
                             let id = self.types.instantiate_with(id, &subs);
 
                             let Ok(()) = self.types.unify(id, expr) else {
-                                todo!()
+                                return Err(Error::Unification {
+                                    message: "failed to unify variant fields".to_string(),
+                                    span: make_type.span,
+                                    a: MaybeUnknownType::from(self.types.construct(id)),
+                                    b: MaybeUnknownType::from(self.types.construct(expr)),
+                                });
                             };
                         }
                         _ => continue,
