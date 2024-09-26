@@ -211,7 +211,12 @@ impl Checker {
                 let ret = self.check_lambda(lambda, parameter_ids)?;
 
                 let Ok(()) = self.types.unify(id, ret) else {
-                    todo!()
+                    return Err(Error::Unification {
+                        message: "failed to unify return value with defined type".to_string(),
+                        span: def.span,
+                        a: MaybeUnknownType::from(self.types.construct(id)),
+                        b: MaybeUnknownType::from(self.types.construct(ret)),
+                    });
                 };
 
                 Ok(())
