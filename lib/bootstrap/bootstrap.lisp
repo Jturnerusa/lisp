@@ -188,3 +188,20 @@
         (if (> counter (- n 1))
             (option-some (car list))
             (loop (+ counter 1) (cdr list))))))
+
+(defun (option-map (fn 'a -> 'b) (option 'a) -> (option 'b)) (fn option)
+  (typecase option
+    ((option-some some)
+     (option-some (fn some)))
+    (else
+     (option-none))))
+
+(defun (option-and-then (fn 'a -> (option 'b))
+                        (option 'a)
+                        -> (option 'b))
+    (fn option)
+    (typecase option
+      ((option-some some)
+       (fn some))
+      (else
+       (option-none))))
