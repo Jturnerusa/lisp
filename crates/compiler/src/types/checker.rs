@@ -773,7 +773,10 @@ impl Checker {
         self.constructors
             .insert(ast::StructConstructor(constructor), r#struct.clone());
 
-        self.structs.insert(r#struct.name.clone(), r#struct);
+        self.structs.insert(r#struct.name.clone(), r#struct.clone());
+
+        self.user_types
+            .insert(r#struct.name.clone(), VariantOrStruct::Struct);
 
         Ok(())
     }
