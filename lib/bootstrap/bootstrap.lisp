@@ -7,6 +7,10 @@
   ;; These functions also should be available at compile time so they can
   ;; be used in macros.
 
+(deftype result
+  (ok 'a)
+  (err 'b))
+
 (deftype hlist
     (hlist (list hlist))
     (symbol symbol)
