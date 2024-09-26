@@ -42,6 +42,7 @@ enum VariantOrStruct {
 #[derive(Clone, Debug, EnumAs, EnumIs)]
 #[allow(clippy::enum_variant_names)]
 pub enum Type {
+    Any,
     DefType {
         name: String,
         parameters: Vec<Type>,
@@ -69,6 +70,7 @@ pub enum Type {
 #[derive(Clone, Debug, EnumAs, EnumIs)]
 #[allow(clippy::enum_variant_names)]
 pub enum TypeInfo {
+    Any,
     DefType {
         name: String,
         parameters: Vec<TypeId>,
@@ -225,6 +227,7 @@ impl Type {
                 }
                 _ => return Err(()),
             },
+            ast::Type::Scalar(t) if t == "any" => Type::Any,
             ast::Type::Scalar(t) if t == "symbol" => Type::Symbol,
             ast::Type::Scalar(t) if t == "string" => Type::String,
             ast::Type::Scalar(t) if t == "char" => Type::Char,
@@ -340,6 +343,8 @@ impl PartialEq for Type {
             (Type::Nil, Type::Nil) => true,
             (Type::List(_), Type::Nil) => true,
             (Type::Nil, Type::List(_)) => true,
+            (Type::Any, _) => true,
+            (_, Type::Any) => true,
             _ => false,
         }
     }
@@ -357,6 +362,7 @@ impl Types {
 
     pub(crate) fn construct(&self, id: TypeId) -> Option<Type> {
         Some(match self.vars[id].clone() {
+            TypeInfo::Any => Type::Any,
             TypeInfo::DefType { name, parameters } => {
                 let parameters = parameters
                     .iter()
@@ -412,6 +418,8 @@ impl Types {
     pub(crate) fn unify(&mut self, a: TypeId, b: TypeId) -> Result<(), ()> {
         match (self.vars[a].clone(), self.vars[b].clone()) {
             _ if a == b => Ok(()),
+            (TypeInfo::Any, _) => Ok(()),
+            (_, TypeInfo::Any) => Ok(()),
             (
                 TypeInfo::DefType {
                     name: name_a,
@@ -557,6 +565,7 @@ impl Types {
 
     fn insert_concrete_type(&mut self, r#type: Type) -> TypeId {
         match r#type {
+            Type::Any => self.insert(TypeInfo::Any),
             Type::DefType { name, parameters } => {
                 let parameters = parameters
                     .iter()
@@ -734,6 +743,7 @@ impl Types {
         seen.insert(id);
 
         let result = match self.vars[id].clone() {
+            TypeInfo::Any => "Any".to_string(),
             TypeInfo::DefType { name, parameters } => {
                 let mut buff = String::new();
                 buff += format!("{name}(").as_str();

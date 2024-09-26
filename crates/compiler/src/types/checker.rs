@@ -228,7 +228,13 @@ impl Checker {
                 Ok(())
             }
             Some(Err(())) => Err(Error::InvalidType(def.span)),
-            None => Err(Error::Annotation(def.span)),
+            None => {
+                self.globals.insert(
+                    def.parameter.name.clone(),
+                    PolyType::Mono(self.types.insert(TypeInfo::Any)),
+                );
+                Ok(())
+            }
         }
     }
 
