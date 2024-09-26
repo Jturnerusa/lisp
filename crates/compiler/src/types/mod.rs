@@ -1,6 +1,7 @@
 mod checker;
 use crate::ast;
 pub use checker::Checker;
+use core::fmt;
 use std::collections::{HashMap, HashSet};
 
 use error::FileSpan;
@@ -124,6 +125,15 @@ impl From<Option<Type>> for MaybeUnknownType {
     }
 }
 
+impl fmt::Display for MaybeUnknownType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Known(t) => write!(f, "known({t})"),
+            Self::Unknown => write!(f, "unknown"),
+        }
+    }
+}
+
 impl error::Error for Error {
     fn span(&self) -> Option<FileSpan> {
         match self {
@@ -142,7 +152,7 @@ impl error::Error for Error {
                 write!(writer, "invalid type annotation").unwrap();
             }
             Self::Unification { a, b, message, .. } => {
-                write!(writer, "{message}\n{a:?} | {b:?}").unwrap();
+                write!(writer, "{message}\n{a} | {b}").unwrap();
             }
             Self::DefType(_) => {
                 write!(writer, "unknown type").unwrap();
@@ -158,6 +168,63 @@ impl error::Error for Error {
                 "body resolved to unexpected type: expected: {expected:?}: received: {received:?}"
             )
             .unwrap(),
+        }
+    }
+}
+
+impl fmt::Display for Type {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Any => write!(f, "any"),
+            Self::DefType { name, parameters } => {
+                write!(f, "{name}")?;
+                if !parameters.is_empty() {
+                    write!(f, "(")?;
+                    for (i, parameter) in parameters.iter().enumerate() {
+                        write!(f, "{parameter}")?;
+                        if i < parameters.len() - 1 {
+                            write!(f, "| ")?;
+                        }
+                    }
+                    write!(f, ")")?;
+                }
+                Ok(())
+            }
+            Self::Struct { name, parameters } => {
+                write!(f, "{name}")?;
+                if !parameters.is_empty() {
+                    write!(f, "(")?;
+                    for (i, parameter) in parameters.iter().enumerate() {
+                        write!(f, "{parameter}")?;
+                        if i < parameters.len() - 1 {
+                            write!(f, " ")?;
+                        }
+                    }
+                    write!(f, ")")?;
+                }
+                Ok(())
+            }
+            Self::Function {
+                parameters,
+                r#return,
+                ..
+            } => {
+                write!(f, "fn ")?;
+                for parameter in parameters {
+                    write!(f, "{parameter}")?;
+                }
+                write!(f, " -> {}", r#return)?;
+                Ok(())
+            }
+            Self::List(inner) => write!(f, "list({inner})"),
+            Self::Generic(generic) => write!(f, "'{generic}"),
+            Self::Symbol => write!(f, "symbol"),
+            Self::String => write!(f, "string"),
+            Self::Char => write!(f, "char"),
+            Self::Int => write!(f, "int"),
+            Self::Bool => write!(f, "bool"),
+            Self::Nil => write!(f, "nil"),
+            _ => todo!(),
         }
     }
 }
