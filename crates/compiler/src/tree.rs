@@ -672,6 +672,8 @@ impl Compiler {
 
         let sexpr = reader.next().unwrap()?;
 
+        let sexpr = sexpr.set_span(ast.span());
+
         let ast = ast_compiler.compile(&sexpr)?;
 
         self.compile(&ast, vm, ast_compiler)
