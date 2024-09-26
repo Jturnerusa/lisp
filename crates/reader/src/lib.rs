@@ -142,6 +142,21 @@ impl Sexpr {
             | Self::Nil { span, .. } => *span,
         }
     }
+
+    pub fn set_span(&self, span: FileSpan) -> Sexpr {
+        match self.clone() {
+            Self::List { list, .. } => Self::List {
+                span,
+                list: list.iter().map(|sexpr| sexpr.set_span(span)).collect(),
+            },
+            Self::Symbol { symbol, .. } => Self::Symbol { symbol, span },
+            Self::String { string, .. } => Self::String { string, span },
+            Self::Char { char, .. } => Self::Char { char, span },
+            Self::Int { int, .. } => Self::Int { int, span },
+            Self::Bool { bool, .. } => Self::Bool { bool, span },
+            Self::Nil { .. } => Self::Nil { span },
+        }
+    }
 }
 
 impl<'src> Iterator for Reader<'src> {
