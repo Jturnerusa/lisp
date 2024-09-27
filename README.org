@@ -5,15 +5,18 @@ The core language should be as simple as possible, complex features should be im
 of the primitives where possible and reasonable. Let can be implemented with lambda, loops
 can be implemented with recusion, etc.
 
+The language should support an optional static type system.
+
 * Differences
 This lisp is intended to be similar to Emacs lisp, but functions and values are unified into a single
 namespace like in scheme.
 
 There is only one equality function, "=", no eq, eql, equal, etc.
 
-* Limitations
-This language is very unstable and many things are not implemented yet.
+This lisp also has an optional hindley-milner based type system, and built-in sum types.
 
+* Limitations
+This language is very unstable and many things are not implemented yet, and everything is subject to change.
 
 * Working with Carpet Lisp
 
@@ -34,24 +37,24 @@ export CARPET_LISP_PATH="$PWD/lib/lisp"
 #+end_src
 
 Sample lisp for testing:
-#+begin_example
-(require list)
+#+begin_src lisp
+  (require list)
 
-(def fib (lambda (n)
-           (if (< n 2)
-               n
-               (+ (fib (- n 1)) (fib (- n 2))))))
+  (defun (fib int -> int) (n)
+    (if (< n 2)
+        n
+        (+ (fib (- n 1))
+           (fib (- n 2))))))
 
-(named-let loop ((n 1))
-  (print (fib n))
-  (if (< n 10)
-      (loop (+ n 1))
-    nil))
-#+end_example
-
+  (named-let loop ((n 1))
+    (print (fib n))
+    (if (< n 10)
+        (loop (+ n 1))
+        nil))
+#+end_src
 Run the sample:
 #+begin_src bash
-cargo run --bin eval sample.lisp
+    cargo run --bin eval sample.lisp
 #+end_src
 
 This should result in a fibonaci sequence up to 10 indices:
@@ -69,6 +72,29 @@ This should result in a fibonaci sequence up to 10 indices:
 #+end_example
 
 * Features
+
+Sum types, structs and generics
+#+begin_src lisp
+  ; 'a is a type parameter
+  (deftype tree (branch tree tree) (leaf 'a))
+
+  (defun (tree-map (fn 'a -> 'b) (tree 'a) -> (tree 'b)) (fn tree)
+    (typecase tree
+      ((tree-branch l r)
+       (tree-branch (tree-map l) (tree-map r)))
+      ((tree-leaf a)
+       (tree-leaf (fn a)))))
+
+  (defstruct dog
+    (name string)
+    (age int))
+
+  (defun (dog-bark dog -> nil) (dog)
+    (print (dog-name dog))
+    (print (dog-age dog)))
+
+  (dog-bark (make-dog "lily" 4))
+#+end_src
 
 List of native functions:
 - =+=
@@ -107,7 +133,12 @@ List of native functions:
 - =module=
 - =export=
 - =require=
+- =defstruct=
+- =deftype=
+- =if-let=
 
 * Roadmap
-- Native Functions (string slicing, utils, etc.)
-- control flow graph for type system
+- More native Functions (string slicing, utils, etc.)
+- Pattern matching
+- Self hosting
+- Full global type inference
