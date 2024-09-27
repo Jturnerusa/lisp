@@ -173,6 +173,9 @@
        (lambda ,parameters
          ,@body)))
 
+(defun (panic -> any) ()
+    (assert false))
+
 (defun (fold (fn 'a 'a -> 'a) (list 'a) -> 'a) (fn list)
   (letrec ((loop (lambda (acc list)
                    (if (nil? list)
