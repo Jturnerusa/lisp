@@ -16,6 +16,9 @@ edition = "2021"
 [[bin]]
 name = "disasm"
 
+[[bin]]
+name = "check"
+
 [dependencies]
 reader = { path = "crates/reader" }
 compiler = { path = "crates/compiler" }

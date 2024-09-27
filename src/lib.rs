@@ -1,6 +1,7 @@
 #![feature(let_chains)]
 
 use compiler::ast::Ast;
+use compiler::tree;
 use error::FileSpan;
 use reader::Reader;
 use std::collections::HashMap;
@@ -22,7 +23,7 @@ pub fn compile_file(
     files: &mut HashMap<u64, PathBuf>,
     ast_compiler: &mut compiler::ast::Compiler,
     tree_compiler: &mut compiler::tree::Compiler,
-    type_checker: &mut compiler::types::Checker,
+    check_types: &mut dyn FnMut(&tree::Il) -> Result<(), compiler::types::Error>,
     vm: &mut Vm<FileSpan>,
     opcode_table: &mut OpCodeTable<FileSpan>,
 ) -> Result<(), Error> {
@@ -42,7 +43,7 @@ pub fn compile_file(
         files,
         ast_compiler,
         tree_compiler,
-        type_checker,
+        check_types,
         vm,
         opcode_table,
     )
@@ -54,7 +55,7 @@ pub fn compile_source(
     files: &mut HashMap<u64, PathBuf>,
     ast_compiler: &mut compiler::ast::Compiler,
     tree_compiler: &mut compiler::tree::Compiler,
-    type_checker: &mut compiler::types::Checker,
+    check_types: &mut dyn FnMut(&tree::Il) -> Result<(), compiler::types::Error>,
     vm: &mut Vm<FileSpan>,
     opcode_table: &mut OpCodeTable<FileSpan>,
 ) -> Result<(), Error> {
@@ -74,9 +75,7 @@ pub fn compile_source(
                 let tree = tree_compiler.compile(expr, vm, ast_compiler)?;
 
                 if let Some(t) = &tree {
-                    type_checker
-                        .check(t)
-                        .map_err(|e| Error::Spanned(Box::new(e)))?;
+                    check_types(t).map_err(|e| Error::Spanned(Box::new(e)))?;
 
                     compiler::bytecode::compile(t, &mut opcode_table)
                         .map_err(|e| Error::Spanned(Box::new(e)))?;
@@ -104,7 +103,7 @@ pub fn compile_source(
                 files,
                 ast_compiler,
                 tree_compiler,
-                type_checker,
+                check_types,
                 vm,
                 opcode_table,
             )?;
@@ -115,9 +114,7 @@ pub fn compile_source(
         let tree = tree_compiler.compile(&ast, vm, ast_compiler)?;
 
         if let Some(t) = &tree {
-            type_checker
-                .check(t)
-                .map_err(|e| Error::Spanned(Box::new(e)))?;
+            check_types(t).map_err(|e| Error::Spanned(Box::new(e)))?;
 
             compiler::bytecode::compile(t, opcode_table)
                 .map_err(|e| Error::Spanned(Box::new(e)))?;

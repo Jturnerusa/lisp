@@ -16,10 +16,13 @@ static NATIVE_DECL_SOURCE: &str = include_str!(concat!(
 
 fn main() {
     let mut ast_compiler = compiler::ast::Compiler::new();
+    let mut type_checker = compiler::types::Checker::new();
     let mut tree_compiler = compiler::tree::Compiler::new();
     let mut vm = Vm::new();
     let mut opcode_table = OpCodeTable::new();
     let mut files = HashMap::new();
+
+    let mut check_types = |tree: &compiler::tree::Il| type_checker.check(tree);
 
     native_functions::load_module(&mut vm);
 
@@ -34,7 +37,7 @@ fn main() {
         &mut files,
         &mut ast_compiler,
         &mut tree_compiler,
-        &mut |_| Ok(()),
+        &mut check_types,
         &mut vm,
         &mut opcode_table,
     )
@@ -46,7 +49,7 @@ fn main() {
         &mut files,
         &mut ast_compiler,
         &mut tree_compiler,
-        &mut |_| Ok(()),
+        &mut check_types,
         &mut vm,
         &mut opcode_table,
     ) {
@@ -69,7 +72,7 @@ fn main() {
             &mut files,
             &mut ast_compiler,
             &mut tree_compiler,
-            &mut |_| Ok(()),
+            &mut check_types,
             &mut vm,
             &mut opcode_table,
         ) {
@@ -82,14 +85,6 @@ fn main() {
                 display_error(&*error, &files, &mut std::io::stderr()).unwrap();
                 std::process::exit(1)
             }
-        }
-    }
-
-    match vm.eval(&opcode_table) {
-        Ok(_) => (),
-        Err(error) => {
-            display_error(&error, &files, &mut std::io::stderr()).unwrap();
-            std::process::exit(1);
         }
     }
 }

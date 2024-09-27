@@ -30,13 +30,15 @@ fn eval_with_bootstrap(input: &str) -> Result<Option<vm::Object<FileSpan>>, lisp
     let bootstrap_path = PathBuf::from(BOOTSTRAP_PATH);
     let bootstrap_file_id = lisp::hash_path(bootstrap_path.as_path());
 
+    let mut check_type = |tree: &tree::Il| type_checker.check(tree);
+
     compile_source(
         BOOTSTRAP_SOURCE,
         bootstrap_file_id,
         &mut files,
         &mut ast_compiler,
         &mut tree_compiler,
-        &mut type_checker,
+        &mut check_type,
         &mut vm,
         &mut opcode_table,
     )?;
@@ -47,7 +49,7 @@ fn eval_with_bootstrap(input: &str) -> Result<Option<vm::Object<FileSpan>>, lisp
         &mut files,
         &mut ast_compiler,
         &mut tree_compiler,
-        &mut type_checker,
+        &mut check_type,
         &mut vm,
         &mut opcode_table,
     )?;
@@ -69,13 +71,15 @@ fn eval(input: &'static str) -> Result<Option<vm::Object<FileSpan>>, lisp::Error
     let mut vm = Vm::new();
     let mut files = HashMap::new();
 
+    let mut check_type = |tree: &tree::Il| type_checker.check(tree);
+
     compile_source(
         input,
         0,
         &mut files,
         &mut ast_compiler,
         &mut tree_compiler,
-        &mut type_checker,
+        &mut check_type,
         &mut vm,
         &mut opcode_table,
     )?;
