@@ -192,6 +192,13 @@
             (option-some (car list))
             (loop (+ counter 1) (cdr list))))))
 
+(defun (any (fn 'a -> bool) (list 'a) -> bool) (fn list)
+  (if (nil? list)
+      false
+      (if (fn (car list))
+          true
+          (any fn (cdr list)))))
+
 (defun (option-map (fn 'a -> 'b) (option 'a) -> (option 'b)) (fn option)
   (typecase option
     ((option-some some)
