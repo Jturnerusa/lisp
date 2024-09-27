@@ -215,3 +215,25 @@
        (fn some))
       (else
        (option-none))))
+
+(defun (option-unwrap (option 'a) -> 'a) (option)
+  (typecase option
+    ((option-some some)
+     some)
+    (else
+     (panic))))
+
+(defun (option-some? (option 'a) -> bool) (option)
+  (typecase option
+    ((option-some _)
+     true)
+    (else
+     false)))
+
+(defun (option-none? (option 'a) -> bool) (option)
+  (not (option-some? option)))
+
+(defun (option-collect (list (option 'a)) -> (option (list 'a))) (options)
+  (if (any option-none? options)
+      (option-none)
+      (option-some (map option-unwrap options))))
