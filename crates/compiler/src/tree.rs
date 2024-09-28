@@ -111,7 +111,7 @@ pub struct DefParameter {
     pub r#type: Option<Type>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, EnumAs, EnumIs)]
 pub enum Parameters {
     Nary(Vec<String>),
     Variadic(Vec<String>),

@@ -261,13 +261,18 @@ impl Checker {
         let (parameters, rest): (Vec<TypeId>, Rest) = if !parameters.is_empty() {
             match &lambda.parameters {
                 tree::Parameters::Nary(_) => (parameters, Rest::None),
-                tree::Parameters::Variadic(_) => {
-                    let inner = parameters.last().unwrap();
-                    let list = self.types.insert(TypeInfo::List(*inner));
-                    (
-                        parameters[..parameters.len() - 1].to_vec(),
-                        Rest::Known(list),
-                    )
+                tree::Parameters::Variadic(n) => {
+                    let inner = parameters[n.len()];
+
+                    if !parameters[n.len()..parameters.len()]
+                        .iter()
+                        .all(|parameter| self.types.unify(inner, *parameter).is_ok())
+                    {
+                        panic!()
+                    }
+
+                    let list = self.types.insert(TypeInfo::List(inner));
+                    (parameters[..n.len()].to_vec(), Rest::Known(list))
                 }
             }
         } else {
@@ -340,8 +345,8 @@ impl Checker {
 
         let r#return = self.types.insert(TypeInfo::Unknown);
         let function = self.types.insert(TypeInfo::Function {
-            parameters: Parameters::Known(fncall_parameters),
-            rest: Rest::None,
+            parameters: Parameters::Unknown,
+            rest: Rest::Unknown,
             r#return,
         });
 
@@ -353,6 +358,63 @@ impl Checker {
                 b: MaybeUnknownType::from(self.types.construct(fncall_function)),
             });
         };
+
+        match self.types.vars[fncall_function].clone() {
+            TypeInfo::Function {
+                parameters: Parameters::Known(parameters),
+                rest: Rest::Known(rest),
+                ..
+            } => {
+                let non_variadic_parameters = fncall_parameters[0..parameters.len()].to_vec();
+                let variadic_parameters =
+                    fncall_parameters[parameters.len()..fncall_parameters.len()].to_vec();
+
+                for a in &variadic_parameters {
+                    for b in &variadic_parameters {
+                        let Ok(()) = self.types.unify(*a, *b) else {
+                            return Err(Error::Unification {
+                                message: "failed to unify variadic parameter".to_string(),
+                                span: fncall.span,
+                                a: MaybeUnknownType::from(self.types.construct(*a)),
+                                b: MaybeUnknownType::from(self.types.construct(*b)),
+                            });
+                        };
+                    }
+                }
+
+                let id = self.types.insert(TypeInfo::Function {
+                    parameters: Parameters::Known(non_variadic_parameters),
+                    rest: Rest::Known(rest),
+                    r#return,
+                });
+
+                let Ok(()) = self.types.unify(id, fncall_function) else {
+                    return Err(Error::Unification {
+                        message: "failed to unify fncall".to_string(),
+                        span: fncall.span,
+                        a: MaybeUnknownType::from(self.types.construct(id)),
+                        b: MaybeUnknownType::from(self.types.construct(fncall_function)),
+                    });
+                };
+            }
+            TypeInfo::Function { .. } => {
+                let id = self.types.insert(TypeInfo::Function {
+                    parameters: Parameters::Known(fncall_parameters),
+                    rest: Rest::Unknown,
+                    r#return,
+                });
+
+                let Ok(()) = self.types.unify(id, fncall_function) else {
+                    return Err(Error::Unification {
+                        message: "failed to unify fncall".to_string(),
+                        span: fncall.span,
+                        a: MaybeUnknownType::from(self.types.construct(id)),
+                        b: MaybeUnknownType::from(self.types.construct(fncall_function)),
+                    });
+                };
+            }
+            _ => unreachable!(),
+        }
 
         Ok(r#return)
     }

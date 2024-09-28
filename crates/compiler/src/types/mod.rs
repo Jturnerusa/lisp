@@ -571,6 +571,7 @@ impl Types {
                     {
                         return Err(())
                     }
+                    (Parameters::Unknown, Parameters::Unknown) => (),
                     _ => (),
                 }
 
@@ -596,7 +597,22 @@ impl Types {
                     (Rest::Known(a), Rest::Known(b)) => {
                         self.unify(a, b)?;
                     }
+                    (Rest::Unknown, Rest::None) => {
+                        self.vars[a] = TypeInfo::Function {
+                            parameters: parameters_a,
+                            rest: rest_b,
+                            r#return: return_a,
+                        }
+                    }
+                    (Rest::None, Rest::Unknown) => {
+                        self.vars[b] = TypeInfo::Function {
+                            parameters: parameters_b,
+                            rest: rest_a,
+                            r#return: return_b,
+                        }
+                    }
                     (Rest::None, Rest::None) => (),
+                    (Rest::Unknown, Rest::Unknown) => (),
                     _ => return Err(()),
                 }
 
