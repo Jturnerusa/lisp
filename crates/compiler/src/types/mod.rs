@@ -32,6 +32,7 @@ pub enum Error {
         expected: Type,
         received: Type,
     },
+    Arity(FileSpan),
 }
 
 #[derive(Clone, Copy, Debug, EnumAs, EnumIs)]
@@ -142,7 +143,8 @@ impl error::Error for Error {
             | Self::DefType(span)
             | Self::Failed(span)
             | Self::Annotation(span)
-            | Self::Expected { span, .. } => Some(*span),
+            | Self::Expected { span, .. }
+            | Self::Arity(span) => Some(*span),
         }
     }
 
@@ -168,6 +170,7 @@ impl error::Error for Error {
                 "body resolved to unexpected type: expected: {expected:?}: received: {received:?}"
             )
             .unwrap(),
+            Self::Arity(_) => write!(writer, "wrong number of arguments").unwrap(),
         }
     }
 }

@@ -196,7 +196,7 @@ impl Checker {
                     },
                 );
 
-                let (parameters, _, _) = t.as_function().unwrap();
+                let (parameters, rest, _) = t.as_function().unwrap();
 
                 let parameter_ids = parameters
                     .iter()
@@ -207,6 +207,16 @@ impl Checker {
                     tree::Il::Lambda(lambda) => lambda,
                     _ => unreachable!(),
                 };
+
+                if lambda.parameters.len()
+                    != if rest.is_some() {
+                        parameters.len() + 1
+                    } else {
+                        parameters.len()
+                    }
+                {
+                    return Err(Error::Arity(def.span));
+                }
 
                 let ret = self.check_lambda(lambda, parameter_ids)?;
 
