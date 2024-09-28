@@ -346,9 +346,6 @@ impl Checker {
         });
 
         let Ok(()) = self.types.unify(function, fncall_function) else {
-            dbg!(self
-                .types
-                .debug_typeid(fncall_function, &mut HashSet::new()));
             return Err(Error::Unification {
                 message: "failed to unify fncall".to_string(),
                 span: fncall.span,
