@@ -176,7 +176,7 @@
          ,@body)))
 
 (defun (panic -> any) ()
-    (assert false))
+  (assert false))
 
 (defun (fold (fn 'a 'a -> 'a) (list 'a) -> 'a) (fn list)
   (letrec ((loop (lambda (acc list)
@@ -212,11 +212,11 @@
                         (option 'a)
                         -> (option 'b))
     (fn option)
-    (typecase option
-      ((option-some some)
-       (fn some))
-      (else
-       (option-none))))
+  (typecase option
+    ((option-some some)
+     (fn some))
+    (else
+     (option-none))))
 
 (defun (option-unwrap (option 'a) -> 'a) (option)
   (typecase option
