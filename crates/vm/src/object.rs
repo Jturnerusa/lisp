@@ -412,7 +412,7 @@ unsafe impl<D> Trace for Struct<D> {
     }
 
     unsafe fn unroot(&self) {
-        self.fields.root()
+        self.fields.unroot()
     }
 
     unsafe fn trace(&self, tracer: &mut dyn FnMut(NonNull<gc::Inner<dyn Trace>>) -> bool) {
