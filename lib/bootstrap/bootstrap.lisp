@@ -169,7 +169,9 @@
              (typecase ,x ,@(cdr arms))))))
 
 (defmacro defun (def parameters &rest body)
-  `(def (,(car def) ,(cons 'fn (cdr def)))
+  `(def ,(if (cons? def)
+             `(,(car def) ,(cons 'fn (cdr def)))
+             def)
        (lambda ,parameters
          ,@body)))
 
