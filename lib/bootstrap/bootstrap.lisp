@@ -175,7 +175,8 @@
        (lambda ,parameters
          ,@body)))
 
-(defun (panic -> any) ()
+(defun (panic -> any) (message)
+  (print message)
   (assert false))
 
 (defun (fold (fn 'a 'a -> 'a) (list 'a) -> 'a) (fn list)
