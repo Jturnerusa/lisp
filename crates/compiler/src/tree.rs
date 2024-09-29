@@ -613,6 +613,8 @@ impl Compiler {
             })
             .collect::<Result<Vec<Il>, _>>()?;
 
+        self.environment.pop_scope();
+
         let lambda = Il::Lambda(self::Lambda {
             span: ast.span(),
             parameters,
