@@ -175,68 +175,69 @@
        (lambda ,parameters
          ,@body)))
 
-(defun (panic -> any) (message)
-  (print message)
-  (assert false))
+(eval-when-compile
+  (defun (panic -> any) (message)
+    (print message)
+    (assert false))
 
-(defun (fold (fn 'a 'a -> 'a) (list 'a) -> 'a) (fn list)
-  (letrec ((loop (lambda (acc list)
-                   (if (nil? list)
-                       acc
-                       (loop (fn acc (car list)) (cdr list))))))
-    (loop (car list) (cdr list))))
+  (defun (fold (fn 'a 'a -> 'a) (list 'a) -> 'a) (fn list)
+    (letrec ((loop (lambda (acc list)
+                     (if (nil? list)
+                         acc
+                         (loop (fn acc (car list)) (cdr list))))))
+      (loop (car list) (cdr list))))
 
-(defun (nth (list 'a) int -> (option 'a)) (list n)
-  (named-let loop ((counter 0)
-                   (list list))
+  (defun (nth (list 'a) int -> (option 'a)) (list n)
+    (named-let loop ((counter 0)
+                     (list list))
+      (if (nil? list)
+          (option-none)
+          (if (> counter (- n 1))
+              (option-some (car list))
+              (loop (+ counter 1) (cdr list))))))
+
+  (defun (any (fn 'a -> bool) (list 'a) -> bool) (fn list)
     (if (nil? list)
+        false
+        (if (fn (car list))
+            true
+            (any fn (cdr list)))))
+
+  (defun (option-map (fn 'a -> 'b) (option 'a) -> (option 'b)) (fn option)
+    (typecase option
+      ((option-some some)
+       (option-some (fn some)))
+      (else
+       (option-none))))
+
+  (defun (option-and-then (fn 'a -> (option 'b))
+                          (option 'a)
+                          -> (option 'b))
+      (fn option)
+    (typecase option
+      ((option-some some)
+       (fn some))
+      (else
+       (option-none))))
+
+  (defun (option-unwrap (option 'a) -> 'a) (option)
+    (typecase option
+      ((option-some some)
+       some)
+      (else
+       (panic))))
+
+  (defun (option-some? (option 'a) -> bool) (option)
+    (typecase option
+      ((option-some _)
+       true)
+      (else
+       false)))
+
+  (defun (option-none? (option 'a) -> bool) (option)
+    (not (option-some? option)))
+
+  (defun (option-collect (list (option 'a)) -> (option (list 'a))) (options)
+    (if (any option-none? options)
         (option-none)
-        (if (> counter (- n 1))
-            (option-some (car list))
-            (loop (+ counter 1) (cdr list))))))
-
-(defun (any (fn 'a -> bool) (list 'a) -> bool) (fn list)
-  (if (nil? list)
-      false
-      (if (fn (car list))
-          true
-          (any fn (cdr list)))))
-
-(defun (option-map (fn 'a -> 'b) (option 'a) -> (option 'b)) (fn option)
-  (typecase option
-    ((option-some some)
-     (option-some (fn some)))
-    (else
-     (option-none))))
-
-(defun (option-and-then (fn 'a -> (option 'b))
-                        (option 'a)
-                        -> (option 'b))
-    (fn option)
-  (typecase option
-    ((option-some some)
-     (fn some))
-    (else
-     (option-none))))
-
-(defun (option-unwrap (option 'a) -> 'a) (option)
-  (typecase option
-    ((option-some some)
-     some)
-    (else
-     (panic))))
-
-(defun (option-some? (option 'a) -> bool) (option)
-  (typecase option
-    ((option-some _)
-     true)
-    (else
-     false)))
-
-(defun (option-none? (option 'a) -> bool) (option)
-  (not (option-some? option)))
-
-(defun (option-collect (list (option 'a)) -> (option (list 'a))) (options)
-  (if (any option-none? options)
-      (option-none)
-      (option-some (map option-unwrap options))))
+        (option-some (map option-unwrap options)))))
