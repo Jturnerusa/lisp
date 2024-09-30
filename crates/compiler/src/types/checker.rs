@@ -413,6 +413,7 @@ impl Checker {
                     });
                 };
             }
+            TypeInfo::Any => (),
             _ => unreachable!(),
         }
 
