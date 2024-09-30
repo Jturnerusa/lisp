@@ -477,13 +477,17 @@ impl<D: Clone> Cons<D> {
 
 fn pretty_print<D: Clone>(cons: &Cons<D>, depth: usize, f: &mut fmt::Formatter) -> fmt::Result {
     let indent = " ".repeat(depth);
-    write!(f, "{indent}(")?;
-    for (i, expr) in cons.iter_cars().enumerate() {
-        write!(f, "{indent}{expr}")?;
-        if i < cons.iter_cars().count() - 1 {
-            write!(f, "{indent} ")?;
+    if !cons.1.is_nil() {
+        write!(f, "{indent}({} . {})", cons.0, cons.1)?;
+    } else {
+        write!(f, "{indent}(")?;
+        for (i, expr) in cons.iter_cars().enumerate() {
+            write!(f, "{indent}{expr}")?;
+            if i < cons.iter_cars().count() - 1 {
+                write!(f, "{indent} ")?;
+            }
         }
+        write!(f, ")")?;
     }
-    write!(f, ")")?;
     Ok(())
 }
