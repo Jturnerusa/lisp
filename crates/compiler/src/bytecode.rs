@@ -48,6 +48,8 @@ pub fn compile(il: &Il, opcodes: &mut OpCodeTable<FileSpan>) -> Result<(), Error
         Il::MakeType(make_type) => compile_make_type(make_type, opcodes),
         Il::IfLet(if_let) => compile_if_let(if_let, opcodes),
         Il::LetRec(letrec) => compile_letrec(letrec, opcodes),
+        Il::MakeStruct(make_struct) => compile_make_struct(make_struct, opcodes),
+        Il::GetField(field) => compile_get_field(field, opcodes),
         _ => Ok(()),
     }
 }
