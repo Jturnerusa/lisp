@@ -391,7 +391,7 @@ fn compile_if_let(if_let: &tree::IfLet, opcodes: &mut OpCodeTable<FileSpan>) -> 
     let else_length = r#else.len();
 
     let lambda = OpCode::Lambda {
-        arity: vm::Arity::Nary(1),
+        arity: vm::Arity::Nary(if_let.bindings.len()),
         body: Gc::new(then),
     };
 
@@ -406,19 +406,30 @@ fn compile_if_let(if_let: &tree::IfLet, opcodes: &mut OpCodeTable<FileSpan>) -> 
 
     opcodes.push(OpCode::Eq, if_let.span);
 
-    opcodes.push(OpCode::Branch(7), if_let.span);
+    opcodes.push(
+        OpCode::Branch(6 + (if_let.bindings.len() * 3) + if_let.upvalues.len()),
+        if_let.span,
+    );
 
     opcodes.push(lambda, if_let.span);
 
-    opcodes.push(OpCode::Peek(1), if_let.span);
-
-    opcodes.push(OpCode::Cdr, if_let.span);
-
-    opcodes.push(OpCode::Call(1), if_let.span);
+    for upvalue in &if_let.upvalues {
+        opcodes.push(OpCode::CreateUpValue(*upvalue), if_let.span);
+    }
 
     opcodes.push(OpCode::Swap, if_let.span);
 
+    opcodes.push(OpCode::Cdr, if_let.span);
+
+    for i in 0..if_let.bindings.len() {
+        opcodes.push(OpCode::Dup, if_let.span);
+        opcodes.push(OpCode::GetField(i), if_let.span);
+        opcodes.push(OpCode::Swap, if_let.span);
+    }
+
     opcodes.push(OpCode::Pop, if_let.span);
+
+    opcodes.push(OpCode::Call(if_let.bindings.len()), if_let.span);
 
     opcodes.push(OpCode::Jmp(else_length as isize), if_let.span);
 
