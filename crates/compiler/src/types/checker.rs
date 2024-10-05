@@ -4,7 +4,7 @@ use super::{
 use crate::ast::{self, VariantPattern};
 use crate::tree::{self, Il};
 use itertools::Itertools;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::iter;
 use unwrap_enum::{EnumAs, EnumIs};
 use vm::UpValue;
