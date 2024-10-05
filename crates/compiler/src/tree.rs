@@ -1,4 +1,4 @@
-use std::{collections::HashMap, env::Vars, iter};
+use std::collections::HashMap;
 
 use crate::{
     ast::{
@@ -512,7 +512,6 @@ impl Compiler {
             }
             Ast::MapItems(map_items) => self.compile_map_items(ast, map_items, vm, ast_compiler),
             Ast::Assert(assert) => self.compile_assert(ast, assert, vm, ast_compiler),
-            Ast::GenSym(_) => self.compile_gensym(ast),
             Ast::Constant(constant) => self.compile_constant(ast, constant),
             Ast::Variable(variable) => self.compile_variable_reference(ast, variable),
             Ast::DefType(deftype) => self.compile_deftype(deftype),
@@ -1163,20 +1162,6 @@ impl Compiler {
                 self.compile(&assert.body, vm, ast_compiler),
                 ast.span()
             )),
-        })))
-    }
-
-    fn compile_gensym(
-        &mut self,
-        ast: &Ast,
-    ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
-        let suffix = rand::random::<u32>();
-
-        let symbol = format!("e{suffix}");
-
-        Ok(Some(Il::Constant(Constant::Symbol {
-            span: ast.span(),
-            symbol,
         })))
     }
 

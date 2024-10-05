@@ -43,7 +43,6 @@ static BUILT_INS: &[&str] = &[
     "box",
     "set-box!",
     "unbox",
-    "gensym",
     "let-type",
     "deftype",
     "if-let",
@@ -109,7 +108,6 @@ pub enum Ast {
     Variable(Variable),
     Constant(Constant),
     Assert(Assert),
-    GenSym(GenSym),
     LetType(LetType),
     DefType(DefType),
     MakeType(MakeType),
@@ -375,11 +373,6 @@ pub enum Quoted {
 }
 
 #[derive(Clone, Debug)]
-pub struct GenSym {
-    pub span: FileSpan,
-}
-
-#[derive(Clone, Debug)]
 pub struct LetType {
     pub span: FileSpan,
     pub name: String,
@@ -597,9 +590,6 @@ impl Compiler {
                     }
                     [Symbol { symbol, .. }, map] if symbol == "map-items" => {
                         self.compile_map_items(sexpr, map)?
-                    }
-                    [Symbol { symbol, .. }] if symbol == "gensym" => {
-                        Ast::GenSym(GenSym { span: sexpr.span() })
                     }
                     [Symbol { symbol, .. }, Symbol { symbol: name, .. }, r#type]
                         if symbol == "let-type" =>
@@ -1335,7 +1325,6 @@ impl Ast {
             | Self::MapInsert(MapInsert { span, .. })
             | Self::MapRetrieve(MapRetrieve { span, .. })
             | Self::MapItems(MapItems { span, .. })
-            | Self::GenSym(GenSym { span })
             | Self::LetType(LetType { span, .. })
             | Self::DefType(DefType { span, .. })
             | Self::MakeType(MakeType { span, .. })
