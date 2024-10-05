@@ -1,3 +1,5 @@
+(decl (gensym (fn -> symbol)))
+
 (decl (print (fn 'a -> nil)))
 
 (decl (argv (fn -> nil)))

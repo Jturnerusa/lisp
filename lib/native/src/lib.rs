@@ -3,7 +3,8 @@ mod string;
 
 use std::{fmt::Debug, hash::Hash};
 
-use vm::Vm;
+use gc::Gc;
+use vm::{Error, Local, Object, Vm};
 
 #[macro_export]
 macro_rules! check_arity {
@@ -68,6 +69,7 @@ macro_rules! check_type {
 }
 
 pub fn load_module<D: Clone + PartialEq + PartialOrd + Hash + Debug>(vm: &mut Vm<D>) {
+    vm.load_native_function("gensym", gensym);
     vm.load_native_function("print", io::print);
     vm.load_native_function("read-file", io::read_file);
     vm.load_native_function("argv", io::argv);
@@ -82,4 +84,10 @@ pub fn load_module<D: Clone + PartialEq + PartialOrd + Hash + Debug>(vm: &mut Vm
     vm.load_native_function("string-substr", string::substr);
     vm.load_native_function("string-find", string::find);
     vm.load_native_function("string-starts-with?", string::starts_with);
+}
+
+pub fn gensym<D: Clone>(_: &mut [Local<D>]) -> Result<Object<D>, Error> {
+    let int = rand::random::<u64>();
+    let symbol = format!("e{int}");
+    Ok(Object::Symbol(Gc::new(symbol)))
 }
