@@ -28,6 +28,10 @@
       (lambda (list)
         (car list)))
 
+  (def (cdr (fn (list 't) -> 't))
+      (lambda (list)
+        (cdr list)))
+
   (def (+ (fn int int -> int))
       (lambda (a b)
         (+ a b)))
