@@ -45,3 +45,18 @@
                      (l (take list mid))
                      (r (drop list mid)))
                 (merge pred (sort l pred) (sort r pred)))))))
+
+(defun (unique (fn 'a 'a -> bool)
+               (list 'a)
+               -> (list 'a))
+    (fn elements)
+  (named-let loop ((elements elements)
+                   (unique nil))
+    (if (nil? elements)
+        unique
+        (loop (cdr elements) (let ((element (car elements)))
+                               (if (any? (lambda (e)
+                                           (fn element e))
+                                         unique)
+                                   unique
+                                   (cons element unique)))))))
