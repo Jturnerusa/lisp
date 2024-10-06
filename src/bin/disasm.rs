@@ -1,7 +1,13 @@
 use core::fmt;
+use error::FileSpan;
 use lisp::{compile_file, compile_source, display_error, hash_path};
-use std::{collections::HashMap, env, fs, path::PathBuf};
-use vm::{OpCode, OpCodeTable, Vm};
+use std::{
+    collections::HashMap,
+    env, fs,
+    hash::{Hash, Hasher},
+    path::PathBuf,
+};
+use vm::{Constant, OpCode, OpCodeTable, Vm};
 
 static BOOTSTRAP_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/lib/bootstrap/bootstrap.lisp");
 
@@ -20,6 +26,7 @@ fn main() {
     let mut tree_compiler = compiler::tree::Compiler::new();
     let mut vm = Vm::new();
     let mut opcode_table = OpCodeTable::new();
+    let mut constants = Vec::new();
     let mut files = HashMap::new();
 
     native_functions::load_module(&mut vm);
@@ -38,6 +45,7 @@ fn main() {
         &mut |_| Ok(()),
         &mut vm,
         &mut OpCodeTable::new(),
+        &mut constants,
     ) {
         Ok(_) => (),
         Err(lisp::Error::Std(error)) => {
@@ -59,6 +67,7 @@ fn main() {
         &mut |_| Ok(()),
         &mut vm,
         &mut OpCodeTable::new(),
+        &mut constants,
     )
     .unwrap();
 
@@ -73,6 +82,7 @@ fn main() {
             &mut |_| Ok(()),
             &mut vm,
             &mut opcode_table,
+            &mut constants,
         ) {
             Ok(_) => (),
             Err(lisp::Error::Std(error)) => {
@@ -86,18 +96,40 @@ fn main() {
         }
     }
 
-    disasm(&opcode_table, 0);
+    let constants_table = constants
+        .iter()
+        .map(|constant| {
+            let hash = hash(&constant);
+            (hash, constant.clone())
+        })
+        .collect::<HashMap<u64, Constant<FileSpan>>>();
+
+    disasm(&opcode_table, &constants_table, 0);
 }
 
-fn disasm<D: fmt::Debug>(opcode_table: &OpCodeTable<D>, depth: usize) {
+fn disasm<D: fmt::Debug>(
+    opcode_table: &OpCodeTable<D>,
+    constants_table: &HashMap<u64, Constant<D>>,
+    depth: usize,
+) {
     let indent = " ".repeat(depth);
 
     for opcode in opcode_table.opcodes() {
-        if let OpCode::Lambda { body, .. } = opcode {
+        if let OpCode::Lambda(_, body) = opcode {
             println!("{indent}{opcode:?}");
-            disasm(body, depth + 1);
+            disasm(
+                constants_table[body].as_opcodetable().unwrap(),
+                constants_table,
+                depth + 1,
+            );
         } else {
             println!("{indent}{opcode:?}");
         }
     }
+}
+
+fn hash<T: Hash>(hash: T) -> u64 {
+    let mut hasher = std::hash::DefaultHasher::new();
+    hash.hash(&mut hasher);
+    hasher.finish()
 }

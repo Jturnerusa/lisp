@@ -20,6 +20,7 @@ fn main() {
     let mut tree_compiler = compiler::tree::Compiler::new();
     let mut vm = Vm::new();
     let mut opcode_table = OpCodeTable::new();
+    let mut constants = Vec::new();
     let mut files = HashMap::new();
 
     let mut check_types = |tree: &compiler::tree::Il| type_checker.check(tree);
@@ -40,6 +41,7 @@ fn main() {
         &mut check_types,
         &mut vm,
         &mut opcode_table,
+        &mut constants,
     )
     .unwrap();
 
@@ -52,6 +54,7 @@ fn main() {
         &mut check_types,
         &mut vm,
         &mut opcode_table,
+        &mut constants,
     ) {
         Ok(_) => (),
         Err(lisp::Error::Std(error)) => {
@@ -75,6 +78,7 @@ fn main() {
             &mut check_types,
             &mut vm,
             &mut opcode_table,
+            &mut constants,
         ) {
             Ok(_) => (),
             Err(lisp::Error::Std(error)) => {
