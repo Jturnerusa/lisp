@@ -106,10 +106,6 @@
 (defmacro progn (&rest body)
   (list (cons 'lambda (cons '() body))))
 
-(defmacro let (bindings &rest body)
-  (cons (cons 'lambda (cons (map car bindings) body))
-        (map cadr bindings)))
-
 (defmacro let* (bindings &rest body)
   (if (nil? bindings)
       (list (cons 'lambda (cons '() body)))
@@ -151,6 +147,15 @@
                              (true
                               (list 'list (list 'quote expr)))))
                      exprs)))
+
+(defmacro let (bindings &rest body)
+  (if (symbol? bindings)
+      `(letrec ((,bindings (lambda ,(map car (car body))
+                             ,@(cdr body))))
+         (,bindings ,@(map cadr (car body))))
+      `((lambda ,(map car bindings)
+          ,@body)
+        ,@(map cadr bindings))))
 
 (defmacro when (pred body)
   `(if ,pred ,body nil))
