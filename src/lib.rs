@@ -26,6 +26,7 @@ pub fn compile_file(
     check_types: &mut dyn FnMut(&tree::Il) -> Result<(), compiler::types::Error>,
     vm: &mut Vm<FileSpan>,
     opcode_table: &mut OpCodeTable<FileSpan>,
+    constants: &mut Vec<vm::Constant<FileSpan>>,
 ) -> Result<(), Error> {
     let absolute = fs::canonicalize(path).map_err(|e| Error::Std(Box::new(e)))?;
     let file_id = hash_path(absolute.as_path());
@@ -46,6 +47,7 @@ pub fn compile_file(
         check_types,
         vm,
         opcode_table,
+        constants,
     )
 }
 
@@ -58,6 +60,7 @@ pub fn compile_source(
     check_types: &mut dyn FnMut(&tree::Il) -> Result<(), compiler::types::Error>,
     vm: &mut Vm<FileSpan>,
     opcode_table: &mut OpCodeTable<FileSpan>,
+    constants: &mut Vec<vm::Constant<FileSpan>>,
 ) -> Result<(), Error> {
     let reader = Reader::new(source, file_id);
 
@@ -70,6 +73,7 @@ pub fn compile_source(
 
         if let Ast::EvalWhenCompile(eval_when_compile) = &ast {
             let mut opcode_table = OpCodeTable::new();
+            let mut constants = Vec::new();
 
             for expr in &eval_when_compile.exprs {
                 if let Ast::Require(require) = expr {
@@ -85,6 +89,7 @@ pub fn compile_source(
                     };
 
                     let mut opcode_table = OpCodeTable::new();
+                    let mut constants = Vec::new();
 
                     compile_file(
                         module.as_path(),
@@ -94,7 +99,12 @@ pub fn compile_source(
                         check_types,
                         vm,
                         &mut opcode_table,
+                        &mut constants,
                     )?;
+
+                    for constant in constants {
+                        vm.load_constant(constant);
+                    }
 
                     vm.eval(&opcode_table)
                         .map_err(|e| Error::Spanned(Box::new(e)))?;
@@ -107,9 +117,13 @@ pub fn compile_source(
                 if let Some(t) = &tree {
                     check_types(t).map_err(|e| Error::Spanned(Box::new(e)))?;
 
-                    compiler::bytecode::compile(t, &mut opcode_table)
+                    compiler::bytecode::compile(t, &mut opcode_table, &mut constants)
                         .map_err(|e| Error::Spanned(Box::new(e)))?;
                 }
+            }
+
+            for constant in constants {
+                vm.load_constant(constant);
             }
 
             vm.eval(&opcode_table)
@@ -129,6 +143,7 @@ pub fn compile_source(
             };
 
             let mut opcode_table = OpCodeTable::new();
+            let mut constants = Vec::new();
 
             compile_file(
                 module.as_path(),
@@ -138,7 +153,12 @@ pub fn compile_source(
                 check_types,
                 vm,
                 &mut opcode_table,
+                &mut constants,
             )?;
+
+            for constant in constants {
+                vm.load_constant(constant);
+            }
 
             vm.eval(&opcode_table)
                 .map_err(|e| Error::Spanned(Box::new(e)))?;
@@ -151,7 +171,7 @@ pub fn compile_source(
         if let Some(t) = &tree {
             check_types(t).map_err(|e| Error::Spanned(Box::new(e)))?;
 
-            compiler::bytecode::compile(t, opcode_table)
+            compiler::bytecode::compile(t, opcode_table, constants)
                 .map_err(|e| Error::Spanned(Box::new(e)))?;
         }
     }

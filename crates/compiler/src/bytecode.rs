@@ -4,7 +4,8 @@ use crate::tree::{self, Il};
 use core::fmt;
 use error::FileSpan;
 use gc::Gc;
-use vm::{OpCode, OpCodeTable};
+use std::hash::{Hash, Hasher};
+use vm::{Constant, OpCode, OpCodeTable};
 
 #[derive(Clone, Debug)]
 pub struct Error {
@@ -20,41 +21,49 @@ impl fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-pub fn compile(il: &Il, opcodes: &mut OpCodeTable<FileSpan>) -> Result<(), Error> {
+pub fn compile(
+    il: &Il,
+    opcodes: &mut OpCodeTable<FileSpan>,
+    constants: &mut Vec<Constant<FileSpan>>,
+) -> Result<(), Error> {
     match il {
-        Il::Lambda(lambda) => compile_lambda(lambda, opcodes),
-        Il::Def(def) => compile_def(def, opcodes),
-        Il::Set(set) => compile_set(set, opcodes),
-        Il::SetBox(setbox) => compile_setbox(setbox, opcodes),
-        Il::Box(r#box) => compile_box(r#box, opcodes),
-        Il::UnBox(unbox) => compile_unbox(unbox, opcodes),
-        Il::If(r#if) => compile_if(r#if, opcodes),
-        Il::Cons(cons) => compile_cons(cons, opcodes),
-        Il::Car(car) => compile_car(car, opcodes),
-        Il::Cdr(cdr) => compile_cdr(cdr, opcodes),
-        Il::VarRef(varref) => compile_varref(varref, opcodes),
-        Il::Constant(constant) => compile_constant(constant, opcodes),
-        Il::List(list) => compile_list(list, opcodes),
-        Il::FnCall(fncall) => compile_fncall(fncall, opcodes),
-        Il::ArithmeticOperation(op) => compile_arithmetic_operation(op, opcodes),
-        Il::ComparisonOperation(op) => compile_comparison_operation(op, opcodes),
-        Il::IsType(is_type) => compile_is_type(is_type, opcodes),
-        Il::Apply(apply) => compile_apply(apply, opcodes),
-        Il::Assert(assert) => compile_assert(assert, opcodes),
+        Il::Lambda(lambda) => compile_lambda(lambda, opcodes, constants),
+        Il::Def(def) => compile_def(def, opcodes, constants),
+        Il::Set(set) => compile_set(set, opcodes, constants),
+        Il::SetBox(setbox) => compile_setbox(setbox, opcodes, constants),
+        Il::Box(r#box) => compile_box(r#box, opcodes, constants),
+        Il::UnBox(unbox) => compile_unbox(unbox, opcodes, constants),
+        Il::If(r#if) => compile_if(r#if, opcodes, constants),
+        Il::Cons(cons) => compile_cons(cons, opcodes, constants),
+        Il::Car(car) => compile_car(car, opcodes, constants),
+        Il::Cdr(cdr) => compile_cdr(cdr, opcodes, constants),
+        Il::VarRef(varref) => compile_varref(varref, opcodes, constants),
+        Il::Constant(constant) => compile_constant(constant, opcodes, constants),
+        Il::List(list) => compile_list(list, opcodes, constants),
+        Il::FnCall(fncall) => compile_fncall(fncall, opcodes, constants),
+        Il::ArithmeticOperation(op) => compile_arithmetic_operation(op, opcodes, constants),
+        Il::ComparisonOperation(op) => compile_comparison_operation(op, opcodes, constants),
+        Il::IsType(is_type) => compile_is_type(is_type, opcodes, constants),
+        Il::Apply(apply) => compile_apply(apply, opcodes, constants),
+        Il::Assert(assert) => compile_assert(assert, opcodes, constants),
         Il::MapCreate(map_create) => compile_map_create(map_create, opcodes),
-        Il::MapInsert(map_insert) => compile_map_insert(map_insert, opcodes),
-        Il::MapRetrieve(map_retrieve) => compile_map_retrieve(map_retrieve, opcodes),
-        Il::MapItems(map_items) => compile_map_items(map_items, opcodes),
-        Il::MakeType(make_type) => compile_make_type(make_type, opcodes),
-        Il::IfLet(if_let) => compile_if_let(if_let, opcodes),
-        Il::LetRec(letrec) => compile_letrec(letrec, opcodes),
-        Il::MakeStruct(make_struct) => compile_make_struct(make_struct, opcodes),
-        Il::GetField(field) => compile_get_field(field, opcodes),
+        Il::MapInsert(map_insert) => compile_map_insert(map_insert, opcodes, constants),
+        Il::MapRetrieve(map_retrieve) => compile_map_retrieve(map_retrieve, opcodes, constants),
+        Il::MapItems(map_items) => compile_map_items(map_items, opcodes, constants),
+        Il::MakeType(make_type) => compile_make_type(make_type, opcodes, constants),
+        Il::IfLet(if_let) => compile_if_let(if_let, opcodes, constants),
+        Il::LetRec(letrec) => compile_letrec(letrec, opcodes, constants),
+        Il::MakeStruct(make_struct) => compile_make_struct(make_struct, opcodes, constants),
+        Il::GetField(field) => compile_get_field(field, opcodes, constants),
         _ => Ok(()),
     }
 }
 
-fn compile_varref(varref: &tree::VarRef, opcodes: &mut OpCodeTable<FileSpan>) -> Result<(), Error> {
+fn compile_varref(
+    varref: &tree::VarRef,
+    opcodes: &mut OpCodeTable<FileSpan>,
+    constants: &mut Vec<Constant<FileSpan>>,
+) -> Result<(), Error> {
     match varref {
         tree::VarRef::Local { index, .. } => {
             opcodes.push(OpCode::GetLocal(*index), varref.span());
@@ -63,7 +72,10 @@ fn compile_varref(varref: &tree::VarRef, opcodes: &mut OpCodeTable<FileSpan>) ->
             opcodes.push(OpCode::GetUpValue(*index), varref.span());
         }
         tree::VarRef::Global { name, .. } => {
-            opcodes.push(OpCode::GetGlobal(Gc::new(name.clone())), varref.span())
+            let constant = Constant::Symbol(Gc::new(name.clone()));
+            let hash = hash_constant(&constant);
+            constants.push(constant);
+            opcodes.push(OpCode::GetGlobal(hash), varref.span())
         }
     };
 
@@ -73,10 +85,21 @@ fn compile_varref(varref: &tree::VarRef, opcodes: &mut OpCodeTable<FileSpan>) ->
 fn compile_constant(
     constant: &tree::Constant,
     opcodes: &mut OpCodeTable<FileSpan>,
+    constants: &mut Vec<Constant<FileSpan>>,
 ) -> Result<(), Error> {
     let op = match constant {
-        tree::Constant::Symbol { symbol, .. } => OpCode::PushSymbol(Gc::new(symbol.clone())),
-        tree::Constant::String { string, .. } => OpCode::PushString(Gc::new(string.clone())),
+        tree::Constant::Symbol { symbol, .. } => {
+            let constant = Constant::Symbol(Gc::new(symbol.clone()));
+            let hash = hash_constant(&constant);
+            constants.push(constant);
+            OpCode::PushSymbol(hash)
+        }
+        tree::Constant::String { string, .. } => {
+            let constant = Constant::String(Gc::new(string.clone()));
+            let hash = hash_constant(&constant);
+            constants.push(constant);
+            OpCode::PushString(hash)
+        }
         tree::Constant::Char { char, .. } => OpCode::PushChar(*char),
         tree::Constant::Int { int, .. } => OpCode::PushInt(*int),
         tree::Constant::Bool { bool, .. } => OpCode::PushBool(*bool),
@@ -88,24 +111,26 @@ fn compile_constant(
     Ok(())
 }
 
-fn compile_lambda(lambda: &tree::Lambda, opcodes: &mut OpCodeTable<FileSpan>) -> Result<(), Error> {
+fn compile_lambda(
+    lambda: &tree::Lambda,
+    opcodes: &mut OpCodeTable<FileSpan>,
+    constants: &mut Vec<Constant<FileSpan>>,
+) -> Result<(), Error> {
     let mut lambda_opcode_table = OpCodeTable::new();
 
     for expr in &lambda.body {
-        compile(expr, &mut lambda_opcode_table)?;
+        compile(expr, &mut lambda_opcode_table, constants)?;
     }
 
     lambda_opcode_table.push(OpCode::Return, lambda.span);
 
     let optimized_opcode_table = optimizer::optimize(&lambda_opcode_table);
 
-    opcodes.push(
-        OpCode::Lambda {
-            arity: lambda.arity,
-            body: Gc::new(optimized_opcode_table),
-        },
-        lambda.span,
-    );
+    let constant = Constant::OpCodeTable(Gc::new(optimized_opcode_table));
+    let hash = hash_constant(&constant);
+    constants.push(constant);
+
+    opcodes.push(OpCode::Lambda(lambda.arity, hash), lambda.span);
 
     for upvalue in &lambda.upvalues {
         opcodes.push(vm::OpCode::CreateUpValue(*upvalue), lambda.span);
@@ -114,13 +139,17 @@ fn compile_lambda(lambda: &tree::Lambda, opcodes: &mut OpCodeTable<FileSpan>) ->
     Ok(())
 }
 
-fn compile_if(r#if: &tree::If, opcodes: &mut OpCodeTable<FileSpan>) -> Result<(), Error> {
+fn compile_if(
+    r#if: &tree::If,
+    opcodes: &mut OpCodeTable<FileSpan>,
+    constants: &mut Vec<Constant<FileSpan>>,
+) -> Result<(), Error> {
     let mut then_opcodes = OpCodeTable::new();
     let mut else_opcodes = OpCodeTable::new();
 
-    compile(&r#if.predicate, opcodes)?;
-    compile(&r#if.then, &mut then_opcodes)?;
-    compile(&r#if.r#else, &mut else_opcodes)?;
+    compile(&r#if.predicate, opcodes, constants)?;
+    compile(&r#if.then, &mut then_opcodes, constants)?;
+    compile(&r#if.r#else, &mut else_opcodes, constants)?;
 
     opcodes.push(OpCode::Branch(then_opcodes.len() + 1), r#if.span);
 
@@ -132,19 +161,28 @@ fn compile_if(r#if: &tree::If, opcodes: &mut OpCodeTable<FileSpan>) -> Result<()
     Ok(())
 }
 
-fn compile_def(def: &tree::Def, opcodes: &mut OpCodeTable<FileSpan>) -> Result<(), Error> {
-    compile(&def.body, opcodes)?;
+fn compile_def(
+    def: &tree::Def,
+    opcodes: &mut OpCodeTable<FileSpan>,
+    constants: &mut Vec<Constant<FileSpan>>,
+) -> Result<(), Error> {
+    compile(&def.body, opcodes, constants)?;
 
-    opcodes.push(
-        OpCode::DefGlobal(Gc::new(def.parameter.name.clone())),
-        def.span,
-    );
+    let constant = Constant::Symbol(Gc::new(def.parameter.name.clone()));
+    let hash = hash_constant(&constant);
+    constants.push(constant);
+
+    opcodes.push(OpCode::DefGlobal(hash), def.span);
 
     Ok(())
 }
 
-fn compile_set(set: &tree::Set, opcodes: &mut OpCodeTable<FileSpan>) -> Result<(), Error> {
-    compile(&set.body, opcodes)?;
+fn compile_set(
+    set: &tree::Set,
+    opcodes: &mut OpCodeTable<FileSpan>,
+    constants: &mut Vec<Constant<FileSpan>>,
+) -> Result<(), Error> {
+    compile(&set.body, opcodes, constants)?;
 
     match &set.target {
         tree::VarRef::Local { index, .. } => {
@@ -154,32 +192,47 @@ fn compile_set(set: &tree::Set, opcodes: &mut OpCodeTable<FileSpan>) -> Result<(
             opcodes.push(OpCode::SetUpValue(*index), set.span);
         }
         tree::VarRef::Global { name, .. } => {
-            opcodes.push(OpCode::SetGlobal(Gc::new(name.clone())), set.span);
+            let constant = Constant::Symbol(Gc::new(name.clone()));
+            let hash = hash_constant(&constant);
+            constants.push(constant);
+            opcodes.push(OpCode::SetGlobal(hash), set.span);
         }
     };
 
     Ok(())
 }
 
-fn compile_setbox(setbox: &tree::SetBox, opcodes: &mut OpCodeTable<FileSpan>) -> Result<(), Error> {
-    compile(&setbox.target, opcodes)?;
-    compile(&setbox.body, opcodes)?;
+fn compile_setbox(
+    setbox: &tree::SetBox,
+    opcodes: &mut OpCodeTable<FileSpan>,
+    constants: &mut Vec<Constant<FileSpan>>,
+) -> Result<(), Error> {
+    compile(&setbox.target, opcodes, constants)?;
+    compile(&setbox.body, opcodes, constants)?;
 
     opcodes.push(OpCode::SetBox, setbox.span);
 
     Ok(())
 }
 
-fn compile_box(r#box: &tree::Box, opcodes: &mut OpCodeTable<FileSpan>) -> Result<(), Error> {
-    compile(&r#box.body, opcodes)?;
+fn compile_box(
+    r#box: &tree::Box,
+    opcodes: &mut OpCodeTable<FileSpan>,
+    constants: &mut Vec<Constant<FileSpan>>,
+) -> Result<(), Error> {
+    compile(&r#box.body, opcodes, constants)?;
 
     opcodes.push(OpCode::Box, r#box.span);
 
     Ok(())
 }
 
-fn compile_unbox(unbox: &tree::UnBox, opcodes: &mut OpCodeTable<FileSpan>) -> Result<(), Error> {
-    compile(&unbox.body, opcodes)?;
+fn compile_unbox(
+    unbox: &tree::UnBox,
+    opcodes: &mut OpCodeTable<FileSpan>,
+    constants: &mut Vec<Constant<FileSpan>>,
+) -> Result<(), Error> {
+    compile(&unbox.body, opcodes, constants)?;
 
     opcodes.push(OpCode::UnBox, unbox.span);
 
@@ -189,9 +242,10 @@ fn compile_unbox(unbox: &tree::UnBox, opcodes: &mut OpCodeTable<FileSpan>) -> Re
 fn compile_arithmetic_operation(
     arithmetic_op: &tree::ArithmeticOperation,
     opcodes: &mut OpCodeTable<FileSpan>,
+    constants: &mut Vec<Constant<FileSpan>>,
 ) -> Result<(), Error> {
-    compile(&arithmetic_op.lhs, opcodes)?;
-    compile(&arithmetic_op.rhs, opcodes)?;
+    compile(&arithmetic_op.lhs, opcodes, constants)?;
+    compile(&arithmetic_op.rhs, opcodes, constants)?;
 
     opcodes.push(
         match arithmetic_op.operator {
@@ -209,9 +263,10 @@ fn compile_arithmetic_operation(
 fn compile_comparison_operation(
     comparison_op: &tree::ComparisonOperation,
     opcodes: &mut OpCodeTable<FileSpan>,
+    constants: &mut Vec<Constant<FileSpan>>,
 ) -> Result<(), Error> {
-    compile(&comparison_op.lhs, opcodes)?;
-    compile(&comparison_op.rhs, opcodes)?;
+    compile(&comparison_op.lhs, opcodes, constants)?;
+    compile(&comparison_op.rhs, opcodes, constants)?;
 
     opcodes.push(
         match comparison_op.operator {
@@ -225,9 +280,13 @@ fn compile_comparison_operation(
     Ok(())
 }
 
-fn compile_list(list: &tree::List, opcodes: &mut OpCodeTable<FileSpan>) -> Result<(), Error> {
+fn compile_list(
+    list: &tree::List,
+    opcodes: &mut OpCodeTable<FileSpan>,
+    constants: &mut Vec<Constant<FileSpan>>,
+) -> Result<(), Error> {
     for expr in &list.exprs {
-        compile(expr, opcodes)?;
+        compile(expr, opcodes, constants)?;
     }
 
     opcodes.push(OpCode::List(list.exprs.len()), list.span);
@@ -235,11 +294,15 @@ fn compile_list(list: &tree::List, opcodes: &mut OpCodeTable<FileSpan>) -> Resul
     Ok(())
 }
 
-fn compile_fncall(fncall: &tree::FnCall, opcodes: &mut OpCodeTable<FileSpan>) -> Result<(), Error> {
-    compile(&fncall.function, opcodes)?;
+fn compile_fncall(
+    fncall: &tree::FnCall,
+    opcodes: &mut OpCodeTable<FileSpan>,
+    constants: &mut Vec<Constant<FileSpan>>,
+) -> Result<(), Error> {
+    compile(&fncall.function, opcodes, constants)?;
 
     for arg in &fncall.args {
-        compile(arg, opcodes)?
+        compile(arg, opcodes, constants)?
     }
 
     opcodes.push(OpCode::Call(fncall.args.len()), fncall.span);
@@ -247,25 +310,37 @@ fn compile_fncall(fncall: &tree::FnCall, opcodes: &mut OpCodeTable<FileSpan>) ->
     Ok(())
 }
 
-fn compile_cons(cons: &tree::Cons, opcodes: &mut OpCodeTable<FileSpan>) -> Result<(), Error> {
-    compile(&cons.lhs, opcodes)?;
-    compile(&cons.rhs, opcodes)?;
+fn compile_cons(
+    cons: &tree::Cons,
+    opcodes: &mut OpCodeTable<FileSpan>,
+    constants: &mut Vec<Constant<FileSpan>>,
+) -> Result<(), Error> {
+    compile(&cons.lhs, opcodes, constants)?;
+    compile(&cons.rhs, opcodes, constants)?;
 
     opcodes.push(OpCode::Cons, cons.span);
 
     Ok(())
 }
 
-fn compile_car(car: &tree::Car, opcodes: &mut OpCodeTable<FileSpan>) -> Result<(), Error> {
-    compile(&car.body, opcodes)?;
+fn compile_car(
+    car: &tree::Car,
+    opcodes: &mut OpCodeTable<FileSpan>,
+    constants: &mut Vec<Constant<FileSpan>>,
+) -> Result<(), Error> {
+    compile(&car.body, opcodes, constants)?;
 
     opcodes.push(OpCode::Car, car.span);
 
     Ok(())
 }
 
-fn compile_cdr(cdr: &tree::Cdr, opcodes: &mut OpCodeTable<FileSpan>) -> Result<(), Error> {
-    compile(&cdr.body, opcodes)?;
+fn compile_cdr(
+    cdr: &tree::Cdr,
+    opcodes: &mut OpCodeTable<FileSpan>,
+    constants: &mut Vec<Constant<FileSpan>>,
+) -> Result<(), Error> {
+    compile(&cdr.body, opcodes, constants)?;
 
     opcodes.push(OpCode::Cdr, cdr.span);
 
@@ -275,8 +350,9 @@ fn compile_cdr(cdr: &tree::Cdr, opcodes: &mut OpCodeTable<FileSpan>) -> Result<(
 fn compile_is_type(
     is_type: &tree::IsType,
     opcodes: &mut OpCodeTable<FileSpan>,
+    constants: &mut Vec<Constant<FileSpan>>,
 ) -> Result<(), Error> {
-    compile(&is_type.body, opcodes)?;
+    compile(&is_type.body, opcodes, constants)?;
 
     let vm_type = match is_type.r#type {
         tree::IsTypeParameter::Function => vm::object::Type::Function,
@@ -294,17 +370,25 @@ fn compile_is_type(
     Ok(())
 }
 
-fn compile_apply(apply: &tree::Apply, opcodes: &mut OpCodeTable<FileSpan>) -> Result<(), Error> {
-    compile(&apply.function, opcodes)?;
-    compile(&apply.list, opcodes)?;
+fn compile_apply(
+    apply: &tree::Apply,
+    opcodes: &mut OpCodeTable<FileSpan>,
+    constants: &mut Vec<Constant<FileSpan>>,
+) -> Result<(), Error> {
+    compile(&apply.function, opcodes, constants)?;
+    compile(&apply.list, opcodes, constants)?;
 
     opcodes.push(OpCode::Apply, apply.span);
 
     Ok(())
 }
 
-fn compile_assert(assert: &tree::Assert, opcodes: &mut OpCodeTable<FileSpan>) -> Result<(), Error> {
-    compile(&assert.body, opcodes)?;
+fn compile_assert(
+    assert: &tree::Assert,
+    opcodes: &mut OpCodeTable<FileSpan>,
+    constants: &mut Vec<Constant<FileSpan>>,
+) -> Result<(), Error> {
+    compile(&assert.body, opcodes, constants)?;
 
     opcodes.push(OpCode::Assert, assert.span);
 
@@ -323,10 +407,11 @@ fn compile_map_create(
 fn compile_map_insert(
     map_insert: &tree::MapInsert,
     opcodes: &mut OpCodeTable<FileSpan>,
+    constants: &mut Vec<Constant<FileSpan>>,
 ) -> Result<(), Error> {
-    compile(&map_insert.map, opcodes)?;
-    compile(&map_insert.key, opcodes)?;
-    compile(&map_insert.value, opcodes)?;
+    compile(&map_insert.map, opcodes, constants)?;
+    compile(&map_insert.key, opcodes, constants)?;
+    compile(&map_insert.value, opcodes, constants)?;
 
     opcodes.push(OpCode::MapInsert, map_insert.span);
 
@@ -336,9 +421,10 @@ fn compile_map_insert(
 fn compile_map_retrieve(
     map_retrieve: &tree::MapRetrieve,
     opcodes: &mut OpCodeTable<FileSpan>,
+    constants: &mut Vec<Constant<FileSpan>>,
 ) -> Result<(), Error> {
-    compile(&map_retrieve.map, opcodes)?;
-    compile(&map_retrieve.key, opcodes)?;
+    compile(&map_retrieve.map, opcodes, constants)?;
+    compile(&map_retrieve.key, opcodes, constants)?;
 
     opcodes.push(OpCode::MapRetrieve, map_retrieve.span);
 
@@ -348,8 +434,9 @@ fn compile_map_retrieve(
 fn compile_map_items(
     map_items: &tree::MapItems,
     opcodes: &mut OpCodeTable<FileSpan>,
+    constants: &mut Vec<Constant<FileSpan>>,
 ) -> Result<(), Error> {
-    compile(&map_items.map, opcodes)?;
+    compile(&map_items.map, opcodes, constants)?;
 
     opcodes.push(OpCode::MapItems, map_items.span);
 
@@ -359,15 +446,17 @@ fn compile_map_items(
 fn compile_make_type(
     make_type: &tree::MakeType,
     opcodes: &mut OpCodeTable<FileSpan>,
+    constants: &mut Vec<Constant<FileSpan>>,
 ) -> Result<(), Error> {
-    opcodes.push(
-        OpCode::PushSymbol(Gc::new(make_type.pattern.0.clone())),
-        make_type.span,
-    );
+    let constant = Constant::Symbol(Gc::new(make_type.pattern.0.clone()));
+    let hash = hash_constant(&constant);
+    constants.push(constant);
+
+    opcodes.push(OpCode::PushSymbol(hash), make_type.span);
 
     if !make_type.exprs.is_empty() {
         for expr in &make_type.exprs {
-            compile(expr, opcodes)?;
+            compile(expr, opcodes, constants)?;
         }
 
         opcodes.push(OpCode::MakeStruct(make_type.exprs.len()), make_type.span);
@@ -380,31 +469,37 @@ fn compile_make_type(
     Ok(())
 }
 
-fn compile_if_let(if_let: &tree::IfLet, opcodes: &mut OpCodeTable<FileSpan>) -> Result<(), Error> {
+fn compile_if_let(
+    if_let: &tree::IfLet,
+    opcodes: &mut OpCodeTable<FileSpan>,
+    constants: &mut Vec<Constant<FileSpan>>,
+) -> Result<(), Error> {
     let mut then = OpCodeTable::new();
     let mut r#else = OpCodeTable::new();
 
-    compile(&if_let.body, opcodes)?;
-    compile(&if_let.then, &mut then)?;
-    compile(&if_let.r#else, &mut r#else)?;
+    compile(&if_let.body, opcodes, constants)?;
+    compile(&if_let.then, &mut then, constants)?;
+    compile(&if_let.r#else, &mut r#else, constants)?;
 
     then.push(OpCode::Return, if_let.span);
 
     let else_length = r#else.len();
 
-    let lambda = OpCode::Lambda {
-        arity: vm::Arity::Nary(if_let.bindings.len()),
-        body: Gc::new(then),
-    };
+    let lambda_opcode_table_constant = Constant::OpCodeTable(Gc::new(then));
+    let hash = hash_constant(&lambda_opcode_table_constant);
+    constants.push(lambda_opcode_table_constant);
+
+    let lambda = OpCode::Lambda(vm::Arity::Nary(if_let.bindings.len()), hash);
 
     opcodes.push(OpCode::Dup, if_let.span);
 
     opcodes.push(OpCode::Car, if_let.span);
 
-    opcodes.push(
-        OpCode::PushSymbol(Gc::new(if_let.pattern.0.clone())),
-        if_let.span,
-    );
+    let symbol_constant = Constant::Symbol(Gc::new(if_let.pattern.0.clone()));
+    let hash = hash_constant(&symbol_constant);
+    constants.push(symbol_constant);
+
+    opcodes.push(OpCode::PushSymbol(hash), if_let.span);
 
     opcodes.push(OpCode::Eq, if_let.span);
 
@@ -440,23 +535,28 @@ fn compile_if_let(if_let: &tree::IfLet, opcodes: &mut OpCodeTable<FileSpan>) -> 
     Ok(())
 }
 
-fn compile_letrec(letrec: &tree::LetRec, opcodes: &mut OpCodeTable<FileSpan>) -> Result<(), Error> {
+fn compile_letrec(
+    letrec: &tree::LetRec,
+    opcodes: &mut OpCodeTable<FileSpan>,
+    constants: &mut Vec<Constant<FileSpan>>,
+) -> Result<(), Error> {
     let mut lambda_opcodes = OpCodeTable::new();
 
     for (i, (_, expr)) in letrec.bindings.iter().enumerate() {
-        compile(expr, &mut lambda_opcodes)?;
+        compile(expr, &mut lambda_opcodes, constants)?;
         lambda_opcodes.push(OpCode::SetLocal(i), letrec.span);
     }
 
-    compile(&letrec.body, &mut lambda_opcodes)?;
+    compile(&letrec.body, &mut lambda_opcodes, constants)?;
 
     lambda_opcodes.push(OpCode::Return, letrec.span);
 
+    let constant = Constant::OpCodeTable(Gc::new(lambda_opcodes));
+    let hash = hash_constant(&constant);
+    constants.push(constant);
+
     opcodes.push(
-        OpCode::Lambda {
-            arity: vm::Arity::Nary(letrec.bindings.len()),
-            body: Gc::new(lambda_opcodes),
-        },
+        OpCode::Lambda(vm::Arity::Nary(letrec.bindings.len()), hash),
         letrec.span,
     );
 
@@ -476,9 +576,10 @@ fn compile_letrec(letrec: &tree::LetRec, opcodes: &mut OpCodeTable<FileSpan>) ->
 fn compile_make_struct(
     make_struct: &tree::MakeStruct,
     opcodes: &mut OpCodeTable<FileSpan>,
+    constants: &mut Vec<Constant<FileSpan>>,
 ) -> Result<(), Error> {
     for expr in &make_struct.exprs {
-        compile(expr, opcodes)?;
+        compile(expr, opcodes, constants)?;
     }
 
     opcodes.push(
@@ -492,10 +593,17 @@ fn compile_make_struct(
 fn compile_get_field(
     get_field: &tree::GetField,
     opcodes: &mut OpCodeTable<FileSpan>,
+    constants: &mut Vec<Constant<FileSpan>>,
 ) -> Result<(), Error> {
-    compile(&get_field.body, opcodes)?;
+    compile(&get_field.body, opcodes, constants)?;
 
     opcodes.push(OpCode::GetField(get_field.index), get_field.span);
 
     Ok(())
+}
+
+pub(crate) fn hash_constant<D: Hash>(constant: &Constant<D>) -> u64 {
+    let mut hasher = std::hash::DefaultHasher::new();
+    constant.hash(&mut hasher);
+    hasher.finish()
 }

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, path::Components};
 
 use crate::{
     ast::{
@@ -10,6 +10,7 @@ use crate::{
 };
 
 use error::FileSpan;
+use gc::Gc;
 use reader::Reader;
 use unwrap_enum::{EnumAs, EnumIs};
 use vm::{Arity, OpCodeTable, UpValue, Vm};
@@ -624,13 +625,22 @@ impl Compiler {
         });
 
         let mut opcodes = OpCodeTable::new();
+        let mut constants = Vec::new();
 
-        bytecode::compile(&lambda, &mut opcodes).map_err(std::boxed::Box::new)?;
+        bytecode::compile(&lambda, &mut opcodes, &mut constants).map_err(std::boxed::Box::new)?;
+
+        for constant in constants {
+            vm.load_constant(constant);
+        }
 
         vm.eval(&opcodes)?;
 
-        vm.def_global(defmacro.name.as_str())
-            .map_err(std::boxed::Box::new)?;
+        let constant = vm::Constant::Symbol(Gc::new(defmacro.name.clone()));
+        let hash = bytecode::hash_constant(&constant);
+
+        vm.load_constant(constant);
+
+        vm.def_global(hash).map_err(std::boxed::Box::new)?;
 
         Ok(None)
     }
@@ -643,14 +653,23 @@ impl Compiler {
         ast_compiler: &mut ast::Compiler,
     ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
         let mut opcode_table = OpCodeTable::new();
+        let mut constants = Vec::new();
 
         for arg in &macro_call.args {
             let il = self.compile_quoted(ast, arg)?.unwrap();
 
-            bytecode::compile(&il, &mut opcode_table).unwrap();
+            bytecode::compile(&il, &mut opcode_table, &mut constants).unwrap();
         }
 
-        vm.get_global(macro_call.r#macro.as_str())?;
+        let constant: vm::Constant<FileSpan> =
+            vm::Constant::Symbol(Gc::new(macro_call.r#macro.clone()));
+        let hash = bytecode::hash_constant(&constant);
+
+        for constant in constants {
+            vm.load_constant(constant);
+        }
+
+        vm.get_global(hash)?;
 
         vm.eval(&opcode_table)?;
 

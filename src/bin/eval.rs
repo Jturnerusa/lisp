@@ -19,6 +19,7 @@ fn main() {
     let mut tree_compiler = compiler::tree::Compiler::new();
     let mut vm = Vm::new();
     let mut opcode_table = OpCodeTable::new();
+    let mut constants = Vec::new();
     let mut files = HashMap::new();
 
     native_functions::load_module(&mut vm);
@@ -37,6 +38,7 @@ fn main() {
         &mut |_| Ok(()),
         &mut vm,
         &mut opcode_table,
+        &mut constants,
     )
     .unwrap();
 
@@ -49,6 +51,7 @@ fn main() {
         &mut |_| Ok(()),
         &mut vm,
         &mut opcode_table,
+        &mut constants,
     ) {
         Ok(_) => (),
         Err(lisp::Error::Std(error)) => {
@@ -72,6 +75,7 @@ fn main() {
             &mut |_| Ok(()),
             &mut vm,
             &mut opcode_table,
+            &mut constants,
         ) {
             Ok(_) => (),
             Err(lisp::Error::Std(error)) => {
@@ -83,6 +87,10 @@ fn main() {
                 std::process::exit(1)
             }
         }
+    }
+
+    for constant in constants {
+        vm.load_constant(constant);
     }
 
     match vm.eval(&opcode_table) {
