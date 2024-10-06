@@ -477,7 +477,7 @@ impl<D: Clone> Cons<D> {
 
 fn pretty_print<D: Clone>(cons: &Cons<D>, depth: usize, f: &mut fmt::Formatter) -> fmt::Result {
     let indent = " ".repeat(depth);
-    if !cons.1.is_nil() {
+    if !cons.1.is_nil() && !cons.1.is_cons() {
         write!(f, "{indent}({} . {})", cons.0, cons.1)?;
     } else {
         write!(f, "{indent}(")?;
