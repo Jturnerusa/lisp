@@ -18,7 +18,6 @@ static NATIVE_DECL_SOURCE: &str = include_str!(concat!(
 fn main() {
     let mut ast_compiler = compiler::ast::Compiler::new();
     let mut tree_compiler = compiler::tree::Compiler::new();
-    let mut type_checker = compiler::types::Checker::new();
     let mut vm = Vm::new();
     let mut opcode_table = OpCodeTable::new();
     let mut files = HashMap::new();
@@ -36,7 +35,7 @@ fn main() {
         &mut files,
         &mut ast_compiler,
         &mut tree_compiler,
-        &mut type_checker,
+        &mut |_| Ok(()),
         &mut vm,
         &mut OpCodeTable::new(),
     ) {
@@ -57,7 +56,7 @@ fn main() {
         &mut files,
         &mut ast_compiler,
         &mut tree_compiler,
-        &mut type_checker,
+        &mut |_| Ok(()),
         &mut vm,
         &mut OpCodeTable::new(),
     )
@@ -71,7 +70,7 @@ fn main() {
             &mut files,
             &mut ast_compiler,
             &mut tree_compiler,
-            &mut type_checker,
+            &mut |_| Ok(()),
             &mut vm,
             &mut opcode_table,
         ) {
