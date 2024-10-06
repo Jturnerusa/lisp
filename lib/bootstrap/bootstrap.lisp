@@ -185,7 +185,7 @@
          ,@body)))
 
 (eval-when-compile
-  (defun (panic -> any) (message)
+  (defun (panic 'a -> any) (message)
     (print message)
     (assert false))
 
