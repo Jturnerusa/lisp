@@ -220,6 +220,7 @@ impl fmt::Display for Type {
                 Ok(())
             }
             Self::List(inner) => write!(f, "list({inner})"),
+            Self::Cons(car, cdr) => write!(f, "cons({car} {cdr})"),
             Self::Generic(generic) => write!(f, "'{generic}"),
             Self::Symbol => write!(f, "symbol"),
             Self::String => write!(f, "string"),
@@ -227,7 +228,6 @@ impl fmt::Display for Type {
             Self::Int => write!(f, "int"),
             Self::Bool => write!(f, "bool"),
             Self::Nil => write!(f, "nil"),
-            _ => todo!(),
         }
     }
 }
@@ -269,6 +269,10 @@ impl Type {
                 [ast::Type::Scalar(quote), ast::Type::Scalar(generic)] if quote == "quote" => {
                     Type::Generic(generic.clone())
                 }
+                [ast::Type::Scalar(cons), car, cdr] if cons == "cons" => Type::Cons(
+                    Box::new(Type::from_ast(car, user_types)?),
+                    Box::new(Type::from_ast(cdr, user_types)?),
+                ),
                 [ast::Type::Scalar(deftype), parameters @ ..]
                     if user_types
                         .get(deftype.as_str())
@@ -358,6 +362,10 @@ impl Type {
                 }
             }
             Self::List(inner) => inner.map_generics(generics),
+            Self::Cons(car, cdr) => {
+                car.map_generics(generics);
+                cdr.map_generics(generics);
+            }
             Self::Generic(generic) if !generics.contains_key(generic.as_str()) => {
                 let index = generics.len();
                 generics.insert(generic.clone(), index);
@@ -761,7 +769,11 @@ impl Types {
                 subs.insert(generic.clone(), id);
                 id
             }
-            TypeInfo::Cons(..) => todo!(),
+            TypeInfo::Cons(car, cdr) => {
+                let car = self.instantiate(car, subs);
+                let cdr = self.instantiate(cdr, subs);
+                self.insert(TypeInfo::Cons(car, cdr))
+            }
             TypeInfo::Ref(id) => self.instantiate(id, subs),
             _ => id,
         }
@@ -815,7 +827,11 @@ impl Types {
             TypeInfo::Generic(generic) if subs.contains_key(generic.as_str()) => {
                 subs[generic.as_str()]
             }
-            TypeInfo::Cons(..) => todo!(),
+            TypeInfo::Cons(car, cdr) => {
+                let car = self.instantiate_with(car, subs);
+                let cdr = self.instantiate_with(cdr, subs);
+                self.insert(TypeInfo::Cons(car, cdr))
+            }
             TypeInfo::Ref(id) => self.instantiate_with(id, subs),
             _ => id,
         }
