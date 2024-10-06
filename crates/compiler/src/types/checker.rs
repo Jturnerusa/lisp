@@ -574,38 +574,23 @@ impl Checker {
     fn check_cons(&mut self, cons: &tree::Cons) -> Result<TypeId, Error> {
         let lhs = self.check_tree(&cons.lhs)?;
         let rhs = self.check_tree(&cons.rhs)?;
-        let rhs_inner = self.types.insert(TypeInfo::Unknown);
-        let list = self.types.insert(TypeInfo::List(rhs_inner));
-        let r#return = self.types.insert(TypeInfo::Unknown);
+        let car = self.types.insert(TypeInfo::Unknown);
+        let cdr = self.types.insert(TypeInfo::Unknown);
 
-        let Ok(()) = self.types.unify(list, rhs) else {
-            return Err(Error::Unification {
-                message: "failed to unify rhs with list".to_string(),
-                span: cons.span,
-                a: MaybeUnknownType::from(self.types.construct(list)),
-                b: MaybeUnknownType::from(self.types.construct(rhs)),
-            });
-        };
+        self.types.unify(car, lhs).unwrap();
+        self.types.unify(cdr, rhs).unwrap();
 
-        let Ok(()) = self.types.unify(r#return, lhs) else {
-            return Err(Error::Unification {
-                message: "failed to unify lhs with unknown".to_string(),
-                span: cons.span,
-                a: MaybeUnknownType::from(self.types.construct(r#return)),
-                b: MaybeUnknownType::from(self.types.construct(lhs)),
-            });
-        };
+        let inner = self.types.insert(TypeInfo::Unknown);
+        let list = self.types.insert(TypeInfo::List(inner));
 
-        let Ok(()) = self.types.unify(r#return, rhs_inner) else {
-            return Err(Error::Unification {
-                message: "failed to unify lhs with rhs inner type".to_string(),
-                span: cons.span,
-                a: MaybeUnknownType::from(self.types.construct(r#return)),
-                b: MaybeUnknownType::from(self.types.construct(rhs_inner)),
-            });
-        };
-
-        Ok(self.types.insert(TypeInfo::List(r#return)))
+        match self
+            .types
+            .unify(list, rhs)
+            .and_then(|_| self.types.unify(inner, lhs))
+        {
+            Ok(()) => Ok(list),
+            Err(()) => Ok(self.types.insert(TypeInfo::Cons(car, cdr))),
+        }
     }
 
     fn check_car(&mut self, car: &tree::Car) -> Result<TypeId, Error> {
