@@ -10,7 +10,7 @@ use object::{HashMapKey, Struct};
 use std::cmp::{Ordering, PartialOrd};
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::hash::Hash;
+use std::hash::{Hash, Hasher};
 use std::ops::{Deref, DerefMut};
 use thiserror::Error;
 use unwrap_enum::{EnumAs, EnumIs};
@@ -52,11 +52,11 @@ pub enum Error {
     Other(#[from] Box<dyn std::error::Error>),
 }
 
-#[derive(Clone, Debug, EnumAs, EnumIs, PartialEq, Eq, Hash)]
-pub enum OpCode<D> {
-    DefGlobal(Gc<String>),
-    SetGlobal(Gc<String>),
-    GetGlobal(Gc<String>),
+#[derive(Clone, Copy, Debug, EnumAs, EnumIs, PartialEq, Eq, Hash)]
+pub enum OpCode {
+    DefGlobal(u64),
+    SetGlobal(u64),
+    GetGlobal(u64),
     SetLocal(usize),
     GetLocal(usize),
     SetUpValue(usize),
@@ -68,15 +68,12 @@ pub enum OpCode<D> {
     Tail(usize),
     Apply,
     Return,
-    Lambda {
-        arity: Arity,
-        body: Gc<OpCodeTable<D>>,
-    },
+    Lambda(Arity, u64),
     CreateUpValue(UpValue),
-    PushSymbol(Gc<String>),
+    PushSymbol(u64),
     PushInt(i64),
     PushChar(char),
-    PushString(Gc<String>),
+    PushString(u64),
     PushBool(bool),
     PushNil,
     Pop,
@@ -111,8 +108,15 @@ pub enum OpCode<D> {
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct OpCodeTable<D> {
-    opcodes: Vec<OpCode<D>>,
+    opcodes: Vec<OpCode>,
     debug: Vec<D>,
+}
+
+#[derive(Clone, PartialEq, Eq, Hash, EnumAs, EnumIs)]
+pub enum Constant<D> {
+    OpCodeTable(Gc<OpCodeTable<D>>),
+    Symbol(Gc<String>),
+    String(Gc<String>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -135,7 +139,8 @@ pub enum Local<D: 'static> {
 }
 
 pub struct Vm<D: 'static> {
-    globals: HashMap<String, Object<D>>,
+    globals: HashMap<Gc<String>, Object<D>>,
+    constants: HashMap<u64, Constant<D>>,
     stack: Vec<Local<D>>,
     frames: Vec<Frame<D>>,
     current_function: Option<Gc<GcCell<Lambda<D>>>>,
@@ -148,6 +153,7 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
     pub fn new() -> Self {
         Self {
             globals: HashMap::new(),
+            constants: HashMap::new(),
             stack: Vec::new(),
             frames: Vec::new(),
             current_function: None,
@@ -156,21 +162,30 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
         }
     }
 
+    pub fn load_constant(&mut self, constant: Constant<D>) {
+        let mut hasher = std::hash::DefaultHasher::new();
+        constant.hash(&mut hasher);
+        let hash = hasher.finish();
+        self.constants.insert(hash, constant);
+    }
+
     pub fn load_native_function<F>(&mut self, name: &str, f: F)
     where
         F: Fn(&mut [Local<D>]) -> Result<Object<D>, Error> + 'static,
     {
         let native_function = NativeFunction::new(f);
-        self.globals
-            .insert(name.to_string(), Object::NativeFunction(native_function));
+        self.globals.insert(
+            Gc::new(name.to_string()),
+            Object::NativeFunction(native_function),
+        );
     }
 
     pub fn eval(&mut self, opcode_table: &OpCodeTable<D>) -> Result<(), ErrorWithDebug<D>> {
         loop {
             let opcode = if let Some(function) = &self.current_function {
-                function.borrow().opcodes.opcodes[self.pc].clone()
+                function.borrow().opcodes.opcodes[self.pc]
             } else if self.pc < opcode_table.opcodes.len() {
-                opcode_table.opcodes[self.pc].clone()
+                opcode_table.opcodes[self.pc]
             } else {
                 self.pc = 0;
                 return Ok(());
@@ -192,11 +207,11 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
         }
     }
 
-    fn dispatch(&mut self, opcode: OpCode<D>) -> Result<(), Error> {
+    fn dispatch(&mut self, opcode: OpCode) -> Result<(), Error> {
         match opcode {
-            OpCode::DefGlobal(global) => self.def_global(global.as_str())?,
-            OpCode::SetGlobal(global) => self.set_global(global.as_str())?,
-            OpCode::GetGlobal(global) => self.get_global(global.as_str())?,
+            OpCode::DefGlobal(global) => self.def_global(global)?,
+            OpCode::SetGlobal(global) => self.set_global(global)?,
+            OpCode::GetGlobal(global) => self.get_global(global)?,
             OpCode::SetLocal(local) => self.set_local(local)?,
             OpCode::GetLocal(local) => self.get_local(local)?,
             OpCode::SetUpValue(upvalue) => self.set_upvalue(upvalue)?,
@@ -208,15 +223,17 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
             OpCode::Tail(args) => self.tail(args)?,
             OpCode::Return => self.ret()?,
             OpCode::Apply => self.apply()?,
-            OpCode::Lambda { arity, body } => self.lambda(arity, body)?,
+            OpCode::Lambda(arity, opcode_table) => self.lambda(arity, opcode_table)?,
             OpCode::CreateUpValue(upvalue) => self.create_upvalue(upvalue)?,
             OpCode::PushSymbol(symbol) => {
-                self.stack
-                    .push(Local::Value(Object::Symbol(symbol.clone())));
+                self.stack.push(Local::Value(Object::Symbol(
+                    self.constants[&symbol].as_symbol().unwrap().clone(),
+                )));
             }
             OpCode::PushString(string) => {
-                self.stack
-                    .push(Local::Value(Object::String(string.clone())));
+                self.stack.push(Local::Value(Object::String(
+                    self.constants[&string].as_string().unwrap().clone(),
+                )));
             }
             OpCode::PushInt(i) => self.stack.push(Local::Value(Object::Int(i))),
             OpCode::PushChar(c) => self.stack.push(Local::Value(Object::Char(c))),
@@ -293,17 +310,23 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
         Ok(())
     }
 
-    pub fn def_global(&mut self, global: &str) -> Result<(), Error> {
+    pub fn def_global(&mut self, global: u64) -> Result<(), Error> {
         let val = self.stack.pop().unwrap();
-        self.globals.insert(global.to_string(), val.into_object());
+        self.globals.insert(
+            self.constants[&global].as_symbol().unwrap().clone(),
+            val.into_object(),
+        );
         self.stack.push(Local::Value(Object::Nil));
         Ok(())
     }
 
-    pub fn set_global(&mut self, global: &str) -> Result<(), Error> {
+    pub fn set_global(&mut self, global: u64) -> Result<(), Error> {
         let val = self.stack.pop().unwrap();
 
-        if let Some(var) = self.globals.get_mut(global) {
+        if let Some(var) = self
+            .globals
+            .get_mut(self.constants[&global].as_symbol().unwrap())
+        {
             *var = val.clone().into_object();
             self.stack.push(val);
             Ok(())
@@ -312,8 +335,11 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
         }
     }
 
-    pub fn get_global(&mut self, global: &str) -> Result<(), Error> {
-        if let Some(var) = self.globals.get(global) {
+    pub fn get_global(&mut self, global: u64) -> Result<(), Error> {
+        if let Some(var) = self
+            .globals
+            .get(self.constants[&global].as_symbol().unwrap())
+        {
             self.stack.push(Local::Value(var.clone()))
         } else {
             return Err(Error::NotFound(global.to_string()));
@@ -562,10 +588,12 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
         Ok(())
     }
 
-    pub fn lambda(&mut self, arity: Arity, opcodes: Gc<OpCodeTable<D>>) -> Result<(), Error> {
+    pub fn lambda(&mut self, arity: Arity, opcodes: u64) -> Result<(), Error> {
+        let opcodes = self.constants[&opcodes].as_opcodetable().unwrap().clone();
+
         let function = Lambda {
             arity,
-            opcodes: opcodes.clone(),
+            opcodes,
             upvalues: Vec::new(),
         };
 
@@ -993,12 +1021,12 @@ impl<T> OpCodeTable<T> {
         }
     }
 
-    pub fn push(&mut self, opcode: OpCode<T>, debug: T) {
+    pub fn push(&mut self, opcode: OpCode, debug: T) {
         self.opcodes.push(opcode);
         self.debug.push(debug);
     }
 
-    pub fn opcodes(&self) -> &[OpCode<T>] {
+    pub fn opcodes(&self) -> &[OpCode] {
         self.opcodes.as_slice()
     }
 
