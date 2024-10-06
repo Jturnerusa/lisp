@@ -185,6 +185,8 @@
          ,@body)))
 
 (eval-when-compile
+  (decl (print (fn 'a -> nil)))
+  
   (defun (panic 'a -> any) (message)
     (print message)
     (assert false))
