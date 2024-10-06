@@ -252,7 +252,7 @@
         (option-some (map option-unwrap options))))
 
   (defun (filter-map (fn 'a -> (option 'b))
-                     (list (option 'a))
+                     (list 'a)
                      -> (list 'b))
       (fn list)
     (let loop ((list list))
