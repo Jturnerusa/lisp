@@ -521,7 +521,7 @@ impl Compiler {
             Ast::DefStruct(defstruct) => self.compile_defstruct(defstruct),
             Ast::MakeStruct(make_struct) => self.compile_make_struct(make_struct, vm, ast_compiler),
             Ast::GetField(get_field) => self.compile_get_field(get_field, vm, ast_compiler),
-            _ => unreachable!("{ast:?}"),
+            _ => Ok(None),
         }
     }
 
