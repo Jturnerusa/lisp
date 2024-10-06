@@ -28,7 +28,7 @@
       (lambda (list)
         (car list)))
 
-  (def (cdr (fn (list 't) -> 't))
+  (def (cdr (fn (list 't) -> (list 't)))
       (lambda (list)
         (cdr list)))
 
