@@ -72,6 +72,36 @@ pub fn compile_source(
             let mut opcode_table = OpCodeTable::new();
 
             for expr in &eval_when_compile.exprs {
+                if let Ast::Require(require) = expr {
+                    let path = PathBuf::from(require.module.clone());
+                    let module = match find_module(path.as_path()) {
+                        Some(Ok(module)) => module,
+                        Some(Err(e)) => return Err(Error::Std(e)),
+                        None => {
+                            return Err(Error::Std(
+                                format!("failed to load module {}", path.to_str().unwrap()).into(),
+                            ))
+                        }
+                    };
+
+                    let mut opcode_table = OpCodeTable::new();
+
+                    compile_file(
+                        module.as_path(),
+                        files,
+                        ast_compiler,
+                        tree_compiler,
+                        check_types,
+                        vm,
+                        &mut opcode_table,
+                    )?;
+
+                    vm.eval(&opcode_table)
+                        .map_err(|e| Error::Spanned(Box::new(e)))?;
+
+                    continue;
+                }
+
                 let tree = tree_compiler.compile(expr, vm, ast_compiler)?;
 
                 if let Some(t) = &tree {
@@ -98,6 +128,8 @@ pub fn compile_source(
                 }
             };
 
+            let mut opcode_table = OpCodeTable::new();
+
             compile_file(
                 module.as_path(),
                 files,
@@ -105,8 +137,11 @@ pub fn compile_source(
                 tree_compiler,
                 check_types,
                 vm,
-                opcode_table,
+                &mut opcode_table,
             )?;
+
+            vm.eval(&opcode_table)
+                .map_err(|e| Error::Spanned(Box::new(e)))?;
 
             continue;
         }
