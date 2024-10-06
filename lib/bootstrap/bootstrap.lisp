@@ -249,4 +249,16 @@
   (defun (option-collect (list (option 'a)) -> (option (list 'a))) (options)
     (if (any? option-none? options)
         (option-none)
-        (option-some (map option-unwrap options)))))
+        (option-some (map option-unwrap options))))
+
+  (defun (filter-map (fn 'a -> (option 'b))
+                     (list (option 'a))
+                     -> (list 'b))
+      (fn list)
+    (let loop ((list list))
+         (if (nil? list)
+             nil
+             (let ((element (car list)))
+               (if-let (fn element) (option-some a)
+                 (cons a (loop (cdr list)))
+                 (loop (cdr list))))))))
