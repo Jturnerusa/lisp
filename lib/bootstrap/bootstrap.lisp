@@ -234,7 +234,7 @@
       ((option-some some)
        some)
       (else
-       (panic))))
+       (panic "unwrapped option-none"))))
 
   (defun (option-some? (option 'a) -> bool) (option)
     (typecase option
