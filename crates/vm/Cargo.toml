@@ -8,3 +8,4 @@ gc = { path = "../gc" }
 unwrap-enum = { workspace = true }
 thiserror = { workspace = true }
 error = { path = "../error" }
+identity-hasher = { path = "../identity-hasher" }

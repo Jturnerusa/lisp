@@ -6,6 +6,7 @@ use crate::object::{Cons, Lambda, NativeFunction, Type};
 use core::fmt;
 use error::FileSpan;
 use gc::{Gc, GcCell, Trace};
+use identity_hasher::{IdentityHasher, IdentityMap};
 use object::{HashMapKey, Struct};
 use std::cmp::{Ordering, PartialOrd};
 use std::collections::HashMap;
@@ -140,7 +141,7 @@ pub enum Local<D: 'static> {
 
 pub struct Vm<D: 'static> {
     globals: HashMap<Gc<String>, Object<D>>,
-    constants: HashMap<u64, Constant<D>>,
+    constants: IdentityMap<u64, Constant<D>>,
     stack: Vec<Local<D>>,
     frames: Vec<Frame<D>>,
     current_function: Option<Gc<GcCell<Lambda<D>>>>,
@@ -153,7 +154,7 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
     pub fn new() -> Self {
         Self {
             globals: HashMap::new(),
-            constants: HashMap::new(),
+            constants: HashMap::with_hasher(IdentityHasher::new()),
             stack: Vec::new(),
             frames: Vec::new(),
             current_function: None,

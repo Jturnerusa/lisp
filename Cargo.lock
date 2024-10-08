@@ -59,6 +59,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "identity-hasher"
+version = "0.0.1"
+
+[[package]]
 name = "itertools"
 version = "0.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -303,6 +307,7 @@ version = "0.1.0"
 dependencies = [
  "error",
  "gc",
+ "identity-hasher",
  "thiserror",
  "unwrap-enum",
 ]
