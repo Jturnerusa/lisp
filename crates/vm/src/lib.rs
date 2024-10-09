@@ -133,7 +133,7 @@ struct Frame<D: 'static> {
     bp: usize,
 }
 
-#[derive(Clone, Debug, EnumAs, EnumIs)]
+#[derive(Clone, Debug, PartialEq, PartialOrd, EnumAs, EnumIs)]
 pub enum Local<D: 'static> {
     Value(Object<D>),
     UpValue(Gc<GcCell<Object<D>>>),
@@ -466,37 +466,36 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
     }
 
     pub fn call(&mut self, args: usize) -> Result<(), Error> {
-        match self.stack[self.stack.len() - args - 1]
+        self.stack[self.stack.len() - args - 1]
             .clone()
-            .into_object()
-        {
-            Object::Function(function) => {
-                self.check_arity(args, function.clone())?;
+            .with(|object| match object {
+                Object::Function(function) => {
+                    self.check_arity(args, function.clone())?;
 
-                self.frames.push(Frame {
-                    function: self.current_function.clone(),
-                    bp: self.bp,
-                    pc: self.pc,
-                });
+                    self.frames.push(Frame {
+                        function: self.current_function.clone(),
+                        bp: self.bp,
+                        pc: self.pc,
+                    });
 
-                self.current_function = Some(function.clone());
-                self.pc = 0;
-                self.bp = if let Arity::Variadic(n) = function.borrow().arity() {
-                    let rest = if args > n { args - n } else { 0 };
-                    self.list(rest)?;
-                    self.stack.len() - (n + 1)
-                } else {
-                    self.stack.len() - args
-                };
+                    self.current_function = Some(function.clone());
+                    self.pc = 0;
+                    self.bp = if let Arity::Variadic(n) = function.borrow().arity() {
+                        let rest = if args > n { args - n } else { 0 };
+                        self.list(rest)?;
+                        self.stack.len() - (n + 1)
+                    } else {
+                        self.stack.len() - args
+                    };
 
-                Ok(())
-            }
-            Object::NativeFunction(function) => self.native_call(args, function),
-            object => Err(Error::Type {
-                expected: Type::Function,
-                recieved: Type::from(&object),
-            }),
-        }
+                    Ok(())
+                }
+                Object::NativeFunction(function) => self.native_call(args, function.clone()),
+                object => Err(Error::Type {
+                    expected: Type::Function,
+                    recieved: Type::from(object),
+                }),
+            })
     }
 
     fn tail(&mut self, args: usize) -> Result<(), Error> {
@@ -609,25 +608,21 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
         let rhs = self.stack.pop().unwrap();
         let lhs = self.stack.pop().unwrap();
 
-        let a = match lhs.into_object() {
-            Object::Int(i) => i,
-            object => {
-                return Err(Error::Type {
-                    expected: Type::Int,
-                    recieved: Type::from(&object),
-                })
-            }
-        };
+        let a = lhs.with(|object| match object {
+            Object::Int(i) => Ok(*i),
+            object => Err(Error::Type {
+                expected: Type::Int,
+                recieved: Type::from(object),
+            }),
+        })?;
 
-        let b = match rhs.into_object() {
-            Object::Int(i) => i,
-            object => {
-                return Err(Error::Type {
-                    expected: Type::Int,
-                    recieved: Type::from(&object),
-                })
-            }
-        };
+        let b = rhs.with(|object| match object {
+            Object::Int(i) => Ok(*i),
+            object => Err(Error::Type {
+                expected: Type::Int,
+                recieved: Type::from(object),
+            }),
+        })?;
 
         let result = Object::Int(f(a, b));
 
@@ -752,18 +747,17 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
     pub fn branch(&mut self, i: usize) -> Result<(), Error> {
         let p = self.stack.pop().unwrap();
 
-        match p.into_object() {
-            Object::Bool(true) => (),
+        p.with(|object| match object {
+            Object::Bool(true) => Ok(()),
             Object::Bool(false) => {
                 self.pc += i;
+                Ok(())
             }
-            object => {
-                return Err(Error::Type {
-                    expected: Type::Bool,
-                    recieved: Type::from(&object),
-                });
-            }
-        }
+            object => Err(Error::Type {
+                expected: Type::Bool,
+                recieved: Type::from(object),
+            }),
+        })?;
 
         Ok(())
     }
@@ -790,7 +784,7 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
         let rhs = self.stack.pop().unwrap();
         let lhs = self.stack.pop().unwrap();
 
-        self.stack.push(if lhs.into_object() == rhs.into_object() {
+        self.stack.push(if lhs == rhs {
             Local::Value(Object::Bool(true))
         } else {
             Local::Value(Object::Bool(false))
@@ -803,22 +797,16 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
         let rhs = self.stack.pop().unwrap();
         let lhs = self.stack.pop().unwrap();
 
-        self.stack.push(
-            match lhs
-                .clone()
-                .into_object()
-                .partial_cmp(&rhs.clone().into_object())
-            {
-                Some(Ordering::Less) => Local::Value(Object::Bool(true)),
-                Some(_) => Local::Value(Object::Bool(false)),
-                None => {
-                    return Err(Error::Cmp(
-                        Type::from(&lhs.into_object()),
-                        Type::from(&rhs.into_object()),
-                    ))
-                }
-            },
-        );
+        self.stack.push(match lhs.partial_cmp(&rhs) {
+            Some(Ordering::Less) => Local::Value(Object::Bool(true)),
+            Some(_) => Local::Value(Object::Bool(false)),
+            None => {
+                return Err(Error::Cmp(
+                    Type::from(&lhs.into_object()),
+                    Type::from(&rhs.into_object()),
+                ))
+            }
+        });
 
         Ok(())
     }
@@ -827,22 +815,16 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
         let rhs = self.stack.pop().unwrap();
         let lhs = self.stack.pop().unwrap();
 
-        self.stack.push(
-            match lhs
-                .clone()
-                .into_object()
-                .partial_cmp(&rhs.clone().into_object())
-            {
-                Some(Ordering::Greater) => Local::Value(Object::Bool(true)),
-                Some(_) => Local::Value(Object::Bool(false)),
-                None => {
-                    return Err(Error::Cmp(
-                        Type::from(&lhs.into_object()),
-                        Type::from(&rhs.into_object()),
-                    ))
-                }
-            },
-        );
+        self.stack.push(match lhs.partial_cmp(&rhs) {
+            Some(Ordering::Greater) => Local::Value(Object::Bool(true)),
+            Some(_) => Local::Value(Object::Bool(false)),
+            None => {
+                return Err(Error::Cmp(
+                    Type::from(&lhs.into_object()),
+                    Type::from(&rhs.into_object()),
+                ))
+            }
+        });
 
         Ok(())
     }
@@ -988,7 +970,7 @@ impl<D: Clone> Local<D> {
 
     pub fn with<T, F>(&self, f: F) -> T
     where
-        F: Fn(&Object<D>) -> T,
+        F: FnOnce(&Object<D>) -> T,
     {
         match self {
             Self::Value(object) => f(object),
