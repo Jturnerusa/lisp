@@ -79,6 +79,10 @@ impl<T: Trace> GcCell<T> {
     pub fn borrow_mut(&self) -> RefMut<'_, T> {
         self.try_borrow_mut().unwrap()
     }
+
+    pub fn as_ptr(&self) -> *mut T {
+        self.data.get()
+    }
 }
 
 impl<'a, T: Trace> Drop for Ref<'a, T> {
