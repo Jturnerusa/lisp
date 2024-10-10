@@ -82,6 +82,7 @@ impl Checker {
             tree::Il::Set(set) => self.check_set(set).map(|_| ()),
             tree::Il::FnCall(fncall) => self.check_fncall(fncall).map(|_| ()),
             tree::Il::ArithmeticOperation(op) => self.check_aritmetic_op(op).map(|_| ()),
+            tree::Il::FloatOperation(op) => self.check_float_op(op).map(|_| ()),
             tree::Il::ComparisonOperation(op) => self.check_comparison_op(op).map(|_| ()),
             tree::Il::List(list) => self.check_list(list).map(|_| ()),
             tree::Il::Cons(cons) => self.check_cons(cons).map(|_| ()),
@@ -339,8 +340,7 @@ impl Checker {
 
         let fncall_function = match &*fncall.function {
             Il::Lambda(lambda) => self.check_lambda(lambda, fncall_parameters.clone())?,
-            Il::VarRef(varref) => self.check_varref(varref),
-            _ => unreachable!(),
+            tree => self.check_tree(tree)?,
         };
 
         let r#return = self.types.insert(TypeInfo::Unknown);
@@ -428,6 +428,7 @@ impl Checker {
             Il::If(r#if) => self.check_if(r#if),
             Il::Apply(apply) => self.check_apply(apply),
             Il::ArithmeticOperation(op) => self.check_aritmetic_op(op),
+            Il::FloatOperation(op) => self.check_float_op(op),
             Il::ComparisonOperation(op) => self.check_comparison_op(op),
             Il::List(list) => self.check_list(list),
             Il::Cons(cons) => self.check_cons(cons),
@@ -481,6 +482,32 @@ impl Checker {
         };
 
         Ok(int)
+    }
+
+    fn check_float_op(&mut self, op: &tree::FloatOperation) -> Result<TypeId, Error> {
+        let lhs = self.check_tree(&op.lhs)?;
+        let rhs = self.check_tree(&op.rhs)?;
+        let float = self.types.insert_concrete_type(Type::Float);
+
+        let Ok(()) = self.types.unify(lhs, float) else {
+            return Err(Error::Unification {
+                message: "failed to unify lhs with float".to_string(),
+                span: op.span,
+                a: MaybeUnknownType::from(self.types.construct(lhs)),
+                b: MaybeUnknownType::from(self.types.construct(rhs)),
+            });
+        };
+
+        let Ok(()) = self.types.unify(rhs, float) else {
+            return Err(Error::Unification {
+                message: "failed to unify rhs with float".to_string(),
+                span: op.span,
+                a: MaybeUnknownType::from(self.types.construct(lhs)),
+                b: MaybeUnknownType::from(self.types.construct(rhs)),
+            });
+        };
+
+        Ok(float)
     }
 
     fn check_comparison_op(&mut self, op: &tree::ComparisonOperation) -> Result<TypeId, Error> {
@@ -937,6 +964,7 @@ impl Checker {
             tree::Constant::String { .. } => self.types.insert(TypeInfo::String),
             tree::Constant::Char { .. } => self.types.insert(TypeInfo::Char),
             tree::Constant::Int { .. } => self.types.insert(TypeInfo::Int),
+            tree::Constant::Float { .. } => self.types.insert(TypeInfo::Float),
             tree::Constant::Bool { .. } => self.types.insert(TypeInfo::Bool),
             tree::Constant::Nil { .. } => self.types.insert(TypeInfo::Nil),
         })

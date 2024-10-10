@@ -42,6 +42,7 @@ pub fn compile(
         Il::List(list) => compile_list(list, opcodes, constants),
         Il::FnCall(fncall) => compile_fncall(fncall, opcodes, constants),
         Il::ArithmeticOperation(op) => compile_arithmetic_operation(op, opcodes, constants),
+        Il::FloatOperation(op) => compile_float_operation(op, opcodes, constants),
         Il::ComparisonOperation(op) => compile_comparison_operation(op, opcodes, constants),
         Il::IsType(is_type) => compile_is_type(is_type, opcodes, constants),
         Il::Apply(apply) => compile_apply(apply, opcodes, constants),
@@ -102,6 +103,7 @@ fn compile_constant(
         }
         tree::Constant::Char { char, .. } => OpCode::PushChar(*char),
         tree::Constant::Int { int, .. } => OpCode::PushInt(*int),
+        tree::Constant::Float { float, .. } => OpCode::PushFloat(*float),
         tree::Constant::Bool { bool, .. } => OpCode::PushBool(*bool),
         tree::Constant::Nil { .. } => OpCode::PushNil,
     };
@@ -260,6 +262,27 @@ fn compile_arithmetic_operation(
     Ok(())
 }
 
+fn compile_float_operation(
+    arithmetic_op: &tree::FloatOperation,
+    opcodes: &mut OpCodeTable<FileSpan>,
+    constants: &mut Vec<Constant<FileSpan>>,
+) -> Result<(), Error> {
+    compile(&arithmetic_op.lhs, opcodes, constants)?;
+    compile(&arithmetic_op.rhs, opcodes, constants)?;
+
+    opcodes.push(
+        match arithmetic_op.operator {
+            tree::FloatOperator::Add => OpCode::Add,
+            tree::FloatOperator::Sub => OpCode::Sub,
+            tree::FloatOperator::Mul => OpCode::Mul,
+            tree::FloatOperator::Div => OpCode::Div,
+        },
+        arithmetic_op.span,
+    );
+
+    Ok(())
+}
+
 fn compile_comparison_operation(
     comparison_op: &tree::ComparisonOperation,
     opcodes: &mut OpCodeTable<FileSpan>,
@@ -361,6 +384,7 @@ fn compile_is_type(
         tree::IsTypeParameter::String => vm::object::Type::String,
         tree::IsTypeParameter::Char => vm::object::Type::Char,
         tree::IsTypeParameter::Int => vm::object::Type::Int,
+        tree::IsTypeParameter::Float => vm::object::Type::Float,
         tree::IsTypeParameter::Bool => vm::object::Type::Bool,
         tree::IsTypeParameter::Nil => vm::object::Type::Nil,
     };

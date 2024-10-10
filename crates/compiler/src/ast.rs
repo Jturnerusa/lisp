@@ -10,6 +10,10 @@ static BUILT_INS: &[&str] = &[
     "-",
     "*",
     "/",
+    "+.",
+    "-.",
+    "*.",
+    "/.",
     "cons",
     "car",
     "cdr",
@@ -20,6 +24,7 @@ static BUILT_INS: &[&str] = &[
     "symbol?",
     "string?",
     "int?",
+    "float?",
     "char?",
     "nil?",
     "apply",
@@ -92,6 +97,7 @@ pub enum Ast {
     If(If),
     Apply(Apply),
     BinaryArithemticOperation(BinaryArithmeticOperation),
+    BinaryFloatOperation(BinaryFloatOperation),
     ComparisonOperation(ComparisonOperation),
     List(List),
     Cons(Cons),
@@ -135,6 +141,7 @@ pub enum Constant {
     String { span: FileSpan, string: String },
     Char { span: FileSpan, char: char },
     Int { span: FileSpan, int: i64 },
+    Float { span: FileSpan, float: f64 },
     Bool { span: FileSpan, bool: bool },
     Nil { span: FileSpan },
 }
@@ -250,6 +257,22 @@ pub struct BinaryArithmeticOperation {
     pub rhs: std::boxed::Box<Ast>,
 }
 
+#[derive(Clone, Debug)]
+pub enum BinaryFloatOperator {
+    Add,
+    Sub,
+    Mul,
+    Div,
+}
+
+#[derive(Clone, Debug)]
+pub struct BinaryFloatOperation {
+    pub span: FileSpan,
+    pub operator: BinaryFloatOperator,
+    pub lhs: std::boxed::Box<Ast>,
+    pub rhs: std::boxed::Box<Ast>,
+}
+
 #[derive(Clone, Debug, EnumAs, EnumIs)]
 pub enum ComparisonOperator {
     Lt,
@@ -317,6 +340,7 @@ pub enum IsTypeParameter {
     Symbol,
     String,
     Int,
+    Float,
     Char,
     Bool,
     Nil,
@@ -368,6 +392,7 @@ pub enum Quoted {
     String { span: FileSpan, string: String },
     Char { span: FileSpan, char: char },
     Int { span: FileSpan, int: i64 },
+    Float { span: FileSpan, float: f64 },
     Bool { span: FileSpan, bool: bool },
     Nil { span: FileSpan },
 }
@@ -542,6 +567,11 @@ impl Compiler {
                         self.compile_binary_arithmetic_op(sexpr, symbol, lhs, rhs)?
                     }
                     [Symbol { symbol, .. }, lhs, rhs]
+                        if matches!(symbol.as_str(), "+." | "-." | "*." | "/.") =>
+                    {
+                        self.compile_binary_float_op(sexpr, symbol, lhs, rhs)?
+                    }
+                    [Symbol { symbol, .. }, lhs, rhs]
                         if matches!(symbol.as_str(), "=" | "<" | ">") =>
                     {
                         self.compile_comparison_op(sexpr, symbol, lhs, rhs)?
@@ -567,6 +597,7 @@ impl Compiler {
                                 | "string?"
                                 | "char?"
                                 | "int?"
+                                | "float?"
                                 | "bool?"
                                 | "nil?"
                         ) =>
@@ -690,6 +721,10 @@ impl Compiler {
             Int { int, .. } => Ast::Constant(Constant::Int {
                 span: sexpr.span(),
                 int: *int,
+            }),
+            Float { float, .. } => Ast::Constant(Constant::Float {
+                span: sexpr.span(),
+                float: *float,
             }),
             Bool { bool, .. } => Ast::Constant(Constant::Bool {
                 span: sexpr.span(),
@@ -902,6 +937,27 @@ impl Compiler {
         }))
     }
 
+    fn compile_binary_float_op(
+        &mut self,
+        sexpr: &Sexpr,
+        operator: &str,
+        lhs: &Sexpr,
+        rhs: &Sexpr,
+    ) -> Result<Ast, Error> {
+        Ok(Ast::BinaryFloatOperation(BinaryFloatOperation {
+            span: sexpr.span(),
+            operator: match operator {
+                "+." => BinaryFloatOperator::Add,
+                "-." => BinaryFloatOperator::Sub,
+                "*." => BinaryFloatOperator::Mul,
+                "/." => BinaryFloatOperator::Div,
+                _ => unreachable!(),
+            },
+            lhs: std::boxed::Box::new(self.compile(lhs)?),
+            rhs: std::boxed::Box::new(self.compile(rhs)?),
+        }))
+    }
+
     fn compile_comparison_op(
         &mut self,
         sexpr: &Sexpr,
@@ -1005,6 +1061,7 @@ impl Compiler {
                 "string?" => IsTypeParameter::String,
                 "char?" => IsTypeParameter::Char,
                 "int?" => IsTypeParameter::Int,
+                "float?" => IsTypeParameter::Float,
                 "bool?" => IsTypeParameter::Bool,
                 "nil?" => IsTypeParameter::Nil,
                 _ => unreachable!(),
@@ -1311,6 +1368,7 @@ impl Ast {
             | Self::If(If { span, .. })
             | Self::Apply(Apply { span, .. })
             | Self::BinaryArithemticOperation(BinaryArithmeticOperation { span, .. })
+            | Self::BinaryFloatOperation(BinaryFloatOperation { span, .. })
             | Self::ComparisonOperation(ComparisonOperation { span, .. })
             | Self::List(List { span, .. })
             | Self::Cons(Cons { span, .. })
@@ -1337,6 +1395,7 @@ impl Ast {
             | Self::Constant(Constant::String { span, .. })
             | Self::Constant(Constant::Char { span, .. })
             | Self::Constant(Constant::Int { span, .. })
+            | Self::Constant(Constant::Float { span, .. })
             | Self::Constant(Constant::Bool { span, .. })
             | Self::Constant(Constant::Nil { span }) => *span,
         }
@@ -1465,6 +1524,10 @@ fn quote(sexpr: &Sexpr, quoted: &Sexpr) -> Quoted {
             span: sexpr.span(),
             int: *int,
         },
+        Sexpr::Float { float, .. } => Quoted::Float {
+            span: sexpr.span(),
+            float: *float,
+        },
         Sexpr::Bool { bool, .. } => Quoted::Bool {
             span: sexpr.span(),
             bool: *bool,
@@ -1495,6 +1558,10 @@ fn quote_list(sexpr: &Sexpr, list: &[Sexpr]) -> Quoted {
                 Sexpr::Int { int, .. } => Quoted::Int {
                     span: sexpr.span(),
                     int: *int,
+                },
+                Sexpr::Float { float, .. } => Quoted::Float {
+                    span: sexpr.span(),
+                    float: *float,
                 },
                 Sexpr::Bool { bool, .. } => Quoted::Bool {
                     span: sexpr.span(),

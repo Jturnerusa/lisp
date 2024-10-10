@@ -48,6 +48,7 @@ pub enum Il {
     UnBox(UnBox),
     FnCall(FnCall),
     ArithmeticOperation(ArithmeticOperation),
+    FloatOperation(FloatOperation),
     ComparisonOperation(ComparisonOperation),
     List(List),
     Cons(Cons),
@@ -83,6 +84,7 @@ pub enum Constant {
     String { span: FileSpan, string: String },
     Char { span: FileSpan, char: char },
     Int { span: FileSpan, int: i64 },
+    Float { span: FileSpan, float: f64 },
     Bool { span: FileSpan, bool: bool },
     Nil { span: FileSpan },
 }
@@ -192,6 +194,22 @@ pub struct ArithmeticOperation {
 }
 
 #[derive(Clone, Debug)]
+pub enum FloatOperator {
+    Add,
+    Sub,
+    Mul,
+    Div,
+}
+
+#[derive(Clone, Debug)]
+pub struct FloatOperation {
+    pub span: FileSpan,
+    pub operator: FloatOperator,
+    pub lhs: std::boxed::Box<Il>,
+    pub rhs: std::boxed::Box<Il>,
+}
+
+#[derive(Clone, Debug)]
 pub enum ComparisonOperator {
     Eq,
     Lt,
@@ -273,6 +291,7 @@ pub enum IsTypeParameter {
     String,
     Char,
     Int,
+    Float,
     Bool,
     Nil,
 }
@@ -370,6 +389,7 @@ impl Constant {
             | Self::String { span, .. }
             | Self::Char { span, .. }
             | Self::Int { span, .. }
+            | Self::Float { span, .. }
             | Self::Bool { span, .. }
             | Self::Nil { span } => *span,
         }
@@ -381,6 +401,7 @@ impl Il {
         match self {
             Self::Lambda(Lambda { span, .. })
             | Self::ArithmeticOperation(ArithmeticOperation { span, .. })
+            | Self::FloatOperation(FloatOperation { span, .. })
             | Self::ComparisonOperation(ComparisonOperation { span, .. })
             | Self::Def(Def { span, .. })
             | Self::Set(Set { span, .. })
@@ -415,6 +436,7 @@ impl Il {
             | Self::Constant(Constant::String { span, .. })
             | Self::Constant(Constant::Char { span, .. })
             | Self::Constant(Constant::Int { span, .. })
+            | Self::Constant(Constant::Float { span, .. })
             | Self::Constant(Constant::Bool { span, .. })
             | Self::Constant(Constant::Nil { span, .. }) => *span,
         }
@@ -496,6 +518,9 @@ impl Compiler {
             Ast::BinaryArithemticOperation(op) => {
                 self.compile_arithmetic_operation(ast, op, vm, ast_compiler)
             }
+            Ast::BinaryFloatOperation(op) => {
+                self.compile_float_operation(ast, op, vm, ast_compiler)
+            }
             Ast::ComparisonOperation(op) => {
                 self.compile_comparison_operation(ast, op, vm, ast_compiler)
             }
@@ -543,6 +568,10 @@ impl Compiler {
             ast::Constant::Int { int, .. } => Il::Constant(Constant::Int {
                 span: ast.span(),
                 int: *int,
+            }),
+            ast::Constant::Float { float, .. } => Il::Constant(Constant::Float {
+                span: ast.span(),
+                float: *float,
             }),
             ast::Constant::Bool { bool, .. } => Il::Constant(Constant::Bool {
                 span: ast.span(),
@@ -917,6 +946,10 @@ impl Compiler {
                 span: ast.span(),
                 int: *int,
             }),
+            Quoted::Float { float, .. } => Il::Constant(Constant::Float {
+                span: ast.span(),
+                float: *float,
+            }),
             Quoted::Bool { bool, .. } => Il::Constant(Constant::Bool {
                 span: ast.span(),
                 bool: *bool,
@@ -955,6 +988,10 @@ impl Compiler {
                         Quoted::Int { int, .. } => Il::Constant(Constant::Int {
                             span: ast.span(),
                             int: *int,
+                        }),
+                        Quoted::Float { float, .. } => Il::Constant(Constant::Float {
+                            span: ast.span(),
+                            float: *float,
                         }),
                         Quoted::Bool { bool, .. } => Il::Constant(Constant::Bool {
                             span: ast.span(),
@@ -1029,6 +1066,32 @@ impl Compiler {
                 ast::BinaryArithmeticOperator::Sub => ArithmeticOperator::Sub,
                 ast::BinaryArithmeticOperator::Mul => ArithmeticOperator::Mul,
                 ast::BinaryArithmeticOperator::Div => ArithmeticOperator::Div,
+            },
+            lhs: std::boxed::Box::new(expect_expression!(
+                self.compile(&op.lhs, vm, ast_compiler),
+                ast.span()
+            )),
+            rhs: std::boxed::Box::new(expect_expression!(
+                self.compile(&op.rhs, vm, ast_compiler),
+                ast.span()
+            )),
+        })))
+    }
+
+    fn compile_float_operation(
+        &mut self,
+        ast: &Ast,
+        op: &ast::BinaryFloatOperation,
+        vm: &mut Vm<FileSpan>,
+        ast_compiler: &mut ast::Compiler,
+    ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
+        Ok(Some(Il::FloatOperation(FloatOperation {
+            span: ast.span(),
+            operator: match op.operator {
+                ast::BinaryFloatOperator::Add => FloatOperator::Add,
+                ast::BinaryFloatOperator::Sub => FloatOperator::Sub,
+                ast::BinaryFloatOperator::Mul => FloatOperator::Mul,
+                ast::BinaryFloatOperator::Div => FloatOperator::Div,
             },
             lhs: std::boxed::Box::new(expect_expression!(
                 self.compile(&op.lhs, vm, ast_compiler),
@@ -1158,6 +1221,7 @@ impl Compiler {
                 ast::IsTypeParameter::String => IsTypeParameter::String,
                 ast::IsTypeParameter::Char => IsTypeParameter::Char,
                 ast::IsTypeParameter::Int => IsTypeParameter::Int,
+                ast::IsTypeParameter::Float => IsTypeParameter::Float,
                 ast::IsTypeParameter::Bool => IsTypeParameter::Bool,
                 ast::IsTypeParameter::Nil => IsTypeParameter::Nil,
             },
