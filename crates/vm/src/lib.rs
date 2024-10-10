@@ -136,7 +136,7 @@ struct Frame<D: 'static> {
     bp: usize,
 }
 
-#[derive(Clone, Debug, PartialEq, PartialOrd, EnumAs, EnumIs)]
+#[derive(Clone, Debug, EnumAs, EnumIs)]
 pub enum Local<D: 'static> {
     Value(Object<D>),
     UpValue(Gc<GcCell<Object<D>>>),
@@ -1125,5 +1125,37 @@ impl Hash for OpCode {
             Self::SetField(field) => field.hash(state),
             _ => (),
         }
+    }
+}
+
+impl<D: PartialEq> PartialEq for Local<D> {
+    fn eq(&self, other: &Self) -> bool {
+        let a = match self {
+            Local::Value(object) => object,
+            Local::UpValue(upvalue) => &upvalue.borrow(),
+        };
+
+        let b = match other {
+            Local::Value(object) => object,
+            Local::UpValue(upvalue) => &upvalue.borrow(),
+        };
+
+        a == b
+    }
+}
+
+impl<D: PartialOrd> PartialOrd for Local<D> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        let a = match self {
+            Local::Value(object) => object,
+            Local::UpValue(upvalue) => &upvalue.borrow(),
+        };
+
+        let b = match other {
+            Local::Value(object) => object,
+            Local::UpValue(upvalue) => &upvalue.borrow(),
+        };
+
+        a.partial_cmp(b)
     }
 }
