@@ -1,7 +1,7 @@
 use core::fmt;
 use error::FileSpan;
 use logos::{Lexer, Logos};
-use std::cmp::Ordering;
+use std::{cmp::Ordering, hash::Hash};
 use unwrap_enum::EnumIs;
 
 #[derive(Clone, Debug)]
@@ -52,6 +52,9 @@ enum Token {
 
     #[regex("[0-9]+")]
     Int,
+
+    #[regex("[0-9]+\\.[0-9]+")]
+    Float,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -62,13 +65,14 @@ enum Macro {
     Splice,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, EnumIs)]
+#[derive(Clone, Debug, PartialEq, EnumIs)]
 pub enum Sexpr {
     List { list: Vec<Sexpr>, span: FileSpan },
     Symbol { symbol: String, span: FileSpan },
     String { string: String, span: FileSpan },
     Char { char: char, span: FileSpan },
     Int { int: i64, span: FileSpan },
+    Float { float: f64, span: FileSpan },
     Bool { bool: bool, span: FileSpan },
     Nil { span: FileSpan },
 }
@@ -124,6 +128,13 @@ impl Sexpr {
         }
     }
 
+    pub fn as_float(&self) -> Option<f64> {
+        match self {
+            Self::Float { float, .. } => Some(*float),
+            _ => None,
+        }
+    }
+
     pub fn as_bool(&self) -> Option<bool> {
         match self {
             Self::Bool { bool, .. } => Some(*bool),
@@ -138,6 +149,7 @@ impl Sexpr {
             | Self::String { span, .. }
             | Self::Char { span, .. }
             | Self::Int { span, .. }
+            | Self::Float { span, .. }
             | Self::Bool { span, .. }
             | Self::Nil { span, .. } => *span,
         }
@@ -153,6 +165,7 @@ impl Sexpr {
             Self::String { string, .. } => Self::String { string, span },
             Self::Char { char, .. } => Self::Char { char, span },
             Self::Int { int, .. } => Self::Int { int, span },
+            Self::Float { float, .. } => Self::Float { float, span },
             Self::Bool { bool, .. } => Self::Bool { bool, span },
             Self::Nil { .. } => Self::Nil { span },
         }
@@ -184,6 +197,7 @@ impl fmt::Display for Sexpr {
             Sexpr::String { string, .. } => write!(f, r#""{string}""#),
             Sexpr::Char { char, .. } => write!(f, "'{char}'"),
             Sexpr::Int { int, .. } => write!(f, "{int}"),
+            Sexpr::Float { float, .. } => write!(f, "{float}"),
             Sexpr::Bool { bool, .. } if !bool => write!(f, "false"),
             Sexpr::Bool { .. } => write!(f, "true"),
             Self::Nil { .. } => write!(f, "()"),
@@ -240,6 +254,14 @@ fn read(lexer: &mut Lexer<'_, Token>, file_id: u64) -> Option<Result<Sexpr, Erro
         },
         Ok(Token::Int) => Sexpr::Int {
             int: lexer.slice().parse().unwrap(),
+            span: FileSpan {
+                id: file_id,
+                start: lexer.span().start,
+                stop: lexer.span().end,
+            },
+        },
+        Ok(Token::Float) => Sexpr::Float {
+            float: lexer.slice().parse().unwrap(),
             span: FileSpan {
                 id: file_id,
                 start: lexer.span().start,
@@ -337,6 +359,14 @@ fn read_list(lexer: &mut Lexer<'_, Token>, file_id: u64) -> Result<Sexpr, Error>
                     stop: lexer.span().end,
                 },
             }),
+            Some(Ok(Token::Float)) => list.push(Sexpr::Float {
+                float: lexer.slice().parse().unwrap(),
+                span: FileSpan {
+                    id: file_id,
+                    start: lexer.span().start,
+                    stop: lexer.span().end,
+                },
+            }),
             Some(Ok(Token::True)) => list.push(Sexpr::Bool {
                 bool: true,
                 span: FileSpan {
@@ -412,6 +442,7 @@ impl PartialOrd for Sexpr {
             (Self::String { string: a, .. }, Self::String { string: b, .. }) => a.partial_cmp(b),
             (Self::Char { char: a, .. }, Self::Char { char: b, .. }) => a.partial_cmp(b),
             (Self::Int { int: a, .. }, Self::Int { int: b, .. }) => a.partial_cmp(b),
+            (Self::Float { float: a, .. }, Self::Float { float: b, .. }) => a.partial_cmp(b),
             (Self::Bool { bool: a, .. }, Self::Bool { bool: b, .. }) => a.partial_cmp(b),
             (Self::Nil { .. }, Self::Nil { .. }) => Some(Ordering::Equal),
             _ => None,
@@ -430,5 +461,23 @@ impl error::Error for Error {
             Self::UnbalancedParens => write!(writer, "lexer error: unbalanced parens").unwrap(),
             Self::UnExpectedEof => write!(writer, "lexer error: unexpected eof").unwrap(),
         }
+    }
+}
+
+impl Hash for Sexpr {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::mem::discriminant(self).hash(state);
+        match self {
+            Self::List { list, .. } => list.hash(state),
+            Self::Symbol { symbol, .. } => symbol.hash(state),
+            Self::String { string, .. } => string.hash(state),
+            Self::Char { char, .. } => char.hash(state),
+            Self::Int { int, .. } => int.hash(state),
+            Self::Float { float, .. } => float.to_bits().hash(state),
+            Self::Bool { bool, .. } => bool.hash(state),
+            _ => (),
+        }
+
+        self.span().hash(state);
     }
 }
