@@ -612,7 +612,7 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
         let rhs = self.stack.pop().unwrap();
         let lhs = self.stack.pop().unwrap();
 
-        match (rhs.into_object(), lhs.into_object()) {
+        match (lhs.into_object(), rhs.into_object()) {
             (Object::Int(a), Object::Int(b)) => {
                 self.stack.push(Local::Value(Object::Int(a + b)));
                 Ok(())
@@ -629,7 +629,7 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
         let rhs = self.stack.pop().unwrap();
         let lhs = self.stack.pop().unwrap();
 
-        match (rhs.into_object(), lhs.into_object()) {
+        match (lhs.into_object(), rhs.into_object()) {
             (Object::Int(a), Object::Int(b)) => {
                 self.stack.push(Local::Value(Object::Int(a - b)));
                 Ok(())
@@ -646,7 +646,7 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
         let rhs = self.stack.pop().unwrap();
         let lhs = self.stack.pop().unwrap();
 
-        match (rhs.into_object(), lhs.into_object()) {
+        match (lhs.into_object(), rhs.into_object()) {
             (Object::Int(a), Object::Int(b)) => {
                 self.stack.push(Local::Value(Object::Int(a * b)));
                 Ok(())
@@ -663,7 +663,7 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
         let rhs = self.stack.pop().unwrap();
         let lhs = self.stack.pop().unwrap();
 
-        match (rhs.into_object(), lhs.into_object()) {
+        match (lhs.into_object(), rhs.into_object()) {
             (Object::Int(a), Object::Int(b)) => {
                 self.stack.push(Local::Value(Object::Int(a / b)));
                 Ok(())
