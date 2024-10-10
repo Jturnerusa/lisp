@@ -71,6 +71,8 @@ macro_rules! check_type {
 pub fn load_module<D: Clone + PartialEq + PartialOrd + Hash + Debug>(vm: &mut Vm<D>) {
     vm.load_native_function("gensym", gensym);
     vm.load_native_function("print", io::print);
+    vm.load_native_function("println", io::println);
+    vm.load_native_function("dbg", io::dbg);
     vm.load_native_function("read-file", io::read_file);
     vm.load_native_function("argv", io::argv);
     vm.load_native_function("string-split", string::split);

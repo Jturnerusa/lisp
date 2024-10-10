@@ -1,9 +1,7 @@
 (decl (gensym (fn -> symbol)))
-
 (decl (print (fn 'a -> nil)))
-
+(decl (println (fn 'a -> nil)))
+(decl (dbg (fn 'a -> 'a)))
 (decl (argv (fn -> nil)))
-
 (decl (read-file (fn string -> nil)))
-
 (decl (is-digit? (fn string -> bool)))
