@@ -1,5 +1,5 @@
 use crate::{check_arity, check_type};
-use gc::Gc;
+use std::rc::Rc;
 use std::{fs::File, io::Read};
 use vm::{object::Type, Error, Local, Object};
 
@@ -57,7 +57,7 @@ pub fn dbg<D: Clone>(objects: &mut [Local<D>]) -> Result<Object<D>, Error> {
 
 pub fn argv<D: Clone>(_: &mut [Local<D>]) -> Result<Object<D>, Error> {
     Ok(Object::from_iter(
-        std::env::args().map(|s| Object::String(Gc::new(s))),
+        std::env::args().map(|s| Object::String(Rc::new(s))),
     ))
 }
 
@@ -71,5 +71,5 @@ pub fn read_file<D: Clone>(objects: &mut [Local<D>]) -> Result<Object<D>, Error>
     file.read_to_string(&mut buff)
         .map_err(|e| Error::Other(Box::new(e)))?;
 
-    Ok(Object::String(Gc::new(buff)))
+    Ok(Object::String(Rc::new(buff)))
 }

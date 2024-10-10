@@ -3,8 +3,8 @@ mod optimizer;
 use crate::tree::{self, Il};
 use core::fmt;
 use error::FileSpan;
-use gc::Gc;
 use std::hash::{Hash, Hasher};
+use std::rc::Rc;
 use vm::{Constant, OpCode, OpCodeTable};
 
 #[derive(Clone, Debug)]
@@ -73,7 +73,7 @@ fn compile_varref(
             opcodes.push(OpCode::GetUpValue(*index), varref.span());
         }
         tree::VarRef::Global { name, .. } => {
-            let constant = Constant::Symbol(Gc::new(name.clone()));
+            let constant = Constant::Symbol(Rc::new(name.clone()));
             let hash = hash_constant(&constant);
             constants.push(constant);
             opcodes.push(OpCode::GetGlobal(hash), varref.span())
@@ -90,13 +90,13 @@ fn compile_constant(
 ) -> Result<(), Error> {
     let op = match constant {
         tree::Constant::Symbol { symbol, .. } => {
-            let constant = Constant::Symbol(Gc::new(symbol.clone()));
+            let constant = Constant::Symbol(Rc::new(symbol.clone()));
             let hash = hash_constant(&constant);
             constants.push(constant);
             OpCode::PushSymbol(hash)
         }
         tree::Constant::String { string, .. } => {
-            let constant = Constant::String(Gc::new(string.clone()));
+            let constant = Constant::String(Rc::new(string.clone()));
             let hash = hash_constant(&constant);
             constants.push(constant);
             OpCode::PushString(hash)
@@ -128,7 +128,7 @@ fn compile_lambda(
 
     let optimized_opcode_table = optimizer::optimize(&lambda_opcode_table);
 
-    let constant = Constant::OpCodeTable(Gc::new(optimized_opcode_table));
+    let constant = Constant::OpCodeTable(Rc::new(optimized_opcode_table));
     let hash = hash_constant(&constant);
     constants.push(constant);
 
@@ -170,7 +170,7 @@ fn compile_def(
 ) -> Result<(), Error> {
     compile(&def.body, opcodes, constants)?;
 
-    let constant = Constant::Symbol(Gc::new(def.parameter.name.clone()));
+    let constant = Constant::Symbol(Rc::new(def.parameter.name.clone()));
     let hash = hash_constant(&constant);
     constants.push(constant);
 
@@ -194,7 +194,7 @@ fn compile_set(
             opcodes.push(OpCode::SetUpValue(*index), set.span);
         }
         tree::VarRef::Global { name, .. } => {
-            let constant = Constant::Symbol(Gc::new(name.clone()));
+            let constant = Constant::Symbol(Rc::new(name.clone()));
             let hash = hash_constant(&constant);
             constants.push(constant);
             opcodes.push(OpCode::SetGlobal(hash), set.span);
@@ -472,7 +472,7 @@ fn compile_make_type(
     opcodes: &mut OpCodeTable<FileSpan>,
     constants: &mut Vec<Constant<FileSpan>>,
 ) -> Result<(), Error> {
-    let constant = Constant::Symbol(Gc::new(make_type.pattern.0.clone()));
+    let constant = Constant::Symbol(Rc::new(make_type.pattern.0.clone()));
     let hash = hash_constant(&constant);
     constants.push(constant);
 
@@ -509,7 +509,7 @@ fn compile_if_let(
 
     let else_length = r#else.len();
 
-    let lambda_opcode_table_constant = Constant::OpCodeTable(Gc::new(then));
+    let lambda_opcode_table_constant = Constant::OpCodeTable(Rc::new(then));
     let hash = hash_constant(&lambda_opcode_table_constant);
     constants.push(lambda_opcode_table_constant);
 
@@ -519,7 +519,7 @@ fn compile_if_let(
 
     opcodes.push(OpCode::Car, if_let.span);
 
-    let symbol_constant = Constant::Symbol(Gc::new(if_let.pattern.0.clone()));
+    let symbol_constant = Constant::Symbol(Rc::new(if_let.pattern.0.clone()));
     let hash = hash_constant(&symbol_constant);
     constants.push(symbol_constant);
 
@@ -575,7 +575,7 @@ fn compile_letrec(
 
     lambda_opcodes.push(OpCode::Return, letrec.span);
 
-    let constant = Constant::OpCodeTable(Gc::new(lambda_opcodes));
+    let constant = Constant::OpCodeTable(Rc::new(lambda_opcodes));
     let hash = hash_constant(&constant);
     constants.push(constant);
 

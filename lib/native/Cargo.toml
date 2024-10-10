@@ -7,5 +7,4 @@ edition = "2021"
 
 [dependencies]
 vm = { path = "../../crates/vm" }
-gc = { path = "../../crates/gc" }
 rand =  { workspace = true }

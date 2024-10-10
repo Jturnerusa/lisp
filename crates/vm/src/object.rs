@@ -1,11 +1,10 @@
 use crate::{Arity, Error, OpCodeTable};
-use gc::{Gc, GcCell, Trace};
+use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fmt::Write;
 use std::fmt::{self, Debug, Display};
 use std::ops::Deref;
-use std::ptr::NonNull;
 use std::rc::Rc;
 use unwrap_enum::{EnumAs, EnumIs};
 
@@ -26,8 +25,8 @@ pub enum Type {
 
 #[derive(Clone, Debug, EnumAs, EnumIs, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum HashMapKey {
-    String(Gc<String>),
-    Symbol(Gc<String>),
+    String(Rc<String>),
+    Symbol(Rc<String>),
     Int(i64),
     Char(char),
     Bool(bool),
@@ -36,14 +35,14 @@ pub enum HashMapKey {
 
 #[derive(Clone, Debug, EnumAs, EnumIs)]
 pub enum Object<D: 'static> {
-    Box(Gc<GcCell<Object<D>>>),
-    Struct(Gc<GcCell<Struct<D>>>),
+    Box(Rc<RefCell<Object<D>>>),
+    Struct(Rc<RefCell<Struct<D>>>),
     NativeFunction(NativeFunction<D>),
-    Function(Gc<GcCell<Lambda<D>>>),
-    Cons(Gc<GcCell<Cons<D>>>),
-    HashMap(Gc<GcCell<HashMap<HashMapKey, Object<D>>>>),
-    String(Gc<String>),
-    Symbol(Gc<String>),
+    Function(Rc<RefCell<Lambda<D>>>),
+    Cons(Rc<RefCell<Cons<D>>>),
+    HashMap(Rc<RefCell<HashMap<HashMapKey, Object<D>>>>),
+    String(Rc<String>),
+    Symbol(Rc<String>),
     Int(i64),
     Float(f64),
     Char(char),
@@ -59,8 +58,8 @@ pub struct Struct<D: 'static> {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Lambda<D: 'static> {
     pub(crate) arity: Arity,
-    pub(crate) opcodes: Gc<OpCodeTable<D>>,
-    pub(crate) upvalues: Vec<Gc<GcCell<Object<D>>>>,
+    pub(crate) opcodes: Rc<OpCodeTable<D>>,
+    pub(crate) upvalues: Vec<Rc<RefCell<Object<D>>>>,
 }
 
 #[allow(clippy::type_complexity)]
@@ -86,12 +85,12 @@ impl<D: Clone> FromIterator<Object<D>> for Object<D> {
             return Object::Nil;
         };
 
-        let mut tail = Gc::new(GcCell::new(Cons(first, Object::Nil)));
+        let mut tail = Rc::new(RefCell::new(Cons(first, Object::Nil)));
 
         let list = Object::Cons(tail.clone());
 
         for object in objects {
-            let new_tail = Gc::new(GcCell::new(Cons(object, Object::Nil)));
+            let new_tail = Rc::new(RefCell::new(Cons(object, Object::Nil)));
             tail.deref().borrow_mut().1 = Object::Cons(new_tail.clone());
             tail = new_tail
         }
@@ -236,7 +235,7 @@ impl<D: Clone> Display for Cons<D> {
 impl<D: Clone> Display for Object<D> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Box(object) => write!(f, "box({object})"),
+            Self::Box(object) => write!(f, "box({})", object.borrow()),
             Self::Struct(r#struct) => {
                 write!(f, "struct(")?;
                 for (i, field) in r#struct.borrow().fields.iter().enumerate() {
@@ -334,116 +333,6 @@ impl<D> From<&HashMapKey> for Object<D> {
         }
     }
 }
-
-unsafe impl Trace for HashMapKey {
-    unsafe fn root(&self) {
-        match self {
-            Self::Symbol(symbol) => symbol.root(),
-            Self::String(string) => string.root(),
-            _ => (),
-        }
-    }
-
-    unsafe fn unroot(&self) {
-        match self {
-            Self::Symbol(symbol) => symbol.unroot(),
-            Self::String(string) => string.unroot(),
-            _ => (),
-        }
-    }
-
-    unsafe fn trace(&self, tracer: &mut dyn FnMut(NonNull<gc::Inner<dyn Trace>>) -> bool) {
-        match self {
-            Self::Symbol(symbol) => symbol.trace(tracer),
-            Self::String(string) => string.trace(tracer),
-            _ => (),
-        }
-    }
-}
-
-unsafe impl<D: 'static> Trace for Lambda<D> {
-    unsafe fn root(&self) {
-        self.upvalues.root();
-    }
-
-    unsafe fn unroot(&self) {
-        self.upvalues.unroot();
-    }
-
-    unsafe fn trace(&self, tracer: &mut dyn FnMut(NonNull<gc::Inner<dyn Trace>>) -> bool) {
-        self.upvalues.trace(tracer);
-    }
-}
-
-unsafe impl<D: 'static> Trace for Object<D> {
-    unsafe fn root(&self) {
-        match self {
-            Self::Struct(r#struct) => r#struct.root(),
-            Self::Function(function) => function.root(),
-            Self::Cons(cons) => cons.root(),
-            Self::HashMap(hm) => hm.root(),
-            Self::Symbol(symbol) => symbol.root(),
-            Self::String(string) => string.root(),
-            _ => (),
-        }
-    }
-
-    unsafe fn unroot(&self) {
-        match self {
-            Self::Struct(r#struct) => r#struct.unroot(),
-            Self::Function(function) => function.unroot(),
-            Self::Cons(cons) => cons.unroot(),
-            Self::HashMap(hm) => hm.unroot(),
-            Self::Symbol(symbol) => symbol.unroot(),
-            Self::String(string) => string.unroot(),
-            _ => (),
-        }
-    }
-
-    unsafe fn trace(&self, tracer: &mut dyn FnMut(NonNull<gc::Inner<dyn Trace>>) -> bool) {
-        match self {
-            Self::Struct(r#struct) => r#struct.trace(tracer),
-            Self::Function(function) => function.trace(tracer),
-            Self::Cons(cons) => cons.trace(tracer),
-            Self::HashMap(hm) => hm.trace(tracer),
-            Self::Symbol(symbol) => symbol.trace(tracer),
-            Self::String(string) => string.trace(tracer),
-            _ => (),
-        }
-    }
-}
-
-unsafe impl<D> Trace for Struct<D> {
-    unsafe fn root(&self) {
-        self.fields.root();
-    }
-
-    unsafe fn unroot(&self) {
-        self.fields.unroot()
-    }
-
-    unsafe fn trace(&self, tracer: &mut dyn FnMut(NonNull<gc::Inner<dyn Trace>>) -> bool) {
-        self.fields.trace(tracer);
-    }
-}
-
-unsafe impl<D> Trace for Cons<D> {
-    unsafe fn root(&self) {
-        self.0.root();
-        self.1.root();
-    }
-
-    unsafe fn unroot(&self) {
-        self.0.unroot();
-        self.1.unroot();
-    }
-
-    unsafe fn trace(&self, tracer: &mut dyn FnMut(NonNull<gc::Inner<dyn Trace>>) -> bool) {
-        self.0.trace(tracer);
-        self.1.trace(tracer);
-    }
-}
-
 impl<D: Clone> Object<D> {
     #[allow(clippy::result_unit_err)]
     pub fn print(&self, buffer: &mut String) -> Result<(), ()> {

@@ -2,9 +2,7 @@ mod io;
 mod math;
 mod string;
 
-use std::{fmt::Debug, hash::Hash};
-
-use gc::Gc;
+use std::{fmt::Debug, hash::Hash, rc::Rc};
 use vm::{Error, Local, Object, Vm};
 
 #[macro_export]
@@ -104,5 +102,5 @@ pub fn load_module<D: Clone + PartialEq + PartialOrd + Hash + Debug>(vm: &mut Vm
 pub fn gensym<D: Clone>(_: &mut [Local<D>]) -> Result<Object<D>, Error> {
     let int = rand::random::<u64>();
     let symbol = format!("e{int}");
-    Ok(Object::Symbol(Gc::new(symbol)))
+    Ok(Object::Symbol(Rc::new(symbol)))
 }

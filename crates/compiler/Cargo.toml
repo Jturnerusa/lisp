@@ -6,7 +6,6 @@ edition = "2021"
 [dependencies]
 reader = { path = "../reader" }
 vm = { path = "../vm" }
-gc = { path = "../gc" }
 unwrap-enum = { workspace = true }
 micro-nom = { workspace = true }
 error = { path = "../error" }

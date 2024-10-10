@@ -1,5 +1,5 @@
 use crate::{check_arity, check_type};
-use gc::Gc;
+use std::rc::Rc;
 use vm::{object::Type, Error, Local, Object};
 
 pub fn split<D: Clone>(objects: &mut [Local<D>]) -> Result<Object<D>, Error> {
@@ -11,7 +11,7 @@ pub fn split<D: Clone>(objects: &mut [Local<D>]) -> Result<Object<D>, Error> {
     Ok(Object::from_iter(
         string
             .split(separator.as_str())
-            .map(|s| Object::String(Gc::new(s.to_string()))),
+            .map(|s| Object::String(Rc::new(s.to_string()))),
     ))
 }
 
@@ -23,7 +23,7 @@ pub fn split_ascii_whitespace<D: Clone>(objects: &mut [Local<D>]) -> Result<Obje
     Ok(Object::from_iter(
         string
             .split_ascii_whitespace()
-            .map(|s| Object::String(Gc::new(s.to_string()))),
+            .map(|s| Object::String(Rc::new(s.to_string()))),
     ))
 }
 
@@ -54,7 +54,7 @@ pub fn from_list<D: Clone>(objects: &mut [Local<D>]) -> Result<Object<D>, Error>
         })
         .collect::<Result<String, _>>()?;
 
-    Ok(Object::String(Gc::new(string)))
+    Ok(Object::String(Rc::new(string)))
 }
 
 pub fn parse<D: Clone>(objects: &mut [Local<D>]) -> Result<Object<D>, Error> {
@@ -75,7 +75,7 @@ pub fn lines<D: Clone>(objects: &mut [Local<D>]) -> Result<Object<D>, Error> {
     Ok(Object::from_iter(
         string
             .lines()
-            .map(|s| Object::String(Gc::new(s.to_string()))),
+            .map(|s| Object::String(Rc::new(s.to_string()))),
     ))
 }
 
@@ -123,7 +123,7 @@ pub fn substr<D: Clone>(objects: &mut [Local<D>]) -> Result<Object<D>, Error> {
 
     let substr = string.as_str()[start..stop].to_string();
 
-    Ok(Object::String(Gc::new(substr)))
+    Ok(Object::String(Rc::new(substr)))
 }
 
 pub fn find<D: Clone>(objects: &mut [Local<D>]) -> Result<Object<D>, Error> {

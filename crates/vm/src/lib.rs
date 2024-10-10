@@ -5,14 +5,15 @@ pub mod object;
 use crate::object::{Cons, Lambda, NativeFunction, Type};
 use core::fmt;
 use error::FileSpan;
-use gc::{Gc, GcCell, Trace};
 use identity_hasher::{IdentityHasher, IdentityMap};
 use object::{HashMapKey, Struct};
+use std::cell::RefCell;
 use std::cmp::{Ordering, PartialOrd};
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 use std::ops::{Deref, DerefMut};
+use std::rc::Rc;
 use thiserror::Error;
 use unwrap_enum::{EnumAs, EnumIs};
 
@@ -118,9 +119,9 @@ pub struct OpCodeTable<D> {
 
 #[derive(Clone, PartialEq, Hash, EnumAs, EnumIs)]
 pub enum Constant<D> {
-    OpCodeTable(Gc<OpCodeTable<D>>),
-    Symbol(Gc<String>),
-    String(Gc<String>),
+    OpCodeTable(Rc<OpCodeTable<D>>),
+    Symbol(Rc<String>),
+    String(Rc<String>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Eq, Hash)]
@@ -131,7 +132,7 @@ pub enum UpValue {
 
 #[derive(Clone, Debug)]
 struct Frame<D: 'static> {
-    function: Option<Gc<GcCell<Lambda<D>>>>,
+    function: Option<Rc<RefCell<Lambda<D>>>>,
     pc: usize,
     bp: usize,
 }
@@ -139,15 +140,15 @@ struct Frame<D: 'static> {
 #[derive(Clone, Debug, EnumAs, EnumIs)]
 pub enum Local<D: 'static> {
     Value(Object<D>),
-    UpValue(Gc<GcCell<Object<D>>>),
+    UpValue(Rc<RefCell<Object<D>>>),
 }
 
 pub struct Vm<D: 'static> {
-    globals: HashMap<Gc<String>, Object<D>>,
+    globals: HashMap<Rc<String>, Object<D>>,
     constants: IdentityMap<u64, Constant<D>>,
     stack: Vec<Local<D>>,
     frames: Vec<Frame<D>>,
-    current_function: Option<Gc<GcCell<Lambda<D>>>>,
+    current_function: Option<Rc<RefCell<Lambda<D>>>>,
     pc: usize,
     bp: usize,
 }
@@ -179,7 +180,7 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
     {
         let native_function = NativeFunction::new(f);
         self.globals.insert(
-            Gc::new(name.to_string()),
+            Rc::new(name.to_string()),
             Object::NativeFunction(native_function),
         );
     }
@@ -408,7 +409,7 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
             UpValue::Local(i) => {
                 let val = self.stack[self.bp + i].clone();
                 let gc = match val {
-                    Local::Value(inner) => Gc::new(GcCell::new(inner)),
+                    Local::Value(inner) => Rc::new(RefCell::new(inner)),
                     Local::UpValue(inner) => inner,
                 };
                 self.stack[self.bp + i] = Local::UpValue(gc.clone());
@@ -465,7 +466,7 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
     pub fn r#box(&mut self) -> Result<(), Error> {
         let val = self.stack.pop().unwrap().into_object();
         self.stack
-            .push(Local::Value(Object::Box(Gc::new(GcCell::new(val)))));
+            .push(Local::Value(Object::Box(Rc::new(RefCell::new(val)))));
         Ok(())
     }
 
@@ -530,7 +531,7 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
         }
     }
 
-    fn check_arity(&mut self, args: usize, function: Gc<GcCell<Lambda<D>>>) -> Result<(), Error> {
+    fn check_arity(&mut self, args: usize, function: Rc<RefCell<Lambda<D>>>) -> Result<(), Error> {
         match function.borrow().arity {
             Arity::Nullary if args != 0 => Err(Error::Parameters(format!(
                 "expected 0 parameters, received {args}"
@@ -601,7 +602,7 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
             upvalues: Vec::new(),
         };
 
-        let object = Object::Function(Gc::new(GcCell::new(function)));
+        let object = Object::Function(Rc::new(RefCell::new(function)));
 
         self.stack.push(Local::Value(object));
 
@@ -712,7 +713,7 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
         let rhs = self.stack.pop().unwrap();
         let lhs = self.stack.pop().unwrap();
 
-        let cons = Object::Cons(Gc::new(GcCell::new(Cons(
+        let cons = Object::Cons(Rc::new(RefCell::new(Cons(
             lhs.into_object(),
             rhs.into_object(),
         ))));
@@ -859,7 +860,7 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
     }
 
     pub fn map_create(&mut self) -> Result<(), Error> {
-        let map = Object::HashMap(Gc::new(GcCell::new(HashMap::new())));
+        let map = Object::HashMap(Rc::new(RefCell::new(HashMap::new())));
         self.stack.push(Local::Value(map));
         Ok(())
     }
@@ -925,9 +926,9 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
         };
 
         let list = Object::from_iter(map.borrow().iter().map(|(key, value)| {
-            Object::Cons(Gc::new(GcCell::new(Cons(
+            Object::Cons(Rc::new(RefCell::new(Cons(
                 Object::from(key),
-                Object::Cons(Gc::new(GcCell::new(Cons(value.clone(), Object::Nil)))),
+                Object::Cons(Rc::new(RefCell::new(Cons(value.clone(), Object::Nil)))),
             ))))
         }));
 
@@ -946,7 +947,9 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
         let r#struct = Struct { fields };
 
         self.stack
-            .push(Local::Value(Object::Struct(Gc::new(GcCell::new(r#struct)))));
+            .push(Local::Value(Object::Struct(Rc::new(RefCell::new(
+                r#struct,
+            )))));
 
         Ok(())
     }
@@ -1060,14 +1063,6 @@ impl<T> OpCodeTable<T> {
             self.debug.push(debug);
         }
     }
-}
-
-unsafe impl<D> Trace for OpCodeTable<D> {
-    unsafe fn root(&self) {}
-
-    unsafe fn unroot(&self) {}
-
-    unsafe fn trace(&self, _: &mut dyn FnMut(std::ptr::NonNull<gc::Inner<dyn Trace>>) -> bool) {}
 }
 
 impl<D> fmt::Debug for OpCodeTable<D> {

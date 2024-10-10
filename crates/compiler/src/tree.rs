@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::Components};
+use std::{collections::HashMap, rc::Rc};
 
 use crate::{
     ast::{
@@ -10,7 +10,6 @@ use crate::{
 };
 
 use error::FileSpan;
-use gc::Gc;
 use reader::Reader;
 use unwrap_enum::{EnumAs, EnumIs};
 use vm::{Arity, OpCodeTable, UpValue, Vm};
@@ -664,7 +663,7 @@ impl Compiler {
 
         vm.eval(&opcodes)?;
 
-        let constant = vm::Constant::Symbol(Gc::new(defmacro.name.clone()));
+        let constant = vm::Constant::Symbol(Rc::new(defmacro.name.clone()));
         let hash = bytecode::hash_constant(&constant);
 
         vm.load_constant(constant);
@@ -691,7 +690,7 @@ impl Compiler {
         }
 
         let constant: vm::Constant<FileSpan> =
-            vm::Constant::Symbol(Gc::new(macro_call.r#macro.clone()));
+            vm::Constant::Symbol(Rc::new(macro_call.r#macro.clone()));
         let hash = bytecode::hash_constant(&constant);
 
         for constant in constants {
