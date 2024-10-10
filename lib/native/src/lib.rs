@@ -1,4 +1,5 @@
 mod io;
+mod math;
 mod string;
 
 use std::{fmt::Debug, hash::Hash};
@@ -57,6 +58,15 @@ macro_rules! check_type {
             }),
         })?
     };
+    ($object:expr, Float) => {
+        $object.with(|object| match object {
+            Object::Float(f) => Ok(*f),
+            object => Err(::vm::Error::Type {
+                expected: Type::Int,
+                recieved: Type::from(object),
+            }),
+        })?
+    };
     ($object:expr, Char) => {
         $object.with(|object| match object {
             Object::Char(c) => Ok(*c),
@@ -86,6 +96,9 @@ pub fn load_module<D: Clone + PartialEq + PartialOrd + Hash + Debug>(vm: &mut Vm
     vm.load_native_function("string-substr", string::substr);
     vm.load_native_function("string-find", string::find);
     vm.load_native_function("string-starts-with?", string::starts_with);
+    vm.load_native_function("sqrt", math::sqrt);
+    vm.load_native_function("float->int", math::float_to_int);
+    vm.load_native_function("int->float", math::int_to_float);
 }
 
 pub fn gensym<D: Clone>(_: &mut [Local<D>]) -> Result<Object<D>, Error> {

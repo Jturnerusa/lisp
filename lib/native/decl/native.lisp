@@ -5,3 +5,6 @@
 (decl (argv (fn -> nil)))
 (decl (read-file (fn string -> nil)))
 (decl (is-digit? (fn string -> bool)))
+(decl (sqrt (fn float -> float)))
+(decl (float->int (fn float -> int)))
+(decl (int->float (fn int -> float)))
