@@ -18,7 +18,7 @@ use unwrap_enum::{EnumAs, EnumIs};
 
 pub use crate::object::Object;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Hash)]
 pub enum Arity {
     Nullary,
     Nary(usize),
@@ -43,6 +43,8 @@ pub enum Error {
     Assert(String),
     #[error("cannot compare this combination of types: {0} {1}")]
     Cmp(Type, Type),
+    #[error("cannot do arithmetic on this combination of types: {0} {1}")]
+    Arithmetic(Type, Type),
     #[error("cannot make hashmap key from type: {0}")]
     HashKey(Type),
     #[error("expected a list for apply")]
@@ -53,7 +55,7 @@ pub enum Error {
     Other(#[from] Box<dyn std::error::Error>),
 }
 
-#[derive(Clone, Copy, Debug, EnumAs, EnumIs, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, EnumAs, EnumIs)]
 pub enum OpCode {
     DefGlobal(u64),
     SetGlobal(u64),
@@ -73,6 +75,7 @@ pub enum OpCode {
     CreateUpValue(UpValue),
     PushSymbol(u64),
     PushInt(i64),
+    PushFloat(f64),
     PushChar(char),
     PushString(u64),
     PushBool(bool),
@@ -107,20 +110,20 @@ pub enum OpCode {
     SetField(usize),
 }
 
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, PartialOrd, Hash)]
 pub struct OpCodeTable<D> {
     opcodes: Vec<OpCode>,
     debug: Vec<D>,
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, EnumAs, EnumIs)]
+#[derive(Clone, PartialEq, Hash, EnumAs, EnumIs)]
 pub enum Constant<D> {
     OpCodeTable(Gc<OpCodeTable<D>>),
     Symbol(Gc<String>),
     String(Gc<String>),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Eq, Hash)]
 pub enum UpValue {
     Local(usize),
     UpValue(usize),
@@ -237,6 +240,7 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
                 )));
             }
             OpCode::PushInt(i) => self.stack.push(Local::Value(Object::Int(i))),
+            OpCode::PushFloat(f) => self.stack.push(Local::Value(Object::Float(f))),
             OpCode::PushChar(c) => self.stack.push(Local::Value(Object::Char(c))),
             OpCode::PushBool(b) => self.stack.push(Local::Value(Object::Bool(b))),
             OpCode::PushNil => self.stack.push(Local::Value(Object::Nil)),
@@ -604,47 +608,72 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
         Ok(())
     }
 
-    fn binary_integer_op(&mut self, f: impl Fn(i64, i64) -> i64) -> Result<(), Error> {
+    pub fn add(&mut self) -> Result<(), Error> {
         let rhs = self.stack.pop().unwrap();
         let lhs = self.stack.pop().unwrap();
 
-        let a = lhs.with(|object| match object {
-            Object::Int(i) => Ok(*i),
-            object => Err(Error::Type {
-                expected: Type::Int,
-                recieved: Type::from(object),
-            }),
-        })?;
-
-        let b = rhs.with(|object| match object {
-            Object::Int(i) => Ok(*i),
-            object => Err(Error::Type {
-                expected: Type::Int,
-                recieved: Type::from(object),
-            }),
-        })?;
-
-        let result = Object::Int(f(a, b));
-
-        self.stack.push(Local::Value(result));
-
-        Ok(())
-    }
-
-    pub fn add(&mut self) -> Result<(), Error> {
-        self.binary_integer_op(|a, b| a + b)
+        match (rhs.into_object(), lhs.into_object()) {
+            (Object::Int(a), Object::Int(b)) => {
+                self.stack.push(Local::Value(Object::Int(a + b)));
+                Ok(())
+            }
+            (Object::Float(a), Object::Float(b)) => {
+                self.stack.push(Local::Value(Object::Float(a + b)));
+                Ok(())
+            }
+            (a, b) => Err(Error::Arithmetic(Type::from(&a), Type::from(&b))),
+        }
     }
 
     pub fn sub(&mut self) -> Result<(), Error> {
-        self.binary_integer_op(|a, b| a - b)
+        let rhs = self.stack.pop().unwrap();
+        let lhs = self.stack.pop().unwrap();
+
+        match (rhs.into_object(), lhs.into_object()) {
+            (Object::Int(a), Object::Int(b)) => {
+                self.stack.push(Local::Value(Object::Int(a - b)));
+                Ok(())
+            }
+            (Object::Float(a), Object::Float(b)) => {
+                self.stack.push(Local::Value(Object::Float(a - b)));
+                Ok(())
+            }
+            (a, b) => Err(Error::Arithmetic(Type::from(&a), Type::from(&b))),
+        }
     }
 
     pub fn mul(&mut self) -> Result<(), Error> {
-        self.binary_integer_op(|a, b| a * b)
+        let rhs = self.stack.pop().unwrap();
+        let lhs = self.stack.pop().unwrap();
+
+        match (rhs.into_object(), lhs.into_object()) {
+            (Object::Int(a), Object::Int(b)) => {
+                self.stack.push(Local::Value(Object::Int(a * b)));
+                Ok(())
+            }
+            (Object::Float(a), Object::Float(b)) => {
+                self.stack.push(Local::Value(Object::Float(a * b)));
+                Ok(())
+            }
+            (a, b) => Err(Error::Arithmetic(Type::from(&a), Type::from(&b))),
+        }
     }
 
     pub fn div(&mut self) -> Result<(), Error> {
-        self.binary_integer_op(|a, b| a / b)
+        let rhs = self.stack.pop().unwrap();
+        let lhs = self.stack.pop().unwrap();
+
+        match (rhs.into_object(), lhs.into_object()) {
+            (Object::Int(a), Object::Int(b)) => {
+                self.stack.push(Local::Value(Object::Int(a / b)));
+                Ok(())
+            }
+            (Object::Float(a), Object::Float(b)) => {
+                self.stack.push(Local::Value(Object::Float(a / b)));
+                Ok(())
+            }
+            (a, b) => Err(Error::Arithmetic(Type::from(&a), Type::from(&b))),
+        }
     }
 
     pub fn car(&mut self) -> Result<(), Error> {
@@ -1060,5 +1089,41 @@ impl error::Error for ErrorWithDebug<FileSpan> {
 
     fn message(&self, writer: &mut dyn std::io::Write) {
         write!(writer, "{}", self.error).unwrap();
+    }
+}
+
+impl Hash for OpCode {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        std::mem::discriminant(self).hash(state);
+        match self {
+            Self::DefGlobal(global) => global.hash(state),
+            Self::SetGlobal(global) => global.hash(state),
+            Self::GetGlobal(global) => global.hash(state),
+            Self::SetLocal(local) => local.hash(state),
+            Self::GetLocal(local) => local.hash(state),
+            Self::SetUpValue(upvalue) => upvalue.hash(state),
+            Self::GetUpValue(upvalue) => upvalue.hash(state),
+            Self::Call(args) => args.hash(state),
+            Self::Tail(args) => args.hash(state),
+            Self::Lambda(arity, opcodes) => {
+                arity.hash(state);
+                opcodes.hash(state);
+            }
+            Self::CreateUpValue(upvalue) => upvalue.hash(state),
+            Self::PushSymbol(symbol) => symbol.hash(state),
+            Self::PushString(string) => string.hash(state),
+            Self::PushChar(char) => char.hash(state),
+            Self::PushInt(int) => int.hash(state),
+            Self::PushFloat(float) => float.to_bits().hash(state),
+            Self::PushBool(bool) => bool.hash(state),
+            Self::Peek(n) => n.hash(state),
+            Self::List(length) => length.hash(state),
+            Self::Jmp(n) => n.hash(state),
+            Self::Branch(n) => n.hash(state),
+            Self::IsType(r#type) => r#type.hash(state),
+            Self::GetField(field) => field.hash(state),
+            Self::SetField(field) => field.hash(state),
+            _ => (),
+        }
     }
 }

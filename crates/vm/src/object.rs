@@ -9,7 +9,7 @@ use std::ptr::NonNull;
 use std::rc::Rc;
 use unwrap_enum::{EnumAs, EnumIs};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Eq, Hash)]
 pub enum Type {
     Struct,
     Function,
@@ -18,6 +18,7 @@ pub enum Type {
     String,
     Symbol,
     Int,
+    Float,
     Char,
     Bool,
     Nil,
@@ -44,12 +45,13 @@ pub enum Object<D: 'static> {
     String(Gc<String>),
     Symbol(Gc<String>),
     Int(i64),
+    Float(f64),
     Char(char),
     Bool(bool),
     Nil,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub struct Struct<D: 'static> {
     pub(crate) fields: Vec<Object<D>>,
 }
@@ -152,6 +154,7 @@ impl<D> From<&Object<D>> for Type {
             Object::String(_) => Type::String,
             Object::Symbol(_) => Type::Symbol,
             Object::Int(_) => Type::Int,
+            Object::Float(_) => Type::Float,
             Object::Char(_) => Type::Char,
             Object::Bool(_) => Type::Bool,
             Object::Nil => Type::Nil,
@@ -169,6 +172,7 @@ impl fmt::Display for Type {
             Self::Symbol => write!(f, "symbol"),
             Self::String => write!(f, "string"),
             Self::Int => write!(f, "int"),
+            Self::Float => write!(f, "float"),
             Self::Char => write!(f, "char"),
             Self::Bool => write!(f, "bool"),
             Self::Nil => write!(f, "nil"),
@@ -185,6 +189,7 @@ impl<D: PartialEq> PartialEq for Object<D> {
             (Object::Symbol(a), Object::Symbol(b)) => a == b,
             (Object::Char(a), Object::Char(b)) => a == b,
             (Object::Int(a), Object::Int(b)) => a == b,
+            (Object::Float(a), Object::Float(b)) => a == b,
             (Object::Bool(a), Object::Bool(b)) => a == b,
             (Object::Nil, Object::Nil) => true,
             _ => false,
@@ -194,14 +199,15 @@ impl<D: PartialEq> PartialEq for Object<D> {
 
 impl<D: PartialOrd> PartialOrd for Object<D> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(match (self, other) {
-            (Object::Symbol(a), Object::Symbol(b)) => a.cmp(b),
-            (Object::String(a), Object::String(b)) => a.cmp(b),
-            (Object::Int(a), Object::Int(b)) => a.cmp(b),
-            (Object::Bool(a), Object::Bool(b)) => a.cmp(b),
-            (Object::Nil, Object::Nil) => Ordering::Equal,
-            _ => return None,
-        })
+        match (self, other) {
+            (Object::Symbol(a), Object::Symbol(b)) => a.partial_cmp(b),
+            (Object::String(a), Object::String(b)) => a.partial_cmp(b),
+            (Object::Int(a), Object::Int(b)) => a.partial_cmp(b),
+            (Object::Float(a), Object::Float(b)) => a.partial_cmp(b),
+            (Object::Bool(a), Object::Bool(b)) => a.partial_cmp(b),
+            (Object::Nil, Object::Nil) => Some(Ordering::Equal),
+            _ => None,
+        }
     }
 }
 
@@ -254,6 +260,7 @@ impl<D: Clone> Display for Object<D> {
             Self::Symbol(symbol) => write!(f, "'{symbol}"),
             Self::String(string) => write!(f, r#""{string}""#),
             Self::Int(i) => write!(f, "{i}"),
+            Self::Float(i) => write!(f, "{i}"),
             Self::Char(c) => write!(f, r#"'{c}'"#),
             Self::Bool(true) => write!(f, "true"),
             Self::Bool(false) => write!(f, "false"),
@@ -447,6 +454,9 @@ impl<D: Clone> Object<D> {
             Self::String(string) => write!(buffer, r#""{string}""#).map_err(|_| ())?,
             Self::Char(char) => write!(buffer, r#"?{char}"#).map_err(|_| ())?,
             Self::Int(int) => write!(buffer, "{int}").map_err(|_| ())?,
+            // this needs to be printed with the debug formatter or else "even" floats
+            // get printed without a decimal point
+            Self::Float(float) => write!(buffer, "{float:?}").map_err(|_| ())?,
             Self::Bool(true) => write!(buffer, "true").map_err(|_| ())?,
             Self::Bool(false) => write!(buffer, "false").map_err(|_| ())?,
             Self::Nil => write!(buffer, "nil").map_err(|_| ())?,
