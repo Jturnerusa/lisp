@@ -1,6 +1,4 @@
-use super::{
-    Error, MaybeUnknownType, Parameters, Rest, Type, TypeId, TypeInfo, Types, VariantOrStruct,
-};
+use super::{Error, Parameters, Rest, Type, TypeId, TypeInfo, Types, VariantOrStruct};
 use crate::ast::{self, VariantPattern};
 use crate::tree::{self, Il};
 use itertools::Itertools;
@@ -230,8 +228,8 @@ impl Checker {
                     return Err(Error::Unification {
                         message: "failed to unify return value with defined type".to_string(),
                         span: def.span,
-                        a: MaybeUnknownType::from(self.types.construct(id)),
-                        b: MaybeUnknownType::from(self.types.construct(ret)),
+                        a: self.types.construct_partially_known_type(id),
+                        b: self.types.construct_partially_known_type(ret),
                     });
                 };
 
@@ -324,8 +322,8 @@ impl Checker {
             return Err(Error::Unification {
                 message: "failed to unify function return with final expression".to_string(),
                 span: lambda.span,
-                a: MaybeUnknownType::from(self.types.construct(r#return)),
-                b: MaybeUnknownType::from(self.types.construct(last)),
+                a: self.types.construct_partially_known_type(r#return),
+                b: self.types.construct_partially_known_type(last),
             });
         };
 
@@ -359,8 +357,8 @@ impl Checker {
             return Err(Error::Unification {
                 message: "failed to unify fncall".to_string(),
                 span: fncall.span,
-                a: MaybeUnknownType::from(self.types.construct(function)),
-                b: MaybeUnknownType::from(self.types.construct(fncall_function)),
+                a: self.types.construct_partially_known_type(function),
+                b: self.types.construct_partially_known_type(fncall_function),
             });
         };
 
@@ -380,8 +378,8 @@ impl Checker {
                             return Err(Error::Unification {
                                 message: "failed to unify variadic parameter".to_string(),
                                 span: fncall.span,
-                                a: MaybeUnknownType::from(self.types.construct(*a)),
-                                b: MaybeUnknownType::from(self.types.construct(*b)),
+                                a: self.types.construct_partially_known_type(*a),
+                                b: self.types.construct_partially_known_type(*b),
                             });
                         };
                     }
@@ -397,8 +395,8 @@ impl Checker {
                     return Err(Error::Unification {
                         message: "failed to unify fncall".to_string(),
                         span: fncall.span,
-                        a: MaybeUnknownType::from(self.types.construct(id)),
-                        b: MaybeUnknownType::from(self.types.construct(fncall_function)),
+                        a: self.types.construct_partially_known_type(id),
+                        b: self.types.construct_partially_known_type(fncall_function),
                     });
                 };
             }
@@ -413,8 +411,8 @@ impl Checker {
                     return Err(Error::Unification {
                         message: "failed to unify fncall".to_string(),
                         span: fncall.span,
-                        a: MaybeUnknownType::from(self.types.construct(id)),
-                        b: MaybeUnknownType::from(self.types.construct(fncall_function)),
+                        a: self.types.construct_partially_known_type(id),
+                        b: self.types.construct_partially_known_type(fncall_function),
                     });
                 };
             }
@@ -477,8 +475,8 @@ impl Checker {
             return Err(Error::Unification {
                 message: "failed to unify lhs with integer".to_string(),
                 span: op.span,
-                a: MaybeUnknownType::from(self.types.construct(lhs)),
-                b: MaybeUnknownType::from(self.types.construct(rhs)),
+                a: self.types.construct_partially_known_type(lhs),
+                b: self.types.construct_partially_known_type(rhs),
             });
         };
 
@@ -486,8 +484,8 @@ impl Checker {
             return Err(Error::Unification {
                 message: "failed to unify rhs with integer".to_string(),
                 span: op.span,
-                a: MaybeUnknownType::from(self.types.construct(lhs)),
-                b: MaybeUnknownType::from(self.types.construct(rhs)),
+                a: self.types.construct_partially_known_type(lhs),
+                b: self.types.construct_partially_known_type(rhs),
             });
         };
 
@@ -503,8 +501,8 @@ impl Checker {
             return Err(Error::Unification {
                 message: "failed to unify lhs with float".to_string(),
                 span: op.span,
-                a: MaybeUnknownType::from(self.types.construct(lhs)),
-                b: MaybeUnknownType::from(self.types.construct(rhs)),
+                a: self.types.construct_partially_known_type(lhs),
+                b: self.types.construct_partially_known_type(rhs),
             });
         };
 
@@ -512,8 +510,8 @@ impl Checker {
             return Err(Error::Unification {
                 message: "failed to unify rhs with float".to_string(),
                 span: op.span,
-                a: MaybeUnknownType::from(self.types.construct(lhs)),
-                b: MaybeUnknownType::from(self.types.construct(rhs)),
+                a: self.types.construct_partially_known_type(lhs),
+                b: self.types.construct_partially_known_type(rhs),
             });
         };
 
@@ -542,8 +540,8 @@ impl Checker {
             return Err(Error::Unification {
                 message: "failed to unify preficate with bool".to_string(),
                 span: r#if.span,
-                a: MaybeUnknownType::from(self.types.construct(predicate)),
-                b: MaybeUnknownType::from(self.types.construct(bool)),
+                a: self.types.construct_partially_known_type(predicate),
+                b: self.types.construct_partially_known_type(bool),
             });
         };
 
@@ -551,8 +549,8 @@ impl Checker {
             return Err(Error::Unification {
                 message: "failed to unify then with else".to_string(),
                 span: r#if.span,
-                a: MaybeUnknownType::from(self.types.construct(then)),
-                b: MaybeUnknownType::from(self.types.construct(r#else)),
+                a: self.types.construct_partially_known_type(then),
+                b: self.types.construct_partially_known_type(r#else),
             });
         };
 
@@ -581,8 +579,8 @@ impl Checker {
             return Err(Error::Unification {
                 message: "failed to unify apply's list".to_string(),
                 span: apply.span,
-                a: MaybeUnknownType::from(self.types.construct(apply_list)),
-                b: MaybeUnknownType::from(self.types.construct(rest)),
+                a: self.types.construct_partially_known_type(apply_list),
+                b: self.types.construct_partially_known_type(rest),
             });
         };
 
@@ -639,8 +637,8 @@ impl Checker {
             return Err(Error::Unification {
                 message: "failed to unify body with list".to_string(),
                 span: car.span,
-                a: MaybeUnknownType::from(self.types.construct(list)),
-                b: MaybeUnknownType::from(self.types.construct(body)),
+                a: self.types.construct_partially_known_type(list),
+                b: self.types.construct_partially_known_type(body),
             });
         };
 
@@ -656,8 +654,8 @@ impl Checker {
             return Err(Error::Unification {
                 message: "failed to unify body with list".to_string(),
                 span: cdr.span,
-                a: MaybeUnknownType::from(self.types.construct(list)),
-                b: MaybeUnknownType::from(self.types.construct(body)),
+                a: self.types.construct_partially_known_type(list),
+                b: self.types.construct_partially_known_type(body),
             });
         };
 
@@ -707,8 +705,8 @@ impl Checker {
                                 return Err(Error::Unification {
                                     message: "failed to unify variant fields".to_string(),
                                     span: make_type.span,
-                                    a: MaybeUnknownType::from(self.types.construct(id)),
-                                    b: MaybeUnknownType::from(self.types.construct(expr)),
+                                    a: self.types.construct_partially_known_type(id),
+                                    b: self.types.construct_partially_known_type(expr),
                                 });
                             };
                         }
@@ -799,8 +797,8 @@ impl Checker {
             return Err(Error::Unification {
                 message: "failed while unifying if-let then and else".to_string(),
                 span: if_let.span,
-                a: MaybeUnknownType::from(self.types.construct(then)),
-                b: MaybeUnknownType::from(self.types.construct(r#else)),
+                a: self.types.construct_partially_known_type(then),
+                b: self.types.construct_partially_known_type(r#else),
             });
         };
 
@@ -904,8 +902,8 @@ impl Checker {
                             message: "failed to unify struct fields with constructor expressions"
                                 .to_string(),
                             span: make_struct.span,
-                            a: MaybeUnknownType::from(self.types.construct(id)),
-                            b: MaybeUnknownType::from(self.types.construct(*expr)),
+                            a: self.types.construct_partially_known_type(id),
+                            b: self.types.construct_partially_known_type(*expr),
                         });
                     };
                 }

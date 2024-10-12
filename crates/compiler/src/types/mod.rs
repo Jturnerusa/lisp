@@ -10,19 +10,13 @@ use unwrap_enum::{EnumAs, EnumIs};
 pub type TypeId = usize;
 
 #[derive(Clone, Debug, EnumAs, EnumIs)]
-pub enum MaybeUnknownType {
-    Known(Type),
-    Unknown,
-}
-
-#[derive(Clone, Debug, EnumAs, EnumIs)]
 pub enum Error {
     InvalidType(FileSpan),
     Unification {
         message: String,
         span: FileSpan,
-        a: MaybeUnknownType,
-        b: MaybeUnknownType,
+        a: PartiallyKnownType,
+        b: PartiallyKnownType,
     },
     DefType(FileSpan),
     Failed(FileSpan),
@@ -39,6 +33,42 @@ pub enum Error {
 enum VariantOrStruct {
     Variant,
     Struct,
+}
+
+#[derive(Clone, Debug, EnumAs, EnumIs)]
+pub enum PartiallyKnownParameters {
+    Known(Vec<PartiallyKnownType>),
+    UnKnown,
+}
+
+#[derive(Clone, Debug, EnumAs, EnumIs)]
+pub enum PartiallyKnownType {
+    Any,
+    DefType {
+        name: String,
+        parameters: Vec<PartiallyKnownType>,
+    },
+    Struct {
+        name: String,
+        parameters: Vec<PartiallyKnownType>,
+    },
+    Function {
+        parameters: PartiallyKnownParameters,
+        rest: Option<Box<PartiallyKnownType>>,
+        r#return: Box<PartiallyKnownType>,
+    },
+    List(Box<PartiallyKnownType>),
+    Vec(Box<PartiallyKnownType>),
+    Cons(Box<PartiallyKnownType>, Box<PartiallyKnownType>),
+    Generic(String),
+    Symbol,
+    String,
+    Char,
+    Int,
+    Float,
+    Bool,
+    Nil,
+    Unknown,
 }
 
 #[derive(Clone, Debug, EnumAs, EnumIs)]
@@ -121,24 +151,6 @@ struct Types {
     vars: Vec<TypeInfo>,
 }
 
-impl From<Option<Type>> for MaybeUnknownType {
-    fn from(value: Option<Type>) -> Self {
-        match value {
-            Some(value) => Self::Known(value),
-            None => Self::Unknown,
-        }
-    }
-}
-
-impl fmt::Display for MaybeUnknownType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Known(t) => write!(f, "known({t})"),
-            Self::Unknown => write!(f, "unknown"),
-        }
-    }
-}
-
 impl error::Error for Error {
     fn span(&self) -> Option<FileSpan> {
         match self {
@@ -175,6 +187,75 @@ impl error::Error for Error {
             )
             .unwrap(),
             Self::Arity(_) => write!(writer, "wrong number of arguments").unwrap(),
+        }
+    }
+}
+
+impl fmt::Display for PartiallyKnownType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Any => write!(f, "any"),
+            Self::DefType { name, parameters } => {
+                write!(f, "{name}")?;
+                if !parameters.is_empty() {
+                    write!(f, "(")?;
+                    for (i, parameter) in parameters.iter().enumerate() {
+                        write!(f, "{parameter}")?;
+                        if i < parameters.len() - 1 {
+                            write!(f, "| ")?;
+                        }
+                    }
+                    write!(f, ")")?;
+                }
+
+                Ok(())
+            }
+            Self::Struct { name, parameters } => {
+                write!(f, "{name}")?;
+                if !parameters.is_empty() {
+                    write!(f, "(")?;
+                    for (i, parameter) in parameters.iter().enumerate() {
+                        write!(f, "{parameter}")?;
+                        if i < parameters.len() - 1 {
+                            write!(f, "| ")?;
+                        }
+                    }
+                    write!(f, ")")?;
+                }
+
+                Ok(())
+            }
+            Self::Function {
+                parameters,
+                r#return,
+                ..
+            } => {
+                write!(f, "fn ")?;
+                match parameters {
+                    PartiallyKnownParameters::Known(parameters) => {
+                        for parameter in parameters {
+                            write!(f, "{parameter}")?;
+                        }
+                    }
+                    PartiallyKnownParameters::UnKnown => {
+                        write!(f, "unknown")?;
+                    }
+                }
+                write!(f, " -> {}", r#return)?;
+                Ok(())
+            }
+            Self::List(inner) => write!(f, "list({inner})"),
+            Self::Vec(inner) => write!(f, "vector({inner})"),
+            Self::Cons(car, cdr) => write!(f, "cons({car} {cdr})"),
+            Self::Generic(generic) => write!(f, "'{generic}"),
+            Self::Symbol => write!(f, "symbol"),
+            Self::String => write!(f, "string"),
+            Self::Char => write!(f, "char"),
+            Self::Int => write!(f, "int"),
+            Self::Float => write!(f, "float"),
+            Self::Bool => write!(f, "bool"),
+            Self::Nil => write!(f, "nil"),
+            Self::Unknown => write!(f, "unknown"),
         }
     }
 }
@@ -450,6 +531,76 @@ impl Types {
     pub(crate) fn insert(&mut self, type_info: TypeInfo) -> TypeId {
         self.vars.push(type_info);
         self.vars.len() - 1
+    }
+
+    pub(crate) fn construct_partially_known_type(&self, id: TypeId) -> PartiallyKnownType {
+        match self.vars[id].clone() {
+            TypeInfo::Any => PartiallyKnownType::Any,
+            TypeInfo::DefType { name, parameters } => {
+                let parameters = parameters
+                    .iter()
+                    .map(|parameter| self.construct_partially_known_type(parameter.clone()))
+                    .collect::<Vec<_>>();
+                PartiallyKnownType::DefType { name, parameters }
+            }
+            TypeInfo::Struct { name, parameters } => {
+                let parameters = parameters
+                    .iter()
+                    .map(|parameter| self.construct_partially_known_type(parameter.clone()))
+                    .collect::<Vec<_>>();
+                PartiallyKnownType::Struct { name, parameters }
+            }
+            TypeInfo::Function {
+                parameters,
+                rest,
+                r#return,
+            } => {
+                let parameters = match parameters {
+                    Parameters::Known(parameters) => PartiallyKnownParameters::Known(
+                        parameters
+                            .iter()
+                            .map(|parameter| self.construct_partially_known_type(parameter.clone()))
+                            .collect::<Vec<_>>(),
+                    ),
+                    Parameters::Unknown => PartiallyKnownParameters::UnKnown,
+                };
+                let rest = match rest {
+                    Rest::Unknown => Some(PartiallyKnownType::Unknown),
+                    Rest::Known(rest) => Some(self.construct_partially_known_type(rest)),
+                    Rest::None => None,
+                }
+                .map(|inner| Box::new(inner));
+                let r#return = Box::new(self.construct_partially_known_type(r#return));
+                PartiallyKnownType::Function {
+                    parameters,
+                    rest,
+                    r#return,
+                }
+            }
+            TypeInfo::List(inner) => {
+                let inner = self.construct_partially_known_type(inner);
+                PartiallyKnownType::List(Box::new(inner))
+            }
+            TypeInfo::Vec(inner) => {
+                let inner = self.construct_partially_known_type(inner);
+                PartiallyKnownType::Vec(Box::new(inner))
+            }
+            TypeInfo::Cons(car, cdr) => {
+                let car = self.construct_partially_known_type(car);
+                let cdr = self.construct_partially_known_type(cdr);
+                PartiallyKnownType::Cons(Box::new(car), Box::new(cdr))
+            }
+            TypeInfo::Generic(generic) => PartiallyKnownType::Generic(generic),
+            TypeInfo::Symbol => PartiallyKnownType::Symbol,
+            TypeInfo::String => PartiallyKnownType::String,
+            TypeInfo::Char => PartiallyKnownType::Char,
+            TypeInfo::Int => PartiallyKnownType::Int,
+            TypeInfo::Float => PartiallyKnownType::Float,
+            TypeInfo::Bool => PartiallyKnownType::Bool,
+            TypeInfo::Nil => PartiallyKnownType::Nil,
+            TypeInfo::Ref(r#ref) => self.construct_partially_known_type(r#ref),
+            TypeInfo::Unknown => PartiallyKnownType::Unknown,
+        }
     }
 
     pub(crate) fn construct(&self, id: TypeId) -> Option<Type> {
