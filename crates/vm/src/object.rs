@@ -14,6 +14,7 @@ pub enum Type {
     Function,
     Cons,
     Map,
+    Vec,
     String,
     Symbol,
     Int,
@@ -41,6 +42,7 @@ pub enum Object<D: 'static> {
     Function(Rc<RefCell<Lambda<D>>>),
     Cons(Rc<RefCell<Cons<D>>>),
     HashMap(Rc<RefCell<HashMap<HashMapKey, Object<D>>>>),
+    Vec(Rc<RefCell<Vec<Object<D>>>>),
     String(Rc<String>),
     Symbol(Rc<String>),
     Int(i64),
@@ -150,6 +152,7 @@ impl<D> From<&Object<D>> for Type {
             Object::Function(_) | Object::NativeFunction(_) => Type::Function,
             Object::Cons(_) => Type::Cons,
             Object::HashMap(_) => Type::Map,
+            Object::Vec(_) => Type::Vec,
             Object::String(_) => Type::String,
             Object::Symbol(_) => Type::Symbol,
             Object::Int(_) => Type::Int,
@@ -168,6 +171,7 @@ impl fmt::Display for Type {
             Self::Struct => write!(f, "struct"),
             Self::Cons => write!(f, "cons"),
             Self::Map => write!(f, "map"),
+            Self::Vec => write!(f, "vector"),
             Self::Symbol => write!(f, "symbol"),
             Self::String => write!(f, "string"),
             Self::Int => write!(f, "int"),
@@ -184,6 +188,7 @@ impl<D: PartialEq> PartialEq for Object<D> {
         match (self, other) {
             (Object::Struct(a), Object::Struct(b)) => a == b,
             (Object::Cons(a), Object::Cons(b)) => *a.borrow() == *b.borrow(),
+            (Object::Vec(a), Object::Vec(b)) => *a.borrow() == *b.borrow(),
             (Object::String(a), Object::String(b)) => a == b,
             (Object::Symbol(a), Object::Symbol(b)) => a == b,
             (Object::Char(a), Object::Char(b)) => a == b,
@@ -228,7 +233,7 @@ impl<D> Display for NativeFunction<D> {
 
 impl<D: Clone> Display for Cons<D> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        pretty_print(self, 0, f)
+        pretty_print_cons(self, 0, f)
     }
 }
 
@@ -256,6 +261,7 @@ impl<D: Clone> Display for Object<D> {
                 }
                 Ok(())
             }
+            Self::Vec(vec) => pretty_print_slice(vec.borrow().as_slice(), 0, f),
             Self::Symbol(symbol) => write!(f, "'{symbol}"),
             Self::String(string) => write!(f, r#""{string}""#),
             Self::Int(i) => write!(f, "{i}"),
@@ -374,7 +380,11 @@ impl<D: Clone> Cons<D> {
     }
 }
 
-fn pretty_print<D: Clone>(cons: &Cons<D>, depth: usize, f: &mut fmt::Formatter) -> fmt::Result {
+fn pretty_print_cons<D: Clone>(
+    cons: &Cons<D>,
+    depth: usize,
+    f: &mut fmt::Formatter,
+) -> fmt::Result {
     let indent = " ".repeat(depth);
     if !cons.1.is_nil() && !cons.1.is_cons() {
         write!(f, "{indent}({} . {})", cons.0, cons.1)?;
@@ -388,5 +398,22 @@ fn pretty_print<D: Clone>(cons: &Cons<D>, depth: usize, f: &mut fmt::Formatter) 
         }
         write!(f, ")")?;
     }
+    Ok(())
+}
+
+fn pretty_print_slice<D: Clone>(
+    slice: &[Object<D>],
+    depth: usize,
+    f: &mut fmt::Formatter,
+) -> fmt::Result {
+    let indent = " ".repeat(depth);
+    write!(f, "{indent}[")?;
+    for (i, object) in slice.iter().enumerate() {
+        write!(f, "{indent}{object}")?;
+        if i < slice.len() - 1 {
+            write!(f, "{indent} ")?;
+        }
+    }
+    write!(f, "{indent}]")?;
     Ok(())
 }

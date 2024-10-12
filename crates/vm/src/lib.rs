@@ -109,6 +109,11 @@ pub enum OpCode {
     MakeStruct(usize),
     GetField(usize),
     SetField(usize),
+    VecCreate,
+    VecPush,
+    VecPop,
+    VecIndex,
+    VecLen,
 }
 
 #[derive(Clone, PartialEq, PartialOrd, Hash)]
@@ -277,6 +282,11 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
             OpCode::MakeStruct(args) => self.make_struct(args)?,
             OpCode::SetField(field) => self.set_field(field)?,
             OpCode::GetField(field) => self.get_field(field)?,
+            OpCode::VecCreate => self.vec_create()?,
+            OpCode::VecPop => self.vec_pop()?,
+            OpCode::VecPush => self.vec_push()?,
+            OpCode::VecIndex => self.vec_index()?,
+            OpCode::VecLen => self.vec_len()?,
         }
 
         Ok(())
@@ -987,6 +997,95 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
         };
 
         self.stack.push(Local::Value(val));
+
+        Ok(())
+    }
+
+    fn vec_create(&mut self) -> Result<(), Error> {
+        self.stack
+            .push(Local::Value(Object::Vec(Rc::new(RefCell::new(Vec::new())))));
+
+        Ok(())
+    }
+
+    fn vec_pop(&mut self) -> Result<(), Error> {
+        let vec = match self.stack.pop().unwrap().into_object() {
+            Object::Vec(vec) => vec,
+            object => {
+                return Err(Error::Type {
+                    expected: Type::Vec,
+                    recieved: Type::from(&object),
+                })
+            }
+        };
+
+        let val = vec.borrow_mut().pop().unwrap();
+
+        self.stack.push(Local::Value(val));
+
+        Ok(())
+    }
+
+    fn vec_index(&mut self) -> Result<(), Error> {
+        let index = match self.stack.pop().unwrap().into_object() {
+            Object::Int(int) => int,
+            object => {
+                return Err(Error::Type {
+                    expected: Type::Vec,
+                    recieved: Type::from(&object),
+                })
+            }
+        };
+
+        let vec = match self.stack.pop().unwrap().into_object() {
+            Object::Vec(vec) => vec,
+            object => {
+                return Err(Error::Type {
+                    expected: Type::Vec,
+                    recieved: Type::from(&object),
+                })
+            }
+        };
+
+        let val: Object<D> = vec.borrow()[usize::try_from(index).unwrap()].clone();
+
+        self.stack.push(Local::Value(val));
+
+        Ok(())
+    }
+
+    fn vec_push(&mut self) -> Result<(), Error> {
+        let val = self.stack.pop().unwrap().into_object();
+
+        let vec = match self.stack.pop().unwrap().into_object() {
+            Object::Vec(vec) => vec,
+            object => {
+                return Err(Error::Type {
+                    expected: Type::Vec,
+                    recieved: Type::from(&object),
+                })
+            }
+        };
+
+        vec.borrow_mut().push(val);
+
+        Ok(())
+    }
+
+    fn vec_len(&mut self) -> Result<(), Error> {
+        let vec = match self.stack.pop().unwrap().into_object() {
+            Object::Vec(vec) => vec,
+            object => {
+                return Err(Error::Type {
+                    expected: Type::Vec,
+                    recieved: Type::from(&object),
+                })
+            }
+        };
+
+        self.stack.push(Local::Value(Object::Int(
+            vec.borrow().len().try_into().unwrap(),
+        )));
 
         Ok(())
     }
