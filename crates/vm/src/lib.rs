@@ -286,7 +286,7 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
             OpCode::VecCreate => self.vec_create()?,
             OpCode::VecPop => self.vec_pop()?,
             OpCode::VecPush => self.vec_push()?,
-            OpCode::VecRef => self.vec_index()?,
+            OpCode::VecRef => self.vec_ref()?,
             OpCode::VecSet => self.vec_set()?,
             OpCode::VecLen => self.vec_len()?,
         }
