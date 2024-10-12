@@ -1031,7 +1031,7 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
             Object::Int(int) => int,
             object => {
                 return Err(Error::Type {
-                    expected: Type::Vec,
+                    expected: Type::Int,
                     recieved: Type::from(&object),
                 })
             }
