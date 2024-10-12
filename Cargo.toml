@@ -26,3 +26,7 @@ vm = { path = "crates/vm" }
 native-functions = { path = "lib/native" }
 thiserror = { workspace = true }
 error = { path = "crates/error" }
+
+[profile.bench]
+debug = 1
+debuginfo-level = 1
