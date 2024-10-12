@@ -75,27 +75,32 @@ impl Checker {
 
     pub fn check(&mut self, tree: &tree::Il) -> Result<(), Error> {
         match tree {
-            tree::Il::Def(def) => self.check_def(def),
-            tree::Il::Lambda(lambda) => self.check_lambda(lambda, Vec::new()).map(|_| ()),
-            tree::Il::If(r#if) => self.check_if(r#if).map(|_| ()),
-            tree::Il::Apply(apply) => self.check_apply(apply).map(|_| ()),
-            tree::Il::Set(set) => self.check_set(set).map(|_| ()),
-            tree::Il::FnCall(fncall) => self.check_fncall(fncall).map(|_| ()),
-            tree::Il::ArithmeticOperation(op) => self.check_aritmetic_op(op).map(|_| ()),
-            tree::Il::FloatOperation(op) => self.check_float_op(op).map(|_| ()),
-            tree::Il::ComparisonOperation(op) => self.check_comparison_op(op).map(|_| ()),
-            tree::Il::List(list) => self.check_list(list).map(|_| ()),
-            tree::Il::Cons(cons) => self.check_cons(cons).map(|_| ()),
-            tree::Il::Car(car) => self.check_car(car).map(|_| ()),
-            tree::Il::Cdr(cdr) => self.check_cdr(cdr).map(|_| ()),
-            tree::Il::Assert(assert) => self.check_assert(assert).map(|_| ()),
-            tree::Il::Decl(decl) => self.check_decl(decl),
-            tree::Il::DefType(deftype) => self.deftype(deftype),
-            tree::Il::MakeType(maketype) => self.check_make_type(maketype).map(|_| ()),
-            tree::Il::IfLet(if_let) => self.check_if_let(if_let).map(|_| ()),
-            tree::Il::DefStruct(defstruct) => self.check_defstruct(defstruct),
-            tree::Il::MakeStruct(make_struct) => self.check_make_struct(make_struct).map(|_| ()),
-            tree::Il::GetField(get_field) => self.check_get_field(get_field).map(|_| ()),
+            Il::Def(def) => self.check_def(def),
+            Il::Lambda(lambda) => self.check_lambda(lambda, Vec::new()).map(|_| ()),
+            Il::If(r#if) => self.check_if(r#if).map(|_| ()),
+            Il::Apply(apply) => self.check_apply(apply).map(|_| ()),
+            Il::Set(set) => self.check_set(set).map(|_| ()),
+            Il::FnCall(fncall) => self.check_fncall(fncall).map(|_| ()),
+            Il::ArithmeticOperation(op) => self.check_aritmetic_op(op).map(|_| ()),
+            Il::FloatOperation(op) => self.check_float_op(op).map(|_| ()),
+            Il::ComparisonOperation(op) => self.check_comparison_op(op).map(|_| ()),
+            Il::List(list) => self.check_list(list).map(|_| ()),
+            Il::Cons(cons) => self.check_cons(cons).map(|_| ()),
+            Il::Car(car) => self.check_car(car).map(|_| ()),
+            Il::Cdr(cdr) => self.check_cdr(cdr).map(|_| ()),
+            Il::Assert(assert) => self.check_assert(assert).map(|_| ()),
+            Il::Decl(decl) => self.check_decl(decl),
+            Il::DefType(deftype) => self.deftype(deftype),
+            Il::MakeType(maketype) => self.check_make_type(maketype).map(|_| ()),
+            Il::IfLet(if_let) => self.check_if_let(if_let).map(|_| ()),
+            Il::DefStruct(defstruct) => self.check_defstruct(defstruct),
+            Il::MakeStruct(make_struct) => self.check_make_struct(make_struct).map(|_| ()),
+            Il::GetField(get_field) => self.check_get_field(get_field).map(|_| ()),
+            Il::MakeVec(make_vec) => self.check_make_vec(make_vec).map(|_| ()),
+            Il::VecPush(vec_push) => self.check_vec_push(vec_push).map(|_| ()),
+            Il::VecPop(vec_pop) => self.check_vec_pop(vec_pop).map(|_| ()),
+            Il::VecIndex(vec_index) => self.check_vec_index(vec_index).map(|_| ()),
+            Il::VecLength(vec_length) => self.check_vec_length(vec_length).map(|_| ()),
             _ => Ok(()),
         }
     }
@@ -443,6 +448,11 @@ impl Checker {
             Il::Assert(assert) => self.check_assert(assert),
             Il::VarRef(varref) => Ok(self.check_varref(varref)),
             Il::Constant(constant) => self.check_constant(constant),
+            Il::MakeVec(make_vec) => self.check_make_vec(make_vec),
+            Il::VecPush(vec_push) => self.check_vec_push(vec_push),
+            Il::VecPop(vec_pop) => self.check_vec_pop(vec_pop),
+            Il::VecIndex(vec_index) => self.check_vec_index(vec_index),
+            Il::VecLength(vec_length) => self.check_vec_length(vec_length),
             _ => panic!("unexpected tree il node: {tree:?}"),
         }
     }
@@ -942,6 +952,86 @@ impl Checker {
             }
             TypeOrGeneric::Type(r#type) => Ok(self.types.insert_concrete_type(r#type)),
         }
+    }
+
+    fn check_make_vec(&mut self, make_vec: &tree::MakeVec) -> Result<TypeId, Error> {
+        let exprs = make_vec
+            .exprs
+            .iter()
+            .map(|expr| self.check_tree(expr))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let inner = self.types.insert(TypeInfo::Unknown);
+        let vec = self.types.insert(TypeInfo::Vec(inner));
+
+        for expr in &exprs {
+            let Ok(()) = self.types.unify(inner, *expr) else {
+                todo!()
+            };
+        }
+
+        Ok(vec)
+    }
+
+    fn check_vec_push(&mut self, vec_push: &tree::VecPush) -> Result<TypeId, Error> {
+        let vec = self.check_tree(&vec_push.vec)?;
+        let expr = self.check_tree(&vec_push.expr)?;
+
+        let inner = self.types.insert(TypeInfo::Unknown);
+        let id = self.types.insert(TypeInfo::Vec(inner));
+
+        let Ok(()) = self.types.unify(id, vec) else {
+            todo!()
+        };
+
+        let Ok(()) = self.types.unify(inner, expr) else {
+            todo!()
+        };
+
+        let nil = self.types.insert(TypeInfo::Nil);
+
+        Ok(nil)
+    }
+
+    fn check_vec_pop(&mut self, vec_pop: &tree::VecPop) -> Result<TypeId, Error> {
+        let vec = self.check_tree(&vec_pop.vec)?;
+
+        let inner = self.types.insert(TypeInfo::Unknown);
+        let id = self.types.insert(TypeInfo::Vec(inner));
+
+        let Ok(()) = self.types.unify(id, vec) else {
+            todo!()
+        };
+
+        Ok(inner)
+    }
+
+    fn check_vec_index(&mut self, vec_index: &tree::VecIndex) -> Result<TypeId, Error> {
+        let vec = self.check_tree(&vec_index.vec)?;
+
+        let inner = self.types.insert(TypeInfo::Unknown);
+        let id = self.types.insert(TypeInfo::Vec(inner));
+
+        let Ok(()) = self.types.unify(id, vec) else {
+            todo!()
+        };
+
+        Ok(inner)
+    }
+
+    fn check_vec_length(&mut self, vec_length: &tree::VecLength) -> Result<TypeId, Error> {
+        let vec = self.check_tree(&vec_length.vec)?;
+
+        let inner = self.types.insert(TypeInfo::Unknown);
+        let id = self.types.insert(TypeInfo::Vec(inner));
+
+        let Ok(()) = self.types.unify(id, vec) else {
+            todo!()
+        };
+
+        let int = self.types.insert(TypeInfo::Int);
+
+        Ok(int)
     }
 
     fn check_varref(&mut self, varref: &tree::VarRef) -> TypeId {

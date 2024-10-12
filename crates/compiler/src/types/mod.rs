@@ -59,6 +59,7 @@ pub enum Type {
         r#return: Box<Type>,
     },
     List(Box<Type>),
+    Vec(Box<Type>),
     Cons(Box<Type>, Box<Type>),
     Generic(String),
     Symbol,
@@ -88,6 +89,7 @@ pub enum TypeInfo {
         r#return: TypeId,
     },
     List(TypeId),
+    Vec(TypeId),
     Cons(TypeId, TypeId),
     Generic(String),
     String,
@@ -222,6 +224,7 @@ impl fmt::Display for Type {
                 Ok(())
             }
             Self::List(inner) => write!(f, "list({inner})"),
+            Self::Vec(inner) => write!(f, "vec({inner})"),
             Self::Cons(car, cdr) => write!(f, "cons({car} {cdr})"),
             Self::Generic(generic) => write!(f, "'{generic}"),
             Self::Symbol => write!(f, "symbol"),
@@ -268,6 +271,9 @@ impl Type {
                 }
                 [ast::Type::Scalar(list), inner] if list == "list" => {
                     Type::List(Box::new(Type::from_ast(inner, user_types)?))
+                }
+                [ast::Type::Scalar(vec), inner] if vec == "vec" => {
+                    Type::Vec(Box::new(Type::from_ast(inner, user_types)?))
                 }
                 [ast::Type::Scalar(quote), ast::Type::Scalar(generic)] if quote == "quote" => {
                     Type::Generic(generic.clone())
@@ -352,6 +358,7 @@ impl Type {
                     || r#return.has_generics()
             }
             Self::List(inner) => inner.has_generics(),
+            Self::Vec(inner) => inner.has_generics(),
             Self::Cons(car, cdr) => car.has_generics() || cdr.has_generics(),
             Self::Generic(_) => true,
             _ => false,
@@ -366,6 +373,7 @@ impl Type {
                 }
             }
             Self::List(inner) => inner.map_generics(generics),
+            Self::Vec(inner) => inner.map_generics(generics),
             Self::Cons(car, cdr) => {
                 car.map_generics(generics);
                 cdr.map_generics(generics);
@@ -415,6 +423,7 @@ impl PartialEq for Type {
                 },
             ) => parameters_a == parameters_b && rest_a == rest_b && return_a == return_b,
             (Type::List(a), Type::List(b)) => a == b,
+            (Type::Vec(a), Type::Vec(b)) => a == b,
             (Type::Cons(a, b), Type::Cons(c, d)) => a == c && b == d,
             (Type::Generic(a), Type::Generic(b)) => a == b,
             (Type::Symbol, Type::Symbol) => true,
@@ -482,6 +491,7 @@ impl Types {
                 r#return: Box::new(self.construct(r#return)?),
             },
             TypeInfo::List(inner) => Type::List(Box::new(self.construct(inner)?)),
+            TypeInfo::Vec(inner) => Type::Vec(Box::new(self.construct(inner)?)),
             TypeInfo::Cons(car, cdr) => Type::Cons(
                 Box::new(self.construct(car)?),
                 Box::new(self.construct(cdr)?),
@@ -635,6 +645,7 @@ impl Types {
                 Ok(())
             }
             (TypeInfo::List(a), TypeInfo::List(b)) => self.unify(a, b),
+            (TypeInfo::Vec(a), TypeInfo::Vec(b)) => self.unify(a, b),
             (TypeInfo::Cons(a, b), TypeInfo::Cons(c, d)) => {
                 self.unify(a, c).and_then(|()| self.unify(b, d))
             }
@@ -708,6 +719,10 @@ impl Types {
                 let inner = self.insert_concrete_type(*inner);
                 self.insert(TypeInfo::List(inner))
             }
+            Type::Vec(inner) => {
+                let inner = self.insert_concrete_type(*inner);
+                self.insert(TypeInfo::Vec(inner))
+            }
             Type::Cons(car, cdr) => {
                 let car = self.insert_concrete_type(*car);
                 let cdr = self.insert_concrete_type(*cdr);
@@ -768,6 +783,10 @@ impl Types {
             TypeInfo::List(inner) => {
                 let inner = self.instantiate(inner, subs);
                 self.insert(TypeInfo::List(inner))
+            }
+            TypeInfo::Vec(inner) => {
+                let inner = self.instantiate(inner, subs);
+                self.insert(TypeInfo::Vec(inner))
             }
             TypeInfo::Generic(generic) if subs.contains_key(generic.as_str()) => {
                 subs[generic.as_str()]
@@ -832,6 +851,10 @@ impl Types {
                 let inner = self.instantiate_with(inner, subs);
                 self.insert(TypeInfo::List(inner))
             }
+            TypeInfo::Vec(inner) => {
+                let inner = self.instantiate_with(inner, subs);
+                self.insert(TypeInfo::Vec(inner))
+            }
             TypeInfo::Generic(generic) if subs.contains_key(generic.as_str()) => {
                 subs[generic.as_str()]
             }
@@ -887,6 +910,7 @@ impl Types {
                 buff
             }
             TypeInfo::List(inner) => format!("List({})", self.debug_typeid(inner, seen)),
+            TypeInfo::Vec(inner) => format!("Vec({})", self.debug_typeid(inner, seen)),
             TypeInfo::Generic(generic) => format!("Generic({generic})"),
             TypeInfo::Symbol => "Symbol".to_string(),
             TypeInfo::String => "String".to_string(),

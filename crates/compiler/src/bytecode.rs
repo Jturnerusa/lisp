@@ -56,6 +56,11 @@ pub fn compile(
         Il::LetRec(letrec) => compile_letrec(letrec, opcodes, constants),
         Il::MakeStruct(make_struct) => compile_make_struct(make_struct, opcodes, constants),
         Il::GetField(field) => compile_get_field(field, opcodes, constants),
+        Il::MakeVec(make_vec) => compile_make_vec(make_vec, opcodes, constants),
+        Il::VecPush(vec_push) => compile_vec_push(vec_push, opcodes, constants),
+        Il::VecPop(vec_pop) => compile_vec_pop(vec_pop, opcodes, constants),
+        Il::VecIndex(vec_index) => compile_vec_index(vec_index, opcodes, constants),
+        Il::VecLength(vec_length) => compile_vec_length(vec_length, opcodes, constants),
         _ => Ok(()),
     }
 }
@@ -622,6 +627,68 @@ fn compile_get_field(
     compile(&get_field.body, opcodes, constants)?;
 
     opcodes.push(OpCode::GetField(get_field.index), get_field.span);
+
+    Ok(())
+}
+
+fn compile_make_vec(
+    make_vec: &tree::MakeVec,
+    opcodes: &mut OpCodeTable<FileSpan>,
+    constants: &mut Vec<Constant<FileSpan>>,
+) -> Result<(), Error> {
+    opcodes.push(OpCode::VecCreate, make_vec.span);
+
+    for expr in &make_vec.exprs {
+        opcodes.push(OpCode::Dup, make_vec.span);
+        compile(expr, opcodes, constants)?;
+        opcodes.push(OpCode::VecPush, make_vec.span);
+    }
+
+    Ok(())
+}
+
+fn compile_vec_push(
+    vec_push: &tree::VecPush,
+    opcodes: &mut OpCodeTable<FileSpan>,
+    constants: &mut Vec<Constant<FileSpan>>,
+) -> Result<(), Error> {
+    compile(&vec_push.vec, opcodes, constants)?;
+    compile(&vec_push.expr, opcodes, constants)?;
+    opcodes.push(OpCode::VecPush, vec_push.span);
+
+    Ok(())
+}
+
+fn compile_vec_pop(
+    vec_pop: &tree::VecPop,
+    opcodes: &mut OpCodeTable<FileSpan>,
+    constants: &mut Vec<Constant<FileSpan>>,
+) -> Result<(), Error> {
+    compile(&vec_pop.vec, opcodes, constants)?;
+    opcodes.push(OpCode::VecPop, vec_pop.span);
+
+    Ok(())
+}
+
+fn compile_vec_index(
+    vec_index: &tree::VecIndex,
+    opcodes: &mut OpCodeTable<FileSpan>,
+    constants: &mut Vec<Constant<FileSpan>>,
+) -> Result<(), Error> {
+    compile(&vec_index.vec, opcodes, constants)?;
+    compile(&vec_index.index, opcodes, constants)?;
+    opcodes.push(OpCode::VecIndex, vec_index.span);
+
+    Ok(())
+}
+
+fn compile_vec_length(
+    vec_length: &tree::VecLength,
+    opcodes: &mut OpCodeTable<FileSpan>,
+    constants: &mut Vec<Constant<FileSpan>>,
+) -> Result<(), Error> {
+    compile(&vec_length.vec, opcodes, constants)?;
+    opcodes.push(OpCode::VecLen, vec_length.span);
 
     Ok(())
 }

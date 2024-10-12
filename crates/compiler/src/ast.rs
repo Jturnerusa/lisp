@@ -53,6 +53,11 @@ static BUILT_INS: &[&str] = &[
     "if-let",
     "letrec",
     "defstruct",
+    "make-vec",
+    "vec-push!",
+    "vec-pop!",
+    "vec-length",
+    "vec-index",
 ];
 
 #[derive(Clone, Debug)]
@@ -122,6 +127,11 @@ pub enum Ast {
     DefStruct(DefStruct),
     MakeStruct(MakeStruct),
     GetField(GetField),
+    MakeVec(MakeVec),
+    VecPush(VecPush),
+    VecPop(VecPop),
+    VecLen(VecLen),
+    VecIndex(VecIndex),
 }
 
 #[derive(Clone, Debug)]
@@ -471,6 +481,38 @@ pub struct GetField {
     pub body: std::boxed::Box<Ast>,
 }
 
+#[derive(Clone, Debug)]
+pub struct MakeVec {
+    pub span: FileSpan,
+    pub exprs: Vec<Ast>,
+}
+
+#[derive(Clone, Debug)]
+pub struct VecPush {
+    pub span: FileSpan,
+    pub vec: std::boxed::Box<Ast>,
+    pub expr: std::boxed::Box<Ast>,
+}
+
+#[derive(Clone, Debug)]
+pub struct VecPop {
+    pub span: FileSpan,
+    pub vec: std::boxed::Box<Ast>,
+}
+
+#[derive(Clone, Debug)]
+pub struct VecIndex {
+    pub span: FileSpan,
+    pub vec: std::boxed::Box<Ast>,
+    pub index: std::boxed::Box<Ast>,
+}
+
+#[derive(Clone, Debug)]
+pub struct VecLen {
+    pub span: FileSpan,
+    pub vec: std::boxed::Box<Ast>,
+}
+
 #[allow(clippy::new_without_default)]
 impl Compiler {
     pub fn new() -> Self {
@@ -672,6 +714,41 @@ impl Compiler {
                             .contains_key(&StructConstructor(constructor.to_string())) =>
                     {
                         self.compile_make_struct(sexpr, constructor, exprs)?
+                    }
+                    [Sexpr::Symbol {
+                        symbol: make_vec, ..
+                    }, exprs @ ..]
+                        if make_vec == "make-vec" =>
+                    {
+                        self.compile_make_vec(sexpr, exprs)?
+                    }
+                    [Sexpr::Symbol {
+                        symbol: vec_push, ..
+                    }, vec, expr]
+                        if vec_push == "vec-push!" =>
+                    {
+                        self.compile_vec_push(sexpr, vec, expr)?
+                    }
+                    [Sexpr::Symbol {
+                        symbol: vec_pop, ..
+                    }, vec]
+                        if vec_pop == "vec-pop!" =>
+                    {
+                        self.compile_vec_pop(sexpr, vec)?
+                    }
+                    [Sexpr::Symbol {
+                        symbol: vec_index, ..
+                    }, vec, index]
+                        if vec_index == "vec-index" =>
+                    {
+                        self.compile_vec_index(sexpr, vec, index)?
+                    }
+                    [Sexpr::Symbol {
+                        symbol: vec_length, ..
+                    }, vec]
+                        if vec_length == "vec-length" =>
+                    {
+                        self.compile_vec_length(sexpr, vec)?
                     }
                     [Sexpr::Symbol {
                         symbol: accessor, ..
@@ -1344,6 +1421,51 @@ impl Compiler {
             body: std::boxed::Box::new(self.compile(body)?),
         }))
     }
+
+    fn compile_make_vec(&mut self, sexpr: &Sexpr, exprs: &[Sexpr]) -> Result<Ast, Error> {
+        Ok(Ast::MakeVec(MakeVec {
+            span: sexpr.span(),
+            exprs: exprs
+                .iter()
+                .map(|expr| self.compile(expr))
+                .collect::<Result<_, _>>()?,
+        }))
+    }
+
+    fn compile_vec_push(&mut self, sexpr: &Sexpr, vec: &Sexpr, expr: &Sexpr) -> Result<Ast, Error> {
+        Ok(Ast::VecPush(VecPush {
+            span: sexpr.span(),
+            vec: std::boxed::Box::new(self.compile(vec)?),
+            expr: std::boxed::Box::new(self.compile(expr)?),
+        }))
+    }
+
+    fn compile_vec_pop(&mut self, sexpr: &Sexpr, vec: &Sexpr) -> Result<Ast, Error> {
+        Ok(Ast::VecPop(VecPop {
+            span: sexpr.span(),
+            vec: std::boxed::Box::new(self.compile(vec)?),
+        }))
+    }
+
+    fn compile_vec_index(
+        &mut self,
+        sexpr: &Sexpr,
+        vec: &Sexpr,
+        index: &Sexpr,
+    ) -> Result<Ast, Error> {
+        Ok(Ast::VecIndex(VecIndex {
+            span: sexpr.span(),
+            vec: std::boxed::Box::new(self.compile(vec)?),
+            index: std::boxed::Box::new(self.compile(index)?),
+        }))
+    }
+
+    fn compile_vec_length(&mut self, sexpr: &Sexpr, vec: &Sexpr) -> Result<Ast, Error> {
+        Ok(Ast::VecLen(VecLen {
+            span: sexpr.span(),
+            vec: std::boxed::Box::new(self.compile(vec)?),
+        }))
+    }
 }
 
 impl fmt::Display for Error {
@@ -1391,6 +1513,11 @@ impl Ast {
             | Self::DefStruct(DefStruct { span, .. })
             | Self::MakeStruct(MakeStruct { span, .. })
             | Self::GetField(GetField { span, .. })
+            | Self::MakeVec(MakeVec { span, .. })
+            | Self::VecPush(VecPush { span, .. })
+            | Self::VecPop(VecPop { span, .. })
+            | Self::VecIndex(VecIndex { span, .. })
+            | Self::VecLen(VecLen { span, .. })
             | Self::Variable(Variable { span, .. })
             | Self::Constant(Constant::String { span, .. })
             | Self::Constant(Constant::Char { span, .. })
