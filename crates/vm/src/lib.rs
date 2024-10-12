@@ -1008,6 +1008,24 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
         Ok(())
     }
 
+    fn vec_push(&mut self) -> Result<(), Error> {
+        let val = self.stack.pop().unwrap().into_object();
+
+        let vec = match self.stack.pop().unwrap().into_object() {
+            Object::Vec(vec) => vec,
+            object => {
+                return Err(Error::Type {
+                    expected: Type::Vec,
+                    recieved: Type::from(&object),
+                })
+            }
+        };
+
+        vec.borrow_mut().push(val);
+
+        Ok(())
+    }
+
     fn vec_pop(&mut self) -> Result<(), Error> {
         let vec = match self.stack.pop().unwrap().into_object() {
             Object::Vec(vec) => vec,
@@ -1050,24 +1068,6 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
         let val: Object<D> = vec.borrow()[usize::try_from(index).unwrap()].clone();
 
         self.stack.push(Local::Value(val));
-
-        Ok(())
-    }
-
-    fn vec_push(&mut self) -> Result<(), Error> {
-        let val = self.stack.pop().unwrap().into_object();
-
-        let vec = match self.stack.pop().unwrap().into_object() {
-            Object::Vec(vec) => vec,
-            object => {
-                return Err(Error::Type {
-                    expected: Type::Vec,
-                    recieved: Type::from(&object),
-                })
-            }
-        };
-
-        vec.borrow_mut().push(val);
 
         Ok(())
     }
