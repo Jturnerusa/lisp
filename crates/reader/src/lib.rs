@@ -41,7 +41,7 @@ enum Token {
     #[token("nil")]
     Nil,
 
-    #[regex(r#"[a-zA-Z+_*/?@^=!<>&.-][a-zA-Z0-9+_*/?@^=!<>&:.-]*"#)]
+    #[regex(r#"[a-zA-Z+_*/?@^=!<>&.-][a-zA-Z0-9+_*/?@^=!<>&:.-]*"#, priority = 0)]
     Symbol,
 
     #[regex(r#""[^"]*""#)]
@@ -50,10 +50,10 @@ enum Token {
     #[regex(r#"\?."#)]
     Char,
 
-    #[regex("[0-9]+")]
+    #[regex("[0-9]+|-[0-9]+", priority = 1)]
     Int,
 
-    #[regex("[0-9]+\\.[0-9]+")]
+    #[regex("[0-9]+\\.[0-9]+|-[0-9]+\\.[0-9]")]
     Float,
 }
 
