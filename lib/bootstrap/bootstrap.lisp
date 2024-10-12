@@ -184,6 +184,12 @@
        (lambda ,parameters
          ,@body)))
 
+(defmacro >= (a b)
+  `(or (> ,a ,b) (= ,a ,b)))
+
+(defmacro <= (a b)
+  `(or (< ,a ,b) (= ,a ,b)))
+
 (eval-when-compile
   (decl (print (fn 'a -> nil)))
   
