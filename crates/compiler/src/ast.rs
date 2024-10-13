@@ -56,7 +56,8 @@ static BUILT_INS: &[&str] = &[
     "make-vec",
     "vec-push!",
     "vec-pop!",
-    "vec-length",
+    "vec-set!",
+    "vec-ref",
     "vec-index",
 ];
 
@@ -129,9 +130,10 @@ pub enum Ast {
     GetField(GetField),
     MakeVec(MakeVec),
     VecPush(VecPush),
+    VecRef(VecRef),
+    VecSet(VecSet),
     VecPop(VecPop),
     VecLen(VecLen),
-    VecIndex(VecIndex),
 }
 
 #[derive(Clone, Debug)]
@@ -501,10 +503,18 @@ pub struct VecPop {
 }
 
 #[derive(Clone, Debug)]
-pub struct VecIndex {
+pub struct VecRef {
     pub span: FileSpan,
     pub vec: std::boxed::Box<Ast>,
     pub index: std::boxed::Box<Ast>,
+}
+
+#[derive(Clone, Debug)]
+pub struct VecSet {
+    pub span: FileSpan,
+    pub vec: std::boxed::Box<Ast>,
+    pub index: std::boxed::Box<Ast>,
+    pub expr: std::boxed::Box<Ast>,
 }
 
 #[derive(Clone, Debug)]
@@ -737,11 +747,18 @@ impl Compiler {
                         self.compile_vec_pop(sexpr, vec)?
                     }
                     [Sexpr::Symbol {
-                        symbol: vec_index, ..
+                        symbol: vec_ref, ..
                     }, vec, index]
-                        if vec_index == "vec-index" =>
+                        if vec_ref == "vec-ref" =>
                     {
-                        self.compile_vec_index(sexpr, vec, index)?
+                        self.compile_vec_ref(sexpr, vec, index)?
+                    }
+                    [Sexpr::Symbol {
+                        symbol: vec_set, ..
+                    }, vec, index, expr]
+                        if vec_set == "vec-set!" =>
+                    {
+                        self.compile_vec_set(sexpr, vec, index, expr)?
                     }
                     [Sexpr::Symbol {
                         symbol: vec_length, ..
@@ -1447,16 +1464,26 @@ impl Compiler {
         }))
     }
 
-    fn compile_vec_index(
+    fn compile_vec_ref(&mut self, sexpr: &Sexpr, vec: &Sexpr, index: &Sexpr) -> Result<Ast, Error> {
+        Ok(Ast::VecRef(VecRef {
+            span: sexpr.span(),
+            vec: std::boxed::Box::new(self.compile(vec)?),
+            index: std::boxed::Box::new(self.compile(index)?),
+        }))
+    }
+
+    fn compile_vec_set(
         &mut self,
         sexpr: &Sexpr,
         vec: &Sexpr,
         index: &Sexpr,
+        expr: &Sexpr,
     ) -> Result<Ast, Error> {
-        Ok(Ast::VecIndex(VecIndex {
+        Ok(Ast::VecSet(VecSet {
             span: sexpr.span(),
             vec: std::boxed::Box::new(self.compile(vec)?),
             index: std::boxed::Box::new(self.compile(index)?),
+            expr: std::boxed::Box::new(self.compile(expr)?),
         }))
     }
 
@@ -1516,7 +1543,8 @@ impl Ast {
             | Self::MakeVec(MakeVec { span, .. })
             | Self::VecPush(VecPush { span, .. })
             | Self::VecPop(VecPop { span, .. })
-            | Self::VecIndex(VecIndex { span, .. })
+            | Self::VecRef(VecRef { span, .. })
+            | Self::VecSet(VecSet { span, .. })
             | Self::VecLen(VecLen { span, .. })
             | Self::Variable(Variable { span, .. })
             | Self::Constant(Constant::String { span, .. })

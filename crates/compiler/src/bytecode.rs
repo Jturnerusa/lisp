@@ -59,7 +59,8 @@ pub fn compile(
         Il::MakeVec(make_vec) => compile_make_vec(make_vec, opcodes, constants),
         Il::VecPush(vec_push) => compile_vec_push(vec_push, opcodes, constants),
         Il::VecPop(vec_pop) => compile_vec_pop(vec_pop, opcodes, constants),
-        Il::VecIndex(vec_index) => compile_vec_index(vec_index, opcodes, constants),
+        Il::VecRef(vec_index) => compile_vec_ref(vec_index, opcodes, constants),
+        Il::VecSet(vec_set) => compile_vec_set(vec_set, opcodes, constants),
         Il::VecLength(vec_length) => compile_vec_length(vec_length, opcodes, constants),
         _ => Ok(()),
     }
@@ -670,14 +671,27 @@ fn compile_vec_pop(
     Ok(())
 }
 
-fn compile_vec_index(
-    vec_index: &tree::VecIndex,
+fn compile_vec_ref(
+    vec_index: &tree::VecRef,
     opcodes: &mut OpCodeTable<FileSpan>,
     constants: &mut Vec<Constant<FileSpan>>,
 ) -> Result<(), Error> {
     compile(&vec_index.vec, opcodes, constants)?;
     compile(&vec_index.index, opcodes, constants)?;
-    opcodes.push(OpCode::VecIndex, vec_index.span);
+    opcodes.push(OpCode::VecRef, vec_index.span);
+
+    Ok(())
+}
+
+fn compile_vec_set(
+    vec_set: &tree::VecSet,
+    opcodes: &mut OpCodeTable<FileSpan>,
+    constants: &mut Vec<Constant<FileSpan>>,
+) -> Result<(), Error> {
+    compile(&vec_set.vec, opcodes, constants)?;
+    compile(&vec_set.index, opcodes, constants)?;
+    compile(&vec_set.expr, opcodes, constants)?;
+    opcodes.push(OpCode::VecSet, vec_set.span);
 
     Ok(())
 }

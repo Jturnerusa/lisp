@@ -97,7 +97,7 @@ impl Checker {
             Il::MakeVec(make_vec) => self.check_make_vec(make_vec).map(|_| ()),
             Il::VecPush(vec_push) => self.check_vec_push(vec_push).map(|_| ()),
             Il::VecPop(vec_pop) => self.check_vec_pop(vec_pop).map(|_| ()),
-            Il::VecIndex(vec_index) => self.check_vec_index(vec_index).map(|_| ()),
+            Il::VecRef(vec_index) => self.check_vec_ref(vec_index).map(|_| ()),
             Il::VecLength(vec_length) => self.check_vec_length(vec_length).map(|_| ()),
             _ => Ok(()),
         }
@@ -449,7 +449,7 @@ impl Checker {
             Il::MakeVec(make_vec) => self.check_make_vec(make_vec),
             Il::VecPush(vec_push) => self.check_vec_push(vec_push),
             Il::VecPop(vec_pop) => self.check_vec_pop(vec_pop),
-            Il::VecIndex(vec_index) => self.check_vec_index(vec_index),
+            Il::VecRef(vec_index) => self.check_vec_ref(vec_index),
             Il::VecLength(vec_length) => self.check_vec_length(vec_length),
             _ => panic!("unexpected tree il node: {tree:?}"),
         }
@@ -1004,13 +1004,37 @@ impl Checker {
         Ok(inner)
     }
 
-    fn check_vec_index(&mut self, vec_index: &tree::VecIndex) -> Result<TypeId, Error> {
+    fn check_vec_ref(&mut self, vec_index: &tree::VecRef) -> Result<TypeId, Error> {
         let vec = self.check_tree(&vec_index.vec)?;
 
         let inner = self.types.insert(TypeInfo::Unknown);
         let id = self.types.insert(TypeInfo::Vec(inner));
 
         let Ok(()) = self.types.unify(id, vec) else {
+            todo!()
+        };
+
+        Ok(inner)
+    }
+
+    fn check_vec_set(&mut self, vec_set: &tree::VecSet) -> Result<TypeId, Error> {
+        let vec = self.check_tree(&vec_set.vec)?;
+        let index = self.check_tree(&vec_set.index)?;
+        let expr = self.check_tree(&vec_set.expr)?;
+
+        let inner = self.types.insert(TypeInfo::Unknown);
+        let id = self.types.insert(TypeInfo::Vec(inner));
+        let int = self.types.insert(TypeInfo::Int);
+
+        let Ok(()) = self.types.unify(id, vec) else {
+            todo!()
+        };
+
+        let Ok(()) = self.types.unify(inner, expr) else {
+            todo!()
+        };
+
+        let Ok(()) = self.types.unify(int, index) else {
             todo!()
         };
 

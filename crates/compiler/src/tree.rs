@@ -72,7 +72,8 @@ pub enum Il {
     MakeVec(MakeVec),
     VecPush(VecPush),
     VecPop(VecPop),
-    VecIndex(VecIndex),
+    VecRef(VecRef),
+    VecSet(VecSet),
     VecLength(VecLength),
 }
 
@@ -383,10 +384,18 @@ pub struct VecPop {
 }
 
 #[derive(Clone, Debug)]
-pub struct VecIndex {
+pub struct VecRef {
     pub span: FileSpan,
     pub vec: std::boxed::Box<Il>,
     pub index: std::boxed::Box<Il>,
+}
+
+#[derive(Clone, Debug)]
+pub struct VecSet {
+    pub span: FileSpan,
+    pub vec: std::boxed::Box<Il>,
+    pub index: std::boxed::Box<Il>,
+    pub expr: std::boxed::Box<Il>,
 }
 
 #[derive(Clone, Debug)]
@@ -468,7 +477,8 @@ impl Il {
             | Self::MakeVec(MakeVec { span, .. })
             | Self::VecPush(VecPush { span, .. })
             | Self::VecPop(VecPop { span, .. })
-            | Self::VecIndex(VecIndex { span, .. })
+            | Self::VecRef(VecRef { span, .. })
+            | Self::VecSet(VecSet { span, .. })
             | Self::VecLength(VecLength { span, .. })
             | Self::VarRef(VarRef::Local { span, .. })
             | Self::VarRef(VarRef::UpValue { span, .. })
@@ -591,7 +601,8 @@ impl Compiler {
             Ast::MakeVec(make_vec) => self.compile_make_vec(make_vec, vm, ast_compiler),
             Ast::VecPush(vec_push) => self.compile_vec_push(vec_push, vm, ast_compiler),
             Ast::VecPop(vec_pop) => self.compile_vec_pop(vec_pop, vm, ast_compiler),
-            Ast::VecIndex(vec_index) => self.compile_vec_index(vec_index, vm, ast_compiler),
+            Ast::VecRef(vec_index) => self.compile_vec_ref(vec_index, vm, ast_compiler),
+            Ast::VecSet(vec_set) => self.compile_vec_set(vec_set, vm, ast_compiler),
             Ast::VecLen(vec_length) => self.compile_vec_length(vec_length, vm, ast_compiler),
             _ => Ok(None),
         }
@@ -1716,13 +1727,13 @@ impl Compiler {
         })))
     }
 
-    fn compile_vec_index(
+    fn compile_vec_ref(
         &mut self,
-        vec_index: &ast::VecIndex,
+        vec_index: &ast::VecRef,
         vm: &mut Vm<FileSpan>,
         ast_compiler: &mut ast::Compiler,
     ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
-        Ok(Some(Il::VecIndex(VecIndex {
+        Ok(Some(Il::VecRef(VecRef {
             span: vec_index.span,
             vec: match self.compile(&vec_index.vec, vm, ast_compiler) {
                 Ok(Some(expr)) => std::boxed::Box::new(expr),
@@ -1740,6 +1751,47 @@ impl Compiler {
                 Ok(None) => {
                     return Err(std::boxed::Box::new(Error {
                         span: vec_index.span,
+                        message: "unexpected expression".to_string(),
+                    }))
+                }
+            },
+        })))
+    }
+
+    fn compile_vec_set(
+        &mut self,
+        vec_set: &ast::VecSet,
+        vm: &mut Vm<FileSpan>,
+        ast_compiler: &mut ast::Compiler,
+    ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
+        Ok(Some(Il::VecSet(VecSet {
+            span: vec_set.span,
+            vec: match self.compile(&vec_set.vec, vm, ast_compiler) {
+                Ok(Some(expr)) => std::boxed::Box::new(expr),
+                Err(e) => return Err(e),
+                Ok(None) => {
+                    return Err(std::boxed::Box::new(Error {
+                        span: vec_set.span,
+                        message: "unexpected expression".to_string(),
+                    }))
+                }
+            },
+            index: match self.compile(&vec_set.index, vm, ast_compiler) {
+                Ok(Some(expr)) => std::boxed::Box::new(expr),
+                Err(e) => return Err(e),
+                Ok(None) => {
+                    return Err(std::boxed::Box::new(Error {
+                        span: vec_set.span,
+                        message: "unexpected expression".to_string(),
+                    }))
+                }
+            },
+            expr: match self.compile(&vec_set.expr, vm, ast_compiler) {
+                Ok(Some(expr)) => std::boxed::Box::new(expr),
+                Err(e) => return Err(e),
+                Ok(None) => {
+                    return Err(std::boxed::Box::new(Error {
+                        span: vec_set.span,
                         message: "unexpected expression".to_string(),
                     }))
                 }
