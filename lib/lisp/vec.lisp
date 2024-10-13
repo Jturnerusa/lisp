@@ -1,5 +1,5 @@
-(defun (make-vec-with-capacity int 'a -> (vec 'a)) (capacity init)
-  (let ((vec (make-vec)))
+(defun (vec-init int 'a -> (vec 'a)) (capacity init)
+  (let ((vec (make-vec capacity)))
     (let loop ((counter 0))
          (if (>= counter capacity)
              vec
@@ -8,22 +8,22 @@
                (loop (+ counter 1)))))))
 
 (defun (vec-map (fn 'a -> 'b) (vec 'a) -> (vec 'b)) (fn a)
-  (let ((b (make-vec)))
-    (let loop ((counter 0))
-         (if (>= counter (vec-length a))
-             b
-             (progn
-               (vec-push! b (fn (vec-index a counter)))
-               (loop (+ counter 1)))))))
+  (let loop ((b (make-vec (vec-length a)))
+             (counter 0))
+       (if (>= counter (vec-length a))
+           b
+           (progn
+             (vec-push! b (fn (vec-ref a counter)))
+             (loop (+ counter 1))))))
 
 (defun (vec->list (vec 'a) -> (list 'a)) (vec)
   (let loop ((counter 0))
        (if (>= counter (vec-length vec))
            nil
-           (cons (vec-index vec counter) (loop (+ counter 1))))))
+           (cons (vec-ref vec counter) (loop (+ counter 1))))))
 
 (defun (list->vec (list 'a) -> (vec 'a)) (list)
-  (let ((vec (make-vec)))
+  (let ((vec (make-vec 0)))
     (let loop ((list list))
          (if (nil? list)
              vec
