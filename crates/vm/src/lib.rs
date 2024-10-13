@@ -1004,8 +1004,20 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
     }
 
     fn vec_create(&mut self) -> Result<(), Error> {
+        let capacity = match self.stack.pop().unwrap().into_object() {
+            Object::Int(int) => int,
+            object => {
+                return Err(Error::Type {
+                    expected: Type::Int,
+                    recieved: Type::from(&object),
+                })
+            }
+        };
+
         self.stack
-            .push(Local::Value(Object::Vec(Rc::new(RefCell::new(Vec::new())))));
+            .push(Local::Value(Object::Vec(Rc::new(RefCell::new(
+                Vec::with_capacity(usize::try_from(capacity).unwrap()),
+            )))));
 
         Ok(())
     }
