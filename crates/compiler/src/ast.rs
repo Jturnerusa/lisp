@@ -486,7 +486,7 @@ pub struct GetField {
 #[derive(Clone, Debug)]
 pub struct MakeVec {
     pub span: FileSpan,
-    pub exprs: Vec<Ast>,
+    pub capacity: std::boxed::Box<Ast>,
 }
 
 #[derive(Clone, Debug)]
@@ -727,10 +727,10 @@ impl Compiler {
                     }
                     [Sexpr::Symbol {
                         symbol: make_vec, ..
-                    }, exprs @ ..]
+                    }, capacity]
                         if make_vec == "make-vec" =>
                     {
-                        self.compile_make_vec(sexpr, exprs)?
+                        self.compile_make_vec(sexpr, capacity)?
                     }
                     [Sexpr::Symbol {
                         symbol: vec_push, ..
@@ -1439,13 +1439,10 @@ impl Compiler {
         }))
     }
 
-    fn compile_make_vec(&mut self, sexpr: &Sexpr, exprs: &[Sexpr]) -> Result<Ast, Error> {
+    fn compile_make_vec(&mut self, sexpr: &Sexpr, capacity: &Sexpr) -> Result<Ast, Error> {
         Ok(Ast::MakeVec(MakeVec {
             span: sexpr.span(),
-            exprs: exprs
-                .iter()
-                .map(|expr| self.compile(expr))
-                .collect::<Result<_, _>>()?,
+            capacity: std::boxed::Box::new(self.compile(capacity)?),
         }))
     }
 

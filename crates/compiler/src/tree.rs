@@ -367,7 +367,7 @@ pub struct GetField {
 #[derive(Clone, Debug)]
 pub struct MakeVec {
     pub span: FileSpan,
-    pub exprs: Vec<Il>,
+    pub capacity: std::boxed::Box<Il>,
 }
 
 #[derive(Clone, Debug)]
@@ -1660,18 +1660,16 @@ impl Compiler {
     ) -> Result<Option<Il>, std::boxed::Box<dyn error::Error>> {
         Ok(Some(Il::MakeVec(MakeVec {
             span: make_vec.span,
-            exprs: make_vec
-                .exprs
-                .iter()
-                .map(|expr| match self.compile(expr, vm, ast_compiler) {
-                    Ok(Some(expr)) => Ok(expr),
-                    Err(e) => Err(e),
-                    Ok(None) => Err(std::boxed::Box::new(Error {
+            capacity: match self.compile(&make_vec.capacity, vm, ast_compiler) {
+                Ok(Some(expr)) => std::boxed::Box::new(expr),
+                Err(e) => return Err(e),
+                Ok(None) => {
+                    return Err(std::boxed::Box::new(Error {
                         span: make_vec.span,
                         message: "unexpected expression".to_string(),
-                    }) as _),
-                })
-                .collect::<Result<_, _>>()?,
+                    }))
+                }
+            },
         })))
     }
 

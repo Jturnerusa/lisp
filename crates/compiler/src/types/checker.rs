@@ -953,20 +953,20 @@ impl Checker {
     }
 
     fn check_make_vec(&mut self, make_vec: &tree::MakeVec) -> Result<TypeId, Error> {
-        let exprs = make_vec
-            .exprs
-            .iter()
-            .map(|expr| self.check_tree(expr))
-            .collect::<Result<Vec<_>, _>>()?;
+        let capacity = self.check_tree(&make_vec.capacity)?;
 
         let inner = self.types.insert(TypeInfo::Unknown);
         let vec = self.types.insert(TypeInfo::Vec(inner));
+        let int = self.types.insert(TypeInfo::Int);
 
-        for expr in &exprs {
-            let Ok(()) = self.types.unify(inner, *expr) else {
-                todo!()
-            };
-        }
+        let Ok(()) = self.types.unify(int, capacity) else {
+            return Err(Error::Unification {
+                span: make_vec.span,
+                message: "failed to unify capacity with int".to_string(),
+                a: self.types.construct_partially_known_type(int),
+                b: self.types.construct_partially_known_type(capacity),
+            });
+        };
 
         Ok(vec)
     }

@@ -637,13 +637,8 @@ fn compile_make_vec(
     opcodes: &mut OpCodeTable<FileSpan>,
     constants: &mut Vec<Constant<FileSpan>>,
 ) -> Result<(), Error> {
+    compile(&make_vec.capacity, opcodes, constants)?;
     opcodes.push(OpCode::VecCreate, make_vec.span);
-
-    for expr in &make_vec.exprs {
-        opcodes.push(OpCode::Dup, make_vec.span);
-        compile(expr, opcodes, constants)?;
-        opcodes.push(OpCode::VecPush, make_vec.span);
-    }
 
     Ok(())
 }
