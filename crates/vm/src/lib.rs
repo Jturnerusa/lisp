@@ -1097,7 +1097,9 @@ impl<D: Clone + PartialEq + PartialOrd + Hash + Debug> Vm<D> {
             }
         };
 
-        vec.borrow_mut()[usize::try_from(index).unwrap()] = val;
+        vec.borrow_mut()[usize::try_from(index).unwrap()] = val.clone();
+
+        self.stack.push(Local::Value(val));
 
         Ok(())
     }
