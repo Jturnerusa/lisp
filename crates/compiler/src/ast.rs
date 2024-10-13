@@ -56,9 +56,9 @@ static BUILT_INS: &[&str] = &[
     "make-vec",
     "vec-push!",
     "vec-pop!",
-    "vec-set!",
     "vec-ref",
-    "vec-index",
+    "vec-set!",
+    "vec-length",
 ];
 
 #[derive(Clone, Debug)]
